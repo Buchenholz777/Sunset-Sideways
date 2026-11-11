@@ -47,7 +47,7 @@ export async function renderOverview(root: HTMLElement): Promise<void> {
     box.append(h('p', { class: 'muted', role: 'status' }, 'Lädt Kennzahlen …'));
     const qs = new URLSearchParams({ period: q.period, dev: q.dev, ver: q.ver, ev: q.ev, cfg: q.cfg }).toString();
     let o: Overview;
-    try { o = await api<Overview>('GET', `/kpi?${qs}`); } catch (e) {
+    try { o = await api<Overview>('GET', `/stats?${qs}`); } catch (e) {
       clear(box);
       box.append(h('div', { class: 'notice err', role: 'alert' }, h('strong', null, 'Kennzahlen konnten nicht geladen werden. '), (e as Error).message, ' ', h('button', { type: 'button', class: 'link', onclick: () => void load() }, 'Erneut versuchen')));
       return;
@@ -139,7 +139,7 @@ function comparePanel(o: Overview, q: Q): HTMLElement {
   const run = async (): Promise<void> => {
     clear(out);
     try {
-      const r = await api<{ a: RunMetrics; b: RunMetrics }>('GET', `/compare?${new URLSearchParams({ period: q.period, dev: q.dev, ver: q.ver, ev: q.ev, a: a.value, b: b.value })}`);
+      const r = await api<{ a: RunMetrics; b: RunMetrics }>('GET', `/stats/compare?${new URLSearchParams({ period: q.period, dev: q.dev, ver: q.ver, ev: q.ev, a: a.value, b: b.value })}`);
       const row = (name: string, f: (x: RunMetrics) => string): HTMLElement => h('tr', null, h('th', { scope: 'row' }, name), h('td', null, f(r.a)), h('td', null, f(r.b)));
       out.append(h('div', { class: 'tbl-scroll' }, h('table', { class: 'data' },
         h('thead', null, h('tr', null, h('th', { scope: 'col' }, 'Kennzahl'), h('th', { scope: 'col' }, `A: ${a.selectedOptions[0].text}`), h('th', { scope: 'col' }, `B: ${b.selectedOptions[0].text}`))),

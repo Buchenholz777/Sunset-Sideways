@@ -30,8 +30,8 @@ try {
   // ---- Direkter Zugriff auf private APIs ohne Anmeldung
   const anon = await request.newContext();
   const codes = [];
-  for (const p of ['/admin/api/state', '/admin/api/kpi', '/admin/api/seo', '/admin/api/me']) codes.push((await anon.get(BASE + p)).status());
-  const w = await anon.put(BASE + '/admin/api/draft', { data: { config: {} } });
+  for (const p of ['/api/admin/settings', '/api/admin/stats', '/api/admin/seo', '/api/admin/me']) codes.push((await anon.get(BASE + p)).status());
+  const w = await anon.put(BASE + '/api/admin/draft', { data: { config: {} } });
   const asset = await anon.get(BASE + '/admin/assets/nichts.js');
   note('Private APIs ohne Anmeldung: 401; Schreibzugriff 401; Admin-Assets nicht ausgeliefert', codes.every((c) => c === 401) && w.status() === 401 && !(await asset.text()).includes('function'), codes.join(','));
   const home = await anon.get(BASE + '/');
@@ -182,7 +182,7 @@ try {
   await m.waitForTimeout(600); await m.keyboard.press('Enter');
   await m.waitForFunction(() => !document.getElementById('screen-result').hidden, null, { timeout: 40000 });   // fährt geradeaus bis zum Aufprall
   await m.waitForTimeout(6000);                                                                              // Bündel wird spätestens nach 5 s gesendet
-  const kpi = await (await dctx.request.get(`${BASE}/admin/api/kpi?period=24h`)).json();
+  const kpi = await (await dctx.request.get(`${BASE}/api/admin/stats?period=24h`)).json();
   note('Echte Fahrt wird gemessen: 1 Besuch, 1 Fahrt mit Endereignis, Strecke > 0, Konfiguration 2 zugeordnet', kpi.cards.views === 1 && kpi.cards.runs === 1 && kpi.metrics.withEnd === 1 && kpi.metrics.dist.median > 0 && kpi.metrics.crash.n === 1, JSON.stringify({ v: kpi.cards.views, r: kpi.cards.runs, d: kpi.metrics.dist.median, cause: kpi.metrics.crash.causes[0]?.cause }));
   const runCfg = new DatabaseSync(DB, { readOnly: true }).prepare('SELECT cfg FROM runs').all();
   note('Testfahrt und QA-Läufe sind in den Daten nicht enthalten (nur die eine echte Fahrt)', runCfg.length === 1 && runCfg[0].cfg === '2', JSON.stringify(runCfg));
@@ -231,13 +231,13 @@ try {
   await d.click('text=Passwort'); await d.fill('#pw-cur', PW); await d.fill('#pw-new', 'Neues-Abnahme-Passwort-9'); await d.click('dialog[open] button[type=submit]');
   await d.waitForSelector('#pw');
   note('Passwortwechsel meldet auf diesem Gerät ab', true);
-  const other = await d2ctx.request.get(BASE + '/admin/api/state');
+  const other = await d2ctx.request.get(BASE + '/api/admin/settings');
   note('… und beendet die Sitzung des zweiten Geräts sofort (401)', other.status() === 401, String(other.status()));
   await login(d, PW); await d.waitForFunction(() => document.getElementById('msg').textContent.length > 0);
   note('Altes Passwort ist ungültig', (await d.textContent('#msg')).includes('fehlgeschlagen'));
   await d.fill('#pw', 'Neues-Abnahme-Passwort-9'); await d.click('#go'); await d.waitForSelector('.top');
   await d.click('text=Abmelden'); await d.waitForSelector('#pw');
-  const afterOut = await dctx.request.get(BASE + '/admin/api/state');
+  const afterOut = await dctx.request.get(BASE + '/api/admin/settings');
   note('Abmelden beendet die Sitzung (API 401, Login-Seite)', afterOut.status() === 401);
   await d2ctx.close();
   await dctx.close();

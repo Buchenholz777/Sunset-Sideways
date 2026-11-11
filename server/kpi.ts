@@ -47,10 +47,9 @@ export interface RunMetrics {
   glideFirst: { median: number | null; n: number };
 }
 
-export function runMetrics(db: Db, f: Filter): RunMetrics {
+export async function runMetrics(db: Db, f: Filter): Promise<RunMetrics> {
   const w = runWhere(f);
-  const runs = db.prepare(`SELECT r.run, r.visit, r.ev, r.miles, r.end_ts, r.end_dist, r.end_reason, r.cause FROM runs r WHERE ${w.sql}`).all(...w.args) as
-    Array<{ run: string; visit: string; ev: string | null; miles: number; end_ts: number | null; end_dist: number | null; end_reason: string | null; cause: string | null }>;
+  const runs = await db.all<{ run: string; visit: string; ev: string | null; miles: number; end_ts: number | null; end_dist: number | null; end_reason: string | null; cause: string | null }>(`SELECT r.run, r.visit, r.ev, r.miles, r.end_ts, r.end_dist, r.end_reason, r.cause FROM runs r WHERE ${w.sql}`, ...w.args);
   const n = runs.length;
   const perVisit = new Map<string, number>();
   for (const r of runs) perVisit.set(r.visit, (perVisit.get(r.visit) ?? 0) + 1);
@@ -72,8 +71,8 @@ export function runMetrics(db: Db, f: Filter): RunMetrics {
   for (const r of ends) byReason[r.end_reason ?? '?'] = (byReason[r.end_reason ?? '?'] ?? 0) + 1;
 
   const pw = runWhere(f, 'r');
-  const pk = db.prepare(`SELECT p.type AS type, COUNT(*) AS seen, SUM(p.taken) AS taken FROM pickups p JOIN runs r ON r.run = p.run WHERE ${pw.sql} GROUP BY p.type`).all(...pw.args) as Array<{ type: string; seen: number; taken: number }>;
-  const gf = db.prepare(`SELECT MIN(p.seen_s) AS s FROM pickups p JOIN runs r ON r.run = p.run WHERE p.type = 'glide' AND ${pw.sql} GROUP BY p.run`).all(...pw.args) as Array<{ s: number }>;
+  const pk = await db.all<{ type: string; seen: number; taken: number }>(`SELECT p.type AS type, COUNT(*) AS seen, SUM(p.taken) AS taken FROM pickups p JOIN runs r ON r.run = p.run WHERE ${pw.sql} GROUP BY p.type`, ...pw.args);
+  const gf = await db.all<{ s: number }>(`SELECT MIN(p.seen_s) AS s FROM pickups p JOIN runs r ON r.run = p.run WHERE p.type = 'glide' AND ${pw.sql} GROUP BY p.run`, ...pw.args);
   const types = ['shield', 'slow', 'clear', 'magnet', 'glide', 'boost', 'guide'];
   return {
     runs: n,
@@ -98,23 +97,23 @@ export interface Cards {
 }
 
 /** Besuche werden dem Zeitpunkt ihres ersten Ereignisses zugeordnet; Konfigurations-/Ereignisfilter betreffen nur Läufe. */
-export function cards(db: Db, f: Filter, rm: RunMetrics): Cards {
+export async function cards(db: Db, f: Filter, rm: RunMetrics): Promise<Cards> {
   const runLevelOnly = !!f.cfg || (f.ev && f.ev !== 'all');
   if (runLevelOnly) return { views: null, runs: rm.runs, startRate: null, repeatRate: rm.repeat, medianDist: { value: rm.dist.median, n: rm.dist.n } };
   const a: (string | number)[] = [f.from, f.to];
   let vsql = 'v.ts >= ? AND v.ts < ?';
   if (f.dev) { vsql += ' AND v.dev = ?'; a.push(f.dev); }
   if (f.ver) { vsql += ' AND v.ver = ?'; a.push(f.ver); }
-  const views = (db.prepare(`SELECT COUNT(*) AS n FROM visits v WHERE ${vsql}`).get(...a) as { n: number }).n;
-  const counts = db.prepare(`SELECT COUNT(*) AS c FROM runs r JOIN visits v ON v.visit = r.visit WHERE ${vsql} GROUP BY r.visit`).all(...a) as Array<{ c: number }>;
+  const views = (await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM visits v WHERE ${vsql}`, ...a))!.n;
+  const counts = await db.all<{ c: number }>(`SELECT COUNT(*) AS c FROM runs r JOIN visits v ON v.visit = r.visit WHERE ${vsql} GROUP BY r.visit`, ...a);
   const withRun = counts.length, twice = counts.filter((c) => c.c >= 2).length;
   return { views, runs: rm.runs, startRate: pct(withRun, views), repeatRate: pct(twice, withRun), medianDist: { value: rm.dist.median, n: rm.dist.n } };
 }
 
-export function series(db: Db, f: Filter, buckets: number): number[] {
+export async function series(db: Db, f: Filter, buckets: number): Promise<number[]> {
   const w = runWhere(f);
   const step = (f.to - f.from) / buckets;
-  const rows = db.prepare(`SELECT CAST((r.ts - ?) / ? AS INTEGER) AS b, COUNT(*) AS n FROM runs r WHERE ${w.sql} GROUP BY b`).all(f.from, step, ...w.args) as Array<{ b: number; n: number }>;
+  const rows = await db.all<{ b: number; n: number }>(`SELECT CAST((r.ts - ?) / ? AS INTEGER) AS b, COUNT(*) AS n FROM runs r WHERE ${w.sql} GROUP BY b`, f.from, step, ...w.args);
   const out = new Array<number>(buckets).fill(0);
   for (const r of rows) if (r.b >= 0 && r.b < buckets) out[r.b] = r.n;
   return out;
@@ -130,31 +129,31 @@ export interface Overview {
   filters: { versions: string[]; configs: Array<{ id: number; publishedAt: number; label: string | null }> };
 }
 
-export function overview(db: Db, period: Period, now: number, extra: Omit<Filter, 'from' | 'to'>): Overview {
+export async function overview(db: Db, period: Period, now: number, extra: Omit<Filter, 'from' | 'to'>): Promise<Overview> {
   const len = PERIOD_MS[period];
   const cur: Filter = { ...extra, from: now - len, to: now + 1 };
   const prev: Filter = { ...extra, from: now - 2 * len, to: now - len };
-  const rm = runMetrics(db, cur), pm = runMetrics(db, prev);
+  const rm = await runMetrics(db, cur), pm = await runMetrics(db, prev);
   const buckets = period === '24h' ? 24 : period === '7d' ? 7 : 30;
   const stepMs = len / buckets;
-  const first = (db.prepare('SELECT MIN(ts) AS t FROM visits').get() as { t: number | null }).t;
-  const publishes = db.prepare('SELECT id, published_at AS ts, label FROM config_versions WHERE published_at >= ? AND published_at < ? ORDER BY id').all(cur.from, cur.to) as Overview['markers']['publishes'];
-  const events = db.prepare('SELECT id, event_start AS "from", event_end AS "to" FROM config_versions WHERE event_start IS NOT NULL AND event_end IS NOT NULL AND event_end > ? AND event_start < ? ORDER BY id').all(cur.from, cur.to) as Overview['markers']['events'];
-  const versions = (db.prepare('SELECT DISTINCT ver FROM visits ORDER BY ver').all() as Array<{ ver: string }>).map((r) => r.ver);
-  const configs = (db.prepare('SELECT id, published_at AS publishedAt, label FROM config_versions ORDER BY id DESC LIMIT 30').all() as Overview['filters']['configs']);
+  const first = (await db.get<{ t: number | null }>('SELECT MIN(ts) AS t FROM visits'))!.t;
+  const publishes = await db.all<Overview['markers']['publishes'][number]>('SELECT id, published_at AS ts, label FROM config_versions WHERE published_at >= ? AND published_at < ? ORDER BY id', cur.from, cur.to);
+  const events = await db.all<Overview['markers']['events'][number]>('SELECT id, event_start AS "from", event_end AS "to" FROM config_versions WHERE event_start IS NOT NULL AND event_end IS NOT NULL AND event_end > ? AND event_start < ? ORDER BY id', cur.from, cur.to);
+  const versions = (await db.all<{ ver: string }>('SELECT DISTINCT ver FROM visits ORDER BY ver')).map((r) => r.ver);
+  const configs = await db.all<Overview['filters']['configs'][number]>('SELECT id, published_at AS publishedAt, label FROM config_versions ORDER BY id DESC LIMIT 30');
   return {
     period, from: cur.from, to: cur.to, step: period === '24h' ? 'hour' : 'day',
     coverage: { status: first === null ? 'nodata' : first > cur.from ? 'partial' : 'ok', firstEventAt: first },
-    cards: cards(db, cur, rm), prevCards: cards(db, prev, pm),
+    cards: await cards(db, cur, rm), prevCards: await cards(db, prev, pm),
     metrics: rm, prevMetrics: pm,
-    series: { labels: Array.from({ length: buckets }, (_, i) => Math.round(cur.from + i * stepMs)), cur: series(db, cur, buckets), prev: series(db, prev, buckets) },
+    series: { labels: Array.from({ length: buckets }, (_, i) => Math.round(cur.from + i * stepMs)), cur: await series(db, cur, buckets), prev: await series(db, prev, buckets) },
     markers: { publishes, events },
     filters: { versions, configs },
   };
 }
 
-export function compare(db: Db, period: Period, now: number, a: string, b: string, extra: Omit<Filter, 'from' | 'to' | 'cfg'>): { a: RunMetrics; b: RunMetrics } {
+export async function compare(db: Db, period: Period, now: number, a: string, b: string, extra: Omit<Filter, 'from' | 'to' | 'cfg'>): Promise<{ a: RunMetrics; b: RunMetrics }> {
   const len = PERIOD_MS[period];
   const base = { ...extra, from: now - len, to: now + 1 };
-  return { a: runMetrics(db, { ...base, cfg: a }), b: runMetrics(db, { ...base, cfg: b }) };
+  return { a: await runMetrics(db, { ...base, cfg: a }), b: await runMetrics(db, { ...base, cfg: b }) };
 }

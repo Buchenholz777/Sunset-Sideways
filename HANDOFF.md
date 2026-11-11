@@ -61,3 +61,10 @@ Echtes Smartphone, Firefox/WebKit, Handspiel (Gefühl, Klang), Bildrate auf Ger�
 - Spiel liest Konfig beim Fahrtstart (`applyConfig` in `startRun`), Fallback = eingebaute Defaults. `?testdrive=TOKEN` = Entwurf ohne Messung/Bestweite, `?qa=1` ohne Messung.
 - Tests: `tests/server.test.ts`, `tests/config.test.ts`; Browser-Abnahme `node scripts/admin_check.mjs` (39 Prüfungen). Gesamt 175 Vitest-Tests.
 - Nicht live verifiziert: Google-Search-Console-OAuth (kein Google-Zugang), echtes HTTPS/`__Host-`-Cookie hinter Proxy (nur per Test geprüft).
+
+## Umstellung auf Cloudflare Pages (Functions + D1) – ersetzt den Node-/Docker-Betrieb
+- Ein Handler (`server/app.ts`, Web-Request/Response, async, WebCrypto) läuft als Pages Function (`functions/[[path]].ts`, Routen in `public/_routes.json`) und lokal über `server/node.ts` (SQLite-Adapter `server/sqlite.ts`). Datenbank-Schnittstelle `server/db.ts` (D1 + SQLite), Schema wird per `ensureSchema` selbst angelegt.
+- Admin-Bundle liegt unter `dist/_admin/` (nur nach Sitzungsprüfung ausgeliefert), API unter `/api/admin/*` (settings, stats, stats/compare, publish, restore, testdrive, seo, gsc, password, login, logout).
+- Passwort: PBKDF2-SHA-256/100k (Workers-Limit; Argon2id nicht möglich) als Secret `ADMIN_PASSWORD_HASH` (`npm run admin:hash`), Änderung im Admin in D1; ausgetauschtes Secret gewinnt.
+- Build: `npm run build:pages` (Cloudflare), `npm run build` (+ lokaler Server). Doku: `docs/DEPLOYMENT.md`. Docker-Dateien entfernt.
+- Geprüft: 176 Vitest-Tests, Chrome-Abnahme 39/39 (Node-Adapter), echte workerd-Laufzeit via `wrangler pages dev` (Login, Admin-Auslieferung, Publish, Ingest, Stats). Nicht geprüft: echtes Cloudflare-Deployment, Search-Console-OAuth.

@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { seal, unseal } from './crypto';
 import { kvDel, kvGet, kvSet, type Db } from './db';
 
 /** Optionale, nur lesende Anbindung der Google Search Console (OAuth, Bereich webmasters.readonly). Ohne Zugangsdaten bleibt der technische SEO-Check voll nutzbar. */
@@ -6,21 +6,6 @@ export interface GscEnv { clientId?: string; clientSecret?: string; appSecret?: 
 
 export const gscAvailable = (e: GscEnv): boolean => !!(e.clientId && e.clientSecret && e.appSecret);
 export const redirectUri = (e: GscEnv): string => `${e.origin}/admin/api/gsc/callback`;
-
-const key = (secret: string): Buffer => createHash('sha256').update('gsc:' + secret).digest();
-function seal(secret: string, text: string): string {
-  const iv = randomBytes(12), c = createCipheriv('aes-256-gcm', key(secret), iv);
-  const enc = Buffer.concat([c.update(text, 'utf8'), c.final()]);
-  return [iv, c.getAuthTag(), enc].map((b) => b.toString('base64')).join('.');
-}
-function unseal(secret: string, blob: string): string | null {
-  try {
-    const [iv, tag, enc] = blob.split('.').map((s) => Buffer.from(s, 'base64'));
-    const d = createDecipheriv('aes-256-gcm', key(secret), iv);
-    d.setAuthTag(tag);
-    return Buffer.concat([d.update(enc), d.final()]).toString('utf8');
-  } catch { return null; }
-}
 
 export function authUrl(e: GscEnv, state: string): string {
   const p = new URLSearchParams({ client_id: e.clientId!, redirect_uri: redirectUri(e), response_type: 'code', scope: 'https://www.googleapis.com/auth/webmasters.readonly', access_type: 'offline', prompt: 'consent', state });
@@ -37,15 +22,15 @@ async function tokenCall(e: GscEnv, params: Record<string, string>, f: F): Promi
 export async function connect(db: Db, e: GscEnv, code: string, f: F = fetch): Promise<void> {
   const t = await tokenCall(e, { code, grant_type: 'authorization_code', redirect_uri: redirectUri(e) }, f);
   if (!t.refresh_token) throw new Error('Google hat kein dauerhaftes Zugriffstoken geliefert (Zugriff erneut erteilen).');
-  kvSet(db, 'gsc_token', seal(e.appSecret!, t.refresh_token));
-  kvDel(db, 'gsc_site'); kvDel(db, 'gsc_cache');
+  await kvSet(db, 'gsc_token', await seal(e.appSecret!, t.refresh_token));
+  await kvDel(db, 'gsc_site'); await kvDel(db, 'gsc_cache');
 }
-export const disconnect = (db: Db): void => { kvDel(db, 'gsc_token'); kvDel(db, 'gsc_site'); kvDel(db, 'gsc_cache'); };
-export const isConnected = (db: Db): boolean => kvGet(db, 'gsc_token') !== null;
+export const disconnect = async (db: Db): Promise<void> => { await kvDel(db, 'gsc_token'); await kvDel(db, 'gsc_site'); await kvDel(db, 'gsc_cache'); };
+export const isConnected = async (db: Db): Promise<boolean> => (await kvGet(db, 'gsc_token')) !== null;
 
 async function access(db: Db, e: GscEnv, f: F): Promise<string> {
-  const blob = kvGet(db, 'gsc_token');
-  const refresh = blob && e.appSecret ? unseal(e.appSecret, blob) : null;
+  const blob = await kvGet(db, 'gsc_token');
+  const refresh = blob && e.appSecret ? await unseal(e.appSecret, blob) : null;
   if (!refresh) throw new Error('Nicht mit der Search Console verbunden.');
   return (await tokenCall(e, { refresh_token: refresh, grant_type: 'refresh_token' }, f)).access_token;
 }
@@ -68,9 +53,9 @@ export interface GscData {
 const day = (t: number): string => new Date(t).toISOString().slice(0, 10);
 
 export async function fetchData(db: Db, e: GscEnv, now: number, force = false, f: F = fetch): Promise<GscData | null> {
-  const site = kvGet(db, 'gsc_site');
+  const site = await kvGet(db, 'gsc_site');
   if (!site) return null;
-  const cached = kvGet(db, 'gsc_cache');
+  const cached = await kvGet(db, 'gsc_cache');
   if (cached && !force) { const c = JSON.parse(cached) as GscData; if (c.site === site && now - c.fetchedAt < 6 * 3600_000) return c; }
   const at = await access(db, e, f);
   const from = day(now - 31 * 86400_000), to = day(now - 3 * 86400_000);     // Search-Console-Daten laufen etwa 2–3 Tage nach
@@ -86,6 +71,6 @@ export async function fetchData(db: Db, e: GscEnv, now: number, force = false, f
     totals: { impressions: total?.impressions ?? 0, clicks: total?.clicks ?? 0, ctr: total?.ctr ?? 0, position: total?.position ?? 0 },
     queries: rows.map((r) => ({ query: r.keys?.[0] ?? '', impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, position: r.position })),
   };
-  kvSet(db, 'gsc_cache', JSON.stringify(data));
+  await kvSet(db, 'gsc_cache', JSON.stringify(data));
   return data;
 }

@@ -1,8 +1,0 @@
-sunsetsideways.com {
-	redir https://www.sunsetsideways.com{uri} permanent
-}
-
-www.sunsetsideways.com {
-	encode zstd gzip
-	reverse_proxy app:8080
-}

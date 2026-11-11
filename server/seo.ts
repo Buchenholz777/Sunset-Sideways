@@ -1,6 +1,3 @@
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
-
 export type Status = 'ok' | 'warn' | 'fail' | 'info';
 export interface Check { id: string; label: string; status: Status; found: string; fix: string }
 export interface SeoReport { origin: string; checkedAt: number; finalUrl: string | null; checks: Check[]; summary: { ok: number; warn: number; fail: number } }
@@ -23,12 +20,12 @@ export interface SeoOpts {
   now?: () => number;
 }
 
+/** Zieladresse prüfen. Cloudflare Workers erreichen ohnehin keine privaten Netze; zusätzlich werden IP-Adressen/localhost nur für die eigene Installation (allowHosts) zugelassen. */
 async function guard(url: URL, o: SeoOpts): Promise<void> {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Nur http(s)-Adressen sind erlaubt.');
   if (o.allowLocal || o.allowHosts.includes(url.host)) return;
   const host = url.hostname.replace(/^\[|\]$/g, '');
-  const ips = isIP(host) ? [host] : (await lookup(host, { all: true })).map((a) => a.address);
-  if (ips.some(isPrivate)) throw new Error('Diese Adresse zeigt auf ein privates Netz und wird nicht geprüft.');
+  if (host === 'localhost' || host.endsWith('.local') || host.endsWith('.internal') || /^[\d.]+$/.test(host) || host.includes(':') || isPrivate(host)) throw new Error('Diese Adresse zeigt auf ein privates Netz und wird nicht geprüft.');
 }
 
 async function get(urlStr: string, o: SeoOpts, method = 'GET', maxBytes = 1_000_000): Promise<Res> {

@@ -8,30 +8,29 @@ export interface Version {
   config: GameConfig;
 }
 
-const rowToVersion = (r: { id: number; label: string | null; published_at: number; event_start: number | null; event_end: number | null; config: string }): Version => ({
-  id: r.id, label: r.label, publishedAt: r.published_at, eventStart: r.event_start, eventEnd: r.event_end, config: normalize(JSON.parse(r.config)),
-});
+interface Row { id: number; label: string | null; published_at: number; event_start: number | null; event_end: number | null; config: string }
+const rowToVersion = (r: Row): Version => ({ id: r.id, label: r.label, publishedAt: r.published_at, eventStart: r.event_start, eventEnd: r.event_end, config: normalize(JSON.parse(r.config)) });
 
-export function listVersions(db: Db, limit = 50): Version[] {
-  return (db.prepare('SELECT * FROM config_versions ORDER BY id DESC LIMIT ?').all(limit) as never[]).map(rowToVersion);
+export async function listVersions(db: Db, limit = 50): Promise<Version[]> {
+  return (await db.all<Row>('SELECT * FROM config_versions ORDER BY id DESC LIMIT ?', limit)).map(rowToVersion);
 }
-export function getVersion(db: Db, id: number): Version | null {
-  const r = db.prepare('SELECT * FROM config_versions WHERE id = ?').get(id) as never;
+export async function getVersion(db: Db, id: number): Promise<Version | null> {
+  const r = await db.get<Row>('SELECT * FROM config_versions WHERE id = ?', id);
   return r ? rowToVersion(r) : null;
 }
-export function currentVersion(db: Db): Version | null {
-  const id = kvGet(db, 'current_version');
+export async function currentVersion(db: Db): Promise<Version | null> {
+  const id = await kvGet(db, 'current_version');
   return id ? getVersion(db, Number(id)) : null;
 }
 
-export function getDraft(db: Db): GameConfig {
-  const raw = kvGet(db, 'draft');
+export async function getDraft(db: Db): Promise<GameConfig> {
+  const raw = await kvGet(db, 'draft');
   if (raw) return normalize(JSON.parse(raw));
-  return clone(currentVersion(db)?.config ?? DEFAULT_CONFIG);
+  return clone((await currentVersion(db))?.config ?? DEFAULT_CONFIG);
 }
-export function saveDraft(db: Db, cfg: unknown): GameConfig {
+export async function saveDraft(db: Db, cfg: unknown): Promise<GameConfig> {
   const n = normalize(cfg);
-  kvSet(db, 'draft', JSON.stringify(n));
+  await kvSet(db, 'draft', JSON.stringify(n));
   return n;
 }
 
@@ -42,8 +41,8 @@ export function activeEvent(v: Version | null, now: number): { id: string; endsA
 }
 
 /** Öffentliche Antwort für das Spiel: veröffentlichte Version, ohne Entwurf. */
-export function publicConfig(db: Db, now: number): { id: string; config: GameConfig; event: { id: string; endsAt: number } | null } {
-  const v = currentVersion(db);
+export async function publicConfig(db: Db, now: number): Promise<{ id: string; config: GameConfig; event: { id: string; endsAt: number } | null }> {
+  const v = await currentVersion(db);
   if (!v) return { id: 'builtin', config: DEFAULT_CONFIG, event: null };
   return { id: String(v.id), config: v.config, event: activeEvent(v, now) };
 }
@@ -57,24 +56,21 @@ export function check(cfg: unknown): Checked {
   return { issues: all, analysis, blocking: all.filter((i) => i.level === 'error') };
 }
 
-export function publish(db: Db, now: number, label: string | null): { ok: true; version: Version } | { ok: false; blocking: Issue[] } {
-  const draft = getDraft(db);
+export async function publish(db: Db, now: number, label: string | null): Promise<{ ok: true; version: Version } | { ok: false; blocking: Issue[] }> {
+  const draft = await getDraft(db);
   const c = check(draft);
   if (c.blocking.length) return { ok: false, blocking: c.blocking };
-  const prev = currentVersion(db);
+  const prev = await currentVersion(db);
   let evStart: number | null = null, evEnd: number | null = null;
   if (draft.event.on) {
     const same = prev && prev.config.event.on && activeEvent(prev, now) && prev.config.event.glideBoost === draft.event.glideBoost && prev.config.event.days === draft.event.days;
     if (same && prev) { evStart = prev.eventStart; evEnd = prev.eventEnd; }                  // laufendes Ereignis wird durch andere Änderungen nicht neu gestartet
     else { evStart = now; evEnd = now + draft.event.days * 86400_000; }
   }
-  const r = db.prepare('INSERT INTO config_versions (config, label, published_at, event_start, event_end) VALUES (?, ?, ?, ?, ?)').run(JSON.stringify(draft), label ? label.slice(0, 80) : null, now, evStart, evEnd);
-  kvSet(db, 'current_version', String(r.lastInsertRowid));
-  return { ok: true, version: getVersion(db, Number(r.lastInsertRowid))! };
+  const r = await db.run('INSERT INTO config_versions (config, label, published_at, event_start, event_end) VALUES (?, ?, ?, ?, ?)', JSON.stringify(draft), label ? label.slice(0, 80) : null, now, evStart, evEnd);
+  await kvSet(db, 'current_version', String(r.lastId));
+  return { ok: true, version: (await getVersion(db, r.lastId))! };
 }
 
-export function isDirty(db: Db): boolean {
-  const cur = currentVersion(db)?.config ?? DEFAULT_CONFIG;
-  return diffConfigs(cur, getDraft(db)).length > 0;
-}
-export function draftDiff(db: Db) { return diffConfigs(currentVersion(db)?.config ?? DEFAULT_CONFIG, getDraft(db)); }
+export async function draftDiff(db: Db) { return diffConfigs((await currentVersion(db))?.config ?? DEFAULT_CONFIG, await getDraft(db)); }
+export async function isDirty(db: Db): Promise<boolean> { return (await draftDiff(db)).length > 0; }

@@ -21,7 +21,7 @@ const decimals = (f: Field): number => { const st = f.step * (f.scale ?? 1); ret
 const fmtVal = (f: Field, v: number): string => `${new Intl.NumberFormat('de-DE', { minimumFractionDigits: decimals(f), maximumFractionDigits: decimals(f) }).format(toDisplay(f, v))} ${f.unit}`;
 
 export async function renderSettings(root: HTMLElement): Promise<void> {
-  let st = await api<StateBody>('GET', '/state');
+  let st = await api<StateBody>('GET', '/settings');
   let draft: GameConfig = JSON.parse(JSON.stringify(st.draft));
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let saving: 'idle' | 'pending' | 'saving' | 'saved' | 'error' = 'idle';
@@ -42,7 +42,7 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       saving = 'saving'; paintStatus();
-      try { const r = await api<StateBody>('PUT', '/draft', { config: draft }); st = { ...r }; saving = 'saved'; }
+      try { const r = await api<StateBody>('PUT', '/settings', { config: draft }); st = { ...r }; saving = 'saved'; }
       catch (e) { saving = 'error'; say(`Entwurf konnte nicht gespeichert werden: ${(e as Error).message}`, 'err'); }
       paintAll();
     }, 500);
@@ -134,7 +134,7 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
         clear(seg);
         for (const k of ['relaxed', 'arcade', 'hard'] as const) {
           const on = draft.profile === k;
-          seg.append(h('button', { type: 'button', role: 'radio', 'aria-checked': String(on), class: on ? 'on' : '', onclick: async () => { st = await api<StateBody>('POST', '/draft/profile', { profile: k }); draft = JSON.parse(JSON.stringify(st.draft)); paintAll(); say(`Profil „${PROFILES[k].label}“ in den Entwurf geladen – danach frei anpassbar.`); } }, PROFILES[k].label));
+          seg.append(h('button', { type: 'button', role: 'radio', 'aria-checked': String(on), class: on ? 'on' : '', onclick: async () => { st = await api<StateBody>('POST', '/settings/profile', { profile: k }); draft = JSON.parse(JSON.stringify(st.draft)); paintAll(); say(`Profil „${PROFILES[k].label}“ in den Entwurf geladen – danach frei anpassbar.`); } }, PROFILES[k].label));
         }
         text.textContent = draft.profile === 'custom' ? 'Eigene Werte (weicht von allen Profilen ab).' : PROFILES[draft.profile].text;
       };
@@ -239,7 +239,7 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
   async function testDrive(): Promise<void> {
     const w = window.open('', '_blank');
     try {
-      if (saveTimer) { clearTimeout(saveTimer); const r = await api<StateBody>('PUT', '/draft', { config: draft }); st = r; paintAll(); }
+      if (saveTimer) { clearTimeout(saveTimer); const r = await api<StateBody>('PUT', '/settings', { config: draft }); st = r; paintAll(); }
       const r = await api<{ url: string }>('POST', '/testdrive');
       if (w) { w.opener = null; w.location.href = r.url; } else say(`Testfahrt-Link: ${r.url}`);
       say('Testfahrt mit dem Entwurf geöffnet. Sie zählt weder für Kennzahlen noch für die Bestweite (30 Minuten gültig).');
@@ -248,7 +248,7 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
 
   async function loadDefaults(): Promise<void> {
     if (!confirm('Alle Werte des Entwurfs auf die Standardwerte (Profil „Arcade“) zurücksetzen? Veröffentlicht wird dadurch noch nichts.')) return;
-    st = await api<StateBody>('POST', '/draft/defaults'); draft = JSON.parse(JSON.stringify(st.draft)); paintAll(); say('Standardwerte sind im Entwurf geladen.');
+    st = await api<StateBody>('POST', '/settings/defaults'); draft = JSON.parse(JSON.stringify(st.draft)); paintAll(); say('Standardwerte sind im Entwurf geladen.');
   }
 
   function paintStatus(): void {
