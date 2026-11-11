@@ -9,3 +9,5 @@ admin-shots/
 *.db-*
 .env
 .claude/
+.wrangler/
+.dev.vars
