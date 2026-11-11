@@ -1,0 +1,24 @@
+# Auf dem Server: docker compose up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      PUBLIC_ORIGIN: https://www.sunsetsideways.com
+      # Optional (Search Console): APP_SECRET, GSC_CLIENT_ID, GSC_CLIENT_SECRET
+    volumes:
+      - sunset-data:/data
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - app
+volumes:
+  sunset-data:
+  caddy-data:

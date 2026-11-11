@@ -76,3 +76,16 @@ Ohne Reverse-Proxy (nicht empfohlen): Dienst nicht öffentlich auf Port 80/443 b
 1. Google Cloud → OAuth-Client „Webanwendung“, Weiterleitungs-URI `https://spiel.example.de/admin/api/gsc/callback`, Search-Console-API aktivieren.
 2. `GSC_CLIENT_ID`, `GSC_CLIENT_SECRET` und ein langes zufälliges `APP_SECRET` (verschlüsselt das gespeicherte Token) setzen, Dienst neu starten.
 3. Admin → SEO → „Mit Google verbinden“, bestätigte Property wählen. Der technische SEO-Check funktioniert unabhängig davon.
+
+## Schnellweg mit Docker (empfohlen für www.sunsetsideways.com)
+
+Auf einem Linux-Server (z. B. Hetzner Cloud, Ubuntu, ca. 4 €/Monat) mit installiertem Docker:
+
+1. DNS: `A`-Eintrag (und ggf. `AAAA`) für `sunsetsideways.com` **und** `www` auf die Server-IP. Bei Cloudflare-DNS die Wolke auf „Nur DNS“ (grau) stellen.
+2. `git clone https://github.com/Buchenholz777/Sunset-Sideways.git && cd Sunset-Sideways`
+3. `docker compose up -d --build` (Caddy holt das HTTPS-Zertifikat selbst; die Apex-Domain leitet auf `www` um)
+4. Passwort setzen: `docker compose exec -it app node dist-server/cli.mjs admin:passwd`
+5. Aufruf: `https://www.sunsetsideways.com/admin`
+
+Aktualisieren: `git pull && docker compose up -d --build`. Die Datenbank liegt im Volume `sunset-data` (Sicherung z. B. mit `docker compose cp app:/data/sunset.db .`).
+Wichtig: Cloudflare Pages und dieser Server dürfen nicht gleichzeitig dieselbe Domain bedienen – die Domain zeigt auf den Server.
