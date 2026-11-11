@@ -1,0 +1,453 @@
+[
+ {
+  "szenario": "Vorwarnung 320x568, 384 km/h",
+  "erstesObjekt": {
+   "kind": "baken",
+   "x": 0,
+   "z": 215,
+   "vz": 0
+  },
+  "frames": [
+   {
+    "frame": 0,
+    "ttc": 1.82,
+    "dist": 193.7,
+    "kmh": 384
+   },
+   {
+    "frame": 1,
+    "ttc": 1.62,
+    "dist": 172.3,
+    "kmh": 384
+   },
+   {
+    "frame": 2,
+    "ttc": 1.42,
+    "dist": 151,
+    "kmh": 384
+   },
+   {
+    "frame": 3,
+    "ttc": 1.22,
+    "dist": 129.7,
+    "kmh": 384
+   },
+   {
+    "frame": 4,
+    "ttc": 1.02,
+    "dist": 108.3,
+    "kmh": 384
+   },
+   {
+    "frame": 5,
+    "ttc": 0.82,
+    "dist": 87,
+    "kmh": 384
+   },
+   {
+    "frame": 6,
+    "ttc": 0.62,
+    "dist": 65.7,
+    "kmh": 384
+   },
+   {
+    "frame": 7,
+    "ttc": 0.42,
+    "dist": 44.3,
+    "kmh": 384
+   },
+   {
+    "frame": 8,
+    "ttc": 0.22,
+    "dist": 23,
+    "kmh": 384
+   },
+   {
+    "frame": 9,
+    "ttc": 0.02,
+    "dist": 1.7,
+    "kmh": 384
+   },
+   {
+    "frame": 10,
+    "ttc": 0.84,
+    "dist": 77.9,
+    "kmh": 384
+   },
+   {
+    "frame": 11,
+    "ttc": 0.64,
+    "dist": 59.4,
+    "kmh": 384
+   },
+   {
+    "frame": 12,
+    "ttc": 0.44,
+    "dist": 41,
+    "kmh": 384
+   },
+   {
+    "frame": 13,
+    "ttc": 0.24,
+    "dist": 22.5,
+    "kmh": 384
+   }
+  ]
+ },
+ {
+  "szenario": "Handbremsdrift rechts desktop",
+  "seed": 1,
+  "kmhVorher": 192,
+  "frames": [
+   {
+    "t": 0.12,
+    "drifting": false,
+    "slipM": 0,
+    "winkelGrad": 0,
+    "kmh": 193
+   },
+   {
+    "t": 0.24,
+    "drifting": true,
+    "slipM": -0.25,
+    "winkelGrad": 9.5,
+    "kmh": 188
+   },
+   {
+    "t": 0.36,
+    "drifting": true,
+    "slipM": -0.38,
+    "winkelGrad": 14.9,
+    "kmh": 186
+   },
+   {
+    "t": 0.48,
+    "drifting": true,
+    "slipM": -0.46,
+    "winkelGrad": 17.8,
+    "kmh": 185
+   },
+   {
+    "t": 0.6,
+    "drifting": true,
+    "slipM": -0.5,
+    "winkelGrad": 19.5,
+    "kmh": 185
+   },
+   {
+    "t": 0.72,
+    "drifting": true,
+    "slipM": -0.53,
+    "winkelGrad": 20.4,
+    "kmh": 185
+   },
+   {
+    "t": 0.84,
+    "drifting": true,
+    "slipM": -0.54,
+    "winkelGrad": 20.9,
+    "kmh": 185
+   },
+   {
+    "t": 0.96,
+    "drifting": true,
+    "slipM": -0.55,
+    "winkelGrad": 21.2,
+    "kmh": 185
+   },
+   {
+    "t": 1.08,
+    "drifting": true,
+    "slipM": -0.55,
+    "winkelGrad": 21.4,
+    "kmh": 186
+   },
+   {
+    "t": 1.2,
+    "drifting": true,
+    "slipM": -0.56,
+    "winkelGrad": 21.5,
+    "kmh": 186
+   }
+  ],
+  "nachLoslassen": {
+   "drifting": false,
+   "slipM": -0.007,
+   "winkel": 0.27
+  }
+ },
+ {
+  "szenario": "Handbremsdrift rechts hoch390",
+  "seed": 1,
+  "kmhVorher": 192,
+  "frames": [
+   {
+    "t": 0.12,
+    "drifting": false,
+    "slipM": 0,
+    "winkelGrad": 0,
+    "kmh": 193
+   },
+   {
+    "t": 0.24,
+    "drifting": true,
+    "slipM": -0.25,
+    "winkelGrad": 9.5,
+    "kmh": 188
+   },
+   {
+    "t": 0.36,
+    "drifting": true,
+    "slipM": -0.38,
+    "winkelGrad": 14.9,
+    "kmh": 186
+   },
+   {
+    "t": 0.48,
+    "drifting": false,
+    "slipM": -0.41,
+    "winkelGrad": 15.8,
+    "kmh": 186
+   },
+   {
+    "t": 0.6,
+    "drifting": false,
+    "slipM": -0.2,
+    "winkelGrad": 7.6,
+    "kmh": 188
+   },
+   {
+    "t": 0.72,
+    "drifting": false,
+    "slipM": -0.09,
+    "winkelGrad": 3.7,
+    "kmh": 190
+   },
+   {
+    "t": 0.84,
+    "drifting": false,
+    "slipM": -0.05,
+    "winkelGrad": 1.8,
+    "kmh": 191
+   },
+   {
+    "t": 0.96,
+    "drifting": false,
+    "slipM": -0.02,
+    "winkelGrad": 0.9,
+    "kmh": 193
+   },
+   {
+    "t": 1.08,
+    "drifting": false,
+    "slipM": -0.01,
+    "winkelGrad": 0.4,
+    "kmh": 194
+   },
+   {
+    "t": 1.2,
+    "drifting": false,
+    "slipM": -0.01,
+    "winkelGrad": 0.2,
+    "kmh": 195
+   }
+  ],
+  "nachLoslassen": {
+   "drifting": false,
+   "slipM": 0,
+   "winkel": 0
+  }
+ },
+ {
+  "szenario": "Handbremsdrift links desktop",
+  "seed": 3,
+  "kmhVorher": 192,
+  "frames": [
+   {
+    "t": 0.12,
+    "drifting": false,
+    "slipM": 0,
+    "winkelGrad": 0,
+    "kmh": 193
+   },
+   {
+    "t": 0.24,
+    "drifting": true,
+    "slipM": 0.25,
+    "winkelGrad": -9.5,
+    "kmh": 188
+   },
+   {
+    "t": 0.36,
+    "drifting": true,
+    "slipM": 0.38,
+    "winkelGrad": -14.9,
+    "kmh": 186
+   },
+   {
+    "t": 0.48,
+    "drifting": true,
+    "slipM": 0.46,
+    "winkelGrad": -17.8,
+    "kmh": 185
+   },
+   {
+    "t": 0.6,
+    "drifting": true,
+    "slipM": 0.5,
+    "winkelGrad": -19.5,
+    "kmh": 185
+   },
+   {
+    "t": 0.72,
+    "drifting": true,
+    "slipM": 0.53,
+    "winkelGrad": -20.4,
+    "kmh": 185
+   },
+   {
+    "t": 0.84,
+    "drifting": true,
+    "slipM": 0.54,
+    "winkelGrad": -20.9,
+    "kmh": 185
+   },
+   {
+    "t": 0.96,
+    "drifting": true,
+    "slipM": 0.55,
+    "winkelGrad": -21.2,
+    "kmh": 185
+   },
+   {
+    "t": 1.08,
+    "drifting": true,
+    "slipM": 0.55,
+    "winkelGrad": -21.4,
+    "kmh": 186
+   },
+   {
+    "t": 1.2,
+    "drifting": true,
+    "slipM": 0.56,
+    "winkelGrad": -21.5,
+    "kmh": 186
+   }
+  ],
+  "nachLoslassen": {
+   "drifting": false,
+   "slipM": 0.007,
+   "winkel": -0.27
+  }
+ },
+ {
+  "szenario": "Handbremsdrift links hoch390",
+  "seed": 3,
+  "kmhVorher": 192,
+  "frames": [
+   {
+    "t": 0.12,
+    "drifting": false,
+    "slipM": 0,
+    "winkelGrad": 0,
+    "kmh": 193
+   },
+   {
+    "t": 0.24,
+    "drifting": true,
+    "slipM": 0.25,
+    "winkelGrad": -9.5,
+    "kmh": 188
+   },
+   {
+    "t": 0.36,
+    "drifting": true,
+    "slipM": 0.38,
+    "winkelGrad": -14.9,
+    "kmh": 186
+   },
+   {
+    "t": 0.48,
+    "drifting": false,
+    "slipM": 0.41,
+    "winkelGrad": -15.8,
+    "kmh": 186
+   },
+   {
+    "t": 0.6,
+    "drifting": false,
+    "slipM": 0.2,
+    "winkelGrad": -7.6,
+    "kmh": 188
+   },
+   {
+    "t": 0.72,
+    "drifting": false,
+    "slipM": 0.09,
+    "winkelGrad": -3.7,
+    "kmh": 190
+   },
+   {
+    "t": 0.84,
+    "drifting": false,
+    "slipM": 0.05,
+    "winkelGrad": -1.8,
+    "kmh": 191
+   },
+   {
+    "t": 0.96,
+    "drifting": false,
+    "slipM": 0.02,
+    "winkelGrad": -0.9,
+    "kmh": 192
+   },
+   {
+    "t": 1.08,
+    "drifting": false,
+    "slipM": 0.01,
+    "winkelGrad": -0.4,
+    "kmh": 194
+   },
+   {
+    "t": 1.2,
+    "drifting": false,
+    "slipM": 0.01,
+    "winkelGrad": -0.2,
+    "kmh": 195
+   }
+  ],
+  "nachLoslassen": {
+   "drifting": false,
+   "slipM": 0,
+   "winkel": 0
+  }
+ },
+ {
+  "szenario": "Kurvengrip gleiche Drift-Eingabe",
+  "ohneGrip": {
+   "maxSchlupfM": 0.508,
+   "schlupfNachLoslassenM": [
+    0.372,
+    0.272,
+    0.199,
+    0.146
+   ]
+  },
+  "mitGrip": {
+   "maxSchlupfM": 0.381,
+   "schlupfNachLoslassenM": [
+    0.226,
+    0.135,
+    0.08,
+    0.047
+   ]
+  }
+ },
+ {
+  "szenario": "Ruhiger Horizont: Spurwechsel links→rechts auf der Geraden (Horizontband mittlere 50 %, Prozent geänderter Pixel)",
+  "geaendertProzentMitSpurwechsel": 46.91,
+  "geaendertProzentKontrolleOhneSpurwechsel": 46.32,
+  "sNachher": 521,
+  "anmerkung": "Ausgangsfehler waren querfliegende Kulisse; hier verschiebt nur der Fahrweg (≈ 30 m) die Skyline-Höhe schrittweise"
+ }
+]

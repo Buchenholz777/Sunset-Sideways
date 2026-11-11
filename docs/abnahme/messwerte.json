@@ -1,0 +1,97 @@
+[
+ {
+  "szenario": "Vorwarnung 320x568, 384 km/h",
+  "erstesObjekt": {
+   "kind": "baken",
+   "x": 0,
+   "z": 190,
+   "vz": 0
+  },
+  "frames": [
+   {
+    "frame": 0,
+    "ttc": 1.57,
+    "dist": 167.8,
+    "kmh": 384
+   },
+   {
+    "frame": 1,
+    "ttc": 1.37,
+    "dist": 146.4,
+    "kmh": 384
+   },
+   {
+    "frame": 2,
+    "ttc": 1.17,
+    "dist": 125.1,
+    "kmh": 384
+   },
+   {
+    "frame": 3,
+    "ttc": 0.97,
+    "dist": 103.8,
+    "kmh": 384
+   },
+   {
+    "frame": 4,
+    "ttc": 0.77,
+    "dist": 82.4,
+    "kmh": 384
+   },
+   {
+    "frame": 5,
+    "ttc": 0.57,
+    "dist": 61.1,
+    "kmh": 384
+   },
+   {
+    "frame": 6,
+    "ttc": 0.37,
+    "dist": 39.8,
+    "kmh": 384
+   },
+   {
+    "frame": 7,
+    "ttc": 0.17,
+    "dist": 18.4,
+    "kmh": 384
+   },
+   {
+    "frame": 8,
+    "ttc": 1,
+    "dist": 92.4,
+    "kmh": 384
+   },
+   {
+    "frame": 9,
+    "ttc": 0.8,
+    "dist": 73.9,
+    "kmh": 384
+   },
+   {
+    "frame": 10,
+    "ttc": 0.6,
+    "dist": 55.5,
+    "kmh": 384
+   },
+   {
+    "frame": 11,
+    "ttc": 0.4,
+    "dist": 37,
+    "kmh": 384
+   },
+   {
+    "frame": 12,
+    "ttc": 0.2,
+    "dist": 18.6,
+    "kmh": 384
+   },
+   {
+    "frame": 13,
+    "ttc": 0,
+    "dist": 0.2,
+    "kmh": 384
+   }
+  ]
+ }
+]

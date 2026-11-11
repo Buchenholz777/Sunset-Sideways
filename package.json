@@ -1,0 +1,36 @@
+{
+  "name": "glimmer-mile",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GLIMMER MILE – Neon-Boulevard-Arcade-Racer im Browser",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build && vite build -c vite.admin.config.ts && vite build -c vite.server.config.ts",
+    "build:game": "tsc --noEmit && vite build",
+    "build:admin": "vite build -c vite.admin.config.ts",
+    "build:server": "vite build -c vite.server.config.ts",
+    "start": "node dist-server/index.mjs",
+    "db:init": "node dist-server/cli.mjs db:init",
+    "db:info": "node dist-server/cli.mjs db:info",
+    "admin:passwd": "node dist-server/cli.mjs admin:passwd",
+    "admin:logout-all": "node dist-server/cli.mjs admin:logout-all",
+    "preview": "vite preview --host",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:browser": "node scripts/smoke.mjs smoke-out",
+    "test:lifecycle": "node scripts/lifecycle.mjs",
+    "test:input": "node scripts/input.mjs",
+    "build:static": "node scripts/build_static.mjs https://sunsetsideways.com"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "playwright-core": "^1.65.0",
+    "typescript": "*",
+    "vite": "*",
+    "vitest": "*"
+  },
+  "engines": {
+    "node": ">=24.7"
+  }
+}

@@ -1,0 +1,177 @@
+:root {
+  --ink: #070a24; --cream: #f3ead2; --mint: #7fe3c4; --magenta: #ff3fa4; --cyan: #2ee6d6; --amber: #ffb23f;
+  --sat: env(safe-area-inset-top, 0px); --sar: env(safe-area-inset-right, 0px);
+  --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--ink); color: var(--cream); font-family: "Trebuchet MS", system-ui, sans-serif; overflow: hidden; overscroll-behavior: none; -webkit-tap-highlight-color: transparent; }
+#app { position: fixed; inset: 0; height: 100dvh; user-select: none; -webkit-user-select: none; }
+#stage { position: absolute; inset: 0; width: 100%; height: 100%; display: block; image-rendering: pixelated; touch-action: none; background: var(--ink); }
+
+#hud { position: absolute; inset: 0; pointer-events: none; padding: calc(var(--sat) + 10px) calc(var(--sar) + 10px) 0 calc(var(--sal) + 10px); display: flex; justify-content: space-between; align-items: flex-start; }
+#hud[hidden] { display: none; }
+.hud-left { display: flex; flex-direction: column; gap: 4px; }
+.stat { display: flex; flex-direction: column; line-height: 1.05; text-shadow: 0 2px 0 #000a; }
+.stat .lbl { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; opacity: .75; }
+.stat .val { font-size: clamp(20px, 3.2vw, 32px); font-weight: 800; font-variant-numeric: tabular-nums; }
+#hud-best-wrap .val { font-size: clamp(14px, 2vw, 20px); opacity: .9; }
+#hud-best-wrap.beat .val { color: var(--amber); animation: beat 1.2s ease-out 1; }
+@keyframes beat { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
+#hud-effects { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+#hud-effects li { display: flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 4px; background: #070a24cc; font-weight: 700; font-size: 14px; border: 1px solid currentColor; }
+#hud-effects li[hidden] { display: none; }
+#hud-effects svg { width: 18px; height: 18px; }
+#fx-shield { color: #7fe3c4; } #fx-slow { color: #f4e9c8; } #fx-magnet { color: #6bb8ff; } #fx-blitz { color: #ffe95a; } #fx-glide { color: #ff9ae0; } #fx-boost { color: #ff5a5a; } #fx-guide { color: #6bffa8; }
+.fx-time { font-variant-numeric: tabular-nums; opacity: .9; margin-left: auto; padding-left: 6px; }
+.hud-speed { margin-right: 108px; text-align: right; text-shadow: 0 2px 0 #000a; font-weight: 800; font-size: clamp(20px, 3.2vw, 32px); font-variant-numeric: tabular-nums; }
+.hud-speed .unit { font-size: 12px; margin-left: 4px; opacity: .75; letter-spacing: .08em; }
+
+#hud-btns { position: absolute; top: calc(var(--sat) + 8px); right: calc(var(--sar) + 8px); display: flex; gap: 8px; z-index: 5; }
+#hud-btns button { width: 48px; height: 48px; min-width: 44px; min-height: 44px; border-radius: 10px; border: 2px solid var(--cyan); background: #070a24cc; color: var(--cream); font-size: 20px; font-weight: 800; cursor: pointer; }
+#hud-btns button[hidden] { display: none; }
+#hud-btns button[aria-pressed="true"] { border-color: #888; color: #888; text-decoration: line-through; }
+button:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
+
+.overlay { position: absolute; inset: 0; z-index: 4; display: flex; align-items: center; justify-content: center; padding: calc(var(--sat) + 12px) calc(var(--sar) + 12px) calc(var(--sab) + 12px) calc(var(--sal) + 12px); background: radial-gradient(ellipse at center, #070a2470, #070a24b0); overflow-y: auto; cursor: pointer; }
+.overlay[hidden] { display: none; }
+.panel { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; max-width: 480px; margin: auto; }
+.title { margin: 0; font-size: clamp(32px, 7vw, 64px); letter-spacing: .14em; color: var(--cream); text-shadow: 0 0 0 var(--magenta), 3px 3px 0 var(--magenta), 6px 6px 0 #1a0f4e; }
+h2 { margin: 0; font-size: 34px; letter-spacing: .1em; }
+.best { margin: 0; font-size: 18px; } .best strong { color: var(--amber); }
+.lbl-big { margin: 0; letter-spacing: .18em; text-transform: uppercase; opacity: .85; }
+.big { margin: 0; font-size: clamp(40px, 9vw, 72px); font-weight: 900; color: var(--mint); text-shadow: 3px 3px 0 #000a; }
+.record { margin: 0; font-size: 26px; font-weight: 900; color: var(--amber); letter-spacing: .06em; animation: beat 1s ease-out 1; }
+.record[hidden] { display: none; }
+.controls { margin: 4px 0 0; opacity: .8; font-size: 16px; }
+button.primary { padding: 14px 44px; min-height: 52px; font: inherit; font-size: 22px; font-weight: 800; border: 0; border-radius: 8px; background: var(--amber); color: var(--ink); cursor: pointer; box-shadow: 0 4px 0 #a96d12; }
+button.primary:disabled { opacity: .45; cursor: default; box-shadow: none; }
+button.secondary { padding: 10px 28px; min-height: 44px; font: inherit; font-size: 17px; font-weight: 700; border: 2px solid var(--cream); border-radius: 8px; background: transparent; color: var(--cream); cursor: pointer; }
+
+@media (max-height: 420px) { .panel { gap: 6px; } .title { font-size: 34px; } .big { font-size: 40px; } button.primary { min-height: 44px; padding: 8px 32px; font-size: 18px; } }
+@media (max-width: 420px) { .hud-speed { margin-right: 0; position: absolute; left: 50%; transform: translateX(-50%); top: calc(var(--sat) + 10px); text-align: center; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+/* Ergebnis oben: das Hindernis des Crashs im unteren Bildteil bleibt sichtbar */
+#screen-result { align-items: flex-start; padding-top: calc(var(--sat) + 12%); background: linear-gradient(#070a24d0, #070a2400 70%); }
+
+
+/* Nitro-Anzeige beim Tacho */
+.hud-speed { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+
+/* Bedienhinweis vor jedem Versuch */
+.brief { position: absolute; left: 50%; top: 26%; transform: translateX(-50%); z-index: 4; display: flex; flex-direction: column; gap: 6px; padding: 14px 22px; max-width: 92%; text-align: center; border-radius: 12px; background: #070a24d9; border: 2px solid #c9a8ff; pointer-events: none; }
+.brief[hidden] { display: none; }
+.brief p { margin: 0; font: 800 clamp(16px, 4.6vw, 24px)/1.2 "Trebuchet MS", system-ui, sans-serif; color: #f3ead2; }
+.brief p:last-child { font-size: clamp(14px, 3.8vw, 18px); color: #ffd36b; }
+
+/* ================= Startbildschirm: Titelbild im 80er-Arcade-Stil ================= */
+#screen-start {
+  --ts: min(120px, 15.5vh, calc((100vw - 28px - var(--sal) - var(--sar)) / 4.35));
+  align-items: flex-start; justify-content: center; cursor: default;
+  padding-top: calc(var(--sat) + 2.2vh);
+  background:
+    radial-gradient(ellipse 70% 38% at 50% 36%, #ff8a4a44, #ff8a4a00 70%),
+    radial-gradient(ellipse 40% 60% at 0% 55%, #2ee6d633, #2ee6d600 70%),
+    radial-gradient(ellipse 40% 60% at 100% 55%, #ff3fa433, #ff3fa400 70%),
+    linear-gradient(#070a24ee 0%, #070a24c4 36%, #070a2455 56%, #070a2400 70%);
+}
+#screen-start .panel { gap: clamp(4px, 1.2vh, 10px); max-width: min(94vw, 760px); margin: 0 auto; }
+.logo { margin: 0; display: flex; flex-direction: column; align-items: center; line-height: .86; text-transform: uppercase; position: relative; padding-bottom: .1em;
+  font-family: "Barlow Condensed", "Oswald", "Bahnschrift Condensed", "Arial Narrow", Impact, "Haettenschweiler", sans-serif; font-weight: 900; font-style: italic; font-size: var(--ts);
+  -webkit-text-stroke: max(2px, calc(var(--ts) * .03)) #1a0f4e; paint-order: stroke fill; transform: skewX(-4deg); }
+.logo span { display: block; white-space: nowrap; }
+.logo .l1 { color: #fff0c4; letter-spacing: .2em; margin-right: -.2em;
+  text-shadow: calc(var(--ts) * -.025) calc(var(--ts) * -.025) 0 #2ee6d6, calc(var(--ts) * .035) calc(var(--ts) * .04) 0 #ff8a3d, 0 calc(var(--ts) * .06) calc(var(--ts) * .12) #070a24cc; }
+.logo .l2 { color: #ffc4e8; letter-spacing: .05em; margin-right: -.05em;
+  text-shadow: calc(var(--ts) * .04) calc(var(--ts) * .045) 0 #e3157c, calc(var(--ts) * .085) calc(var(--ts) * .09) 0 #52106e, 0 calc(var(--ts) * .08) calc(var(--ts) * .18) #070a24dd; }
+.logo::after { content: ""; position: absolute; left: 6%; right: 6%; bottom: 0; height: max(3px, calc(var(--ts) * .035)); background: linear-gradient(90deg, #2ee6d600, #2ee6d6 18%, #2ee6d6 82%, #2ee6d600); border-radius: 2px; transform: skewX(-12deg); box-shadow: 0 0 10px #2ee6d6aa; }
+#screen-start .best { font-size: clamp(13px, 2.2vh, 17px); opacity: .85; letter-spacing: .06em; text-shadow: 0 1px 6px #070a24; }
+#screen-start button.primary { min-width: min(260px, 70vw); min-height: 54px; padding: 12px 40px; font-size: 24px; letter-spacing: .08em; text-transform: uppercase; font-weight: 900;
+  background: linear-gradient(#8ff7ec, #4fe3d4); color: var(--ink); box-shadow: 0 4px 0 #0f8f86, 0 0 22px #2ee6d655; border-radius: 10px; margin-top: clamp(2px, .8vh, 8px); }
+#screen-start button.primary:hover { filter: brightness(1.08); }
+#screen-start button.primary:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
+
+/* Lenkhilfe: Tastenkappen bzw. Daumen, kleines Auto auf drei Spuren */
+#howto { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: clamp(2px, 1vh, 8px); padding: 8px 14px 6px; border-radius: 14px; background: #070a2499; border: 1px solid #ffffff22; }
+#howto .controls { margin: 2px 0 0; opacity: .95; font-size: clamp(13px, 2.2vh, 16px); font-weight: 700; letter-spacing: .02em; color: var(--cream); }
+#howto[data-mode="keys"] .hw-touch, #howto[data-mode="touch"] .hw-keys { display: none; }
+.hw-keys { display: flex; align-items: center; gap: 12px; }
+.hw-touch { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.key { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 8px; font: 900 22px/1 "Trebuchet MS", system-ui, sans-serif; color: var(--cream); background: linear-gradient(#3b3f6e, #262a55); border: 2px solid #8a90d0; box-shadow: 0 4px 0 #14173a; }
+.hw-road { position: relative; width: 108px; height: 54px; overflow: hidden; clip-path: polygon(30% 0, 70% 0, 100% 100%, 0 100%); background: linear-gradient(#34315a, #4a4670); }
+.hw-road::before, .hw-road::after { content: ""; position: absolute; top: 0; bottom: 0; width: 2px; background: repeating-linear-gradient(#e9e2c6 0 6px, transparent 6px 11px); }
+.hw-road::before { left: 38%; transform: skewX(-12deg); } .hw-road::after { left: 62%; transform: skewX(12deg); }
+.hw-car { position: absolute; left: 50%; bottom: 5px; width: 22px; height: 12px; margin-left: -11px; border-radius: 3px 3px 2px 2px; background: linear-gradient(#8a3fe0, #4a1a9a); box-shadow: inset 0 -3px 0 #2a0f5e, -7px 1px 0 -3px #ff2a2a, 7px 1px 0 -3px #ff2a2a; }
+.hw-car::before { content: ""; position: absolute; left: 4px; right: 4px; top: -5px; height: 6px; border-radius: 3px 3px 0 0; background: #6a28c0; }
+.hw-car::after { content: ""; position: absolute; left: 2px; right: 2px; bottom: 2px; height: 2px; background: #ff2a2a; box-shadow: 0 0 4px #ff2a2a; }
+.hw-swipe { position: relative; width: 140px; height: 38px; color: var(--cyan); }
+.hw-line { position: absolute; left: 10px; right: 10px; top: 4px; width: 120px; height: 14px; }
+.hw-thumb { position: absolute; left: 50%; top: 0; width: 24px; height: 34px; margin-left: -12px; filter: drop-shadow(0 2px 2px #0008); }
+.k-l { animation: hw-kl 5s ease-in-out infinite; } .k-r { animation: hw-kr 5s ease-in-out infinite; }
+.hw-car { animation: hw-car 5s ease-in-out infinite; }
+.hw-thumb { animation: hw-thumb 5s ease-in-out infinite; }
+@keyframes hw-car { 0%, 8% { transform: translateX(0); } 20%, 38% { transform: translateX(calc(var(--hw, 26px) * -1)); } 50%, 58% { transform: translateX(0); } 70%, 88% { transform: translateX(var(--hw, 26px)); } 100% { transform: translateX(0); } }
+@keyframes hw-thumb { 0%, 8% { transform: translateX(0); } 20%, 38% { transform: translateX(-46px); } 50%, 58% { transform: translateX(0); } 70%, 88% { transform: translateX(46px); } 100% { transform: translateX(0); } }
+@keyframes hw-kl { 0%, 6%, 42%, 100% { background: linear-gradient(#3b3f6e, #262a55); border-color: #8a90d0; color: var(--cream); transform: none; box-shadow: 0 4px 0 #14173a; } 12%, 36% { background: linear-gradient(#8ff7ec, #2ee6d6); border-color: #d9fffa; color: var(--ink); transform: translateY(3px); box-shadow: 0 1px 0 #0f8f86, 0 0 14px #2ee6d6; } }
+@keyframes hw-kr { 0%, 54%, 92%, 100% { background: linear-gradient(#3b3f6e, #262a55); border-color: #8a90d0; color: var(--cream); transform: none; box-shadow: 0 4px 0 #14173a; } 62%, 86% { background: linear-gradient(#8ff7ec, #2ee6d6); border-color: #d9fffa; color: var(--ink); transform: translateY(3px); box-shadow: 0 1px 0 #0f8f86, 0 0 14px #2ee6d6; } }
+@media (prefers-reduced-motion: reduce) {
+  .k-l, .k-r, .hw-car, .hw-thumb { animation: none; }
+  .key { background: linear-gradient(#8ff7ec, #2ee6d6); border-color: #d9fffa; color: var(--ink); box-shadow: 0 2px 0 #0f8f86; }
+}
+
+/* Hochformat schmal: kompakter */
+@media (max-width: 380px) { #howto { padding: 6px 10px 4px; } .hw-road { width: 92px; height: 46px; } .key { width: 38px; height: 38px; } #screen-start button.primary { min-height: 50px; font-size: 22px; } }
+
+/* Querformat mit geringer Höhe: Startgruppe links neben dem Wagen */
+@media (orientation: landscape) and (max-height: 520px) {
+  #screen-start { --ts: min(120px, 17vh, calc(40vw / 4.35 * 1.1)); justify-content: flex-start; align-items: center; padding-top: calc(var(--sat) + 6px); padding-left: calc(var(--sal) + 16px);
+    background:
+      radial-gradient(ellipse 60% 70% at 24% 45%, #ff8a4a33, #ff8a4a00 70%),
+      radial-gradient(ellipse 30% 60% at 100% 55%, #ff3fa433, #ff3fa400 70%),
+      linear-gradient(90deg, #070a24ee 0%, #070a24c4 34%, #070a2450 46%, #070a2400 58%); }
+  #screen-start .panel { align-items: flex-start; margin: 0; max-width: 44vw; text-align: left; }
+  .logo { align-items: flex-start; transform-origin: left; }
+  .logo::after { left: 0; right: 4%; }
+  #howto { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; gap: 10px; padding: 5px 10px; }
+  #howto .controls { max-width: 22ch; text-align: left; margin: 0; }
+  .hw-road { width: 84px; height: 42px; } .key { width: 34px; height: 34px; font-size: 18px; }
+  #screen-start button.primary { min-height: 44px; padding: 8px 32px; font-size: 20px; min-width: 0; }
+  .hw-swipe { width: 112px; height: 30px; } .hw-line { left: 6px; right: 6px; width: 100px; top: 2px; } .hw-thumb { width: 20px; height: 28px; margin-left: -10px; }
+}
+
+/* Feinschliff: Abstand zum Ton-Knopf (Hochformat) und kompaktere Lenkhilfe auf kleinen Telefonen */
+#screen-start { padding-top: calc(var(--sat) + 3vh); }
+@media (max-width: 600px) and (orientation: portrait) {
+  #screen-start { padding-top: calc(var(--sat) + 46px); }
+  #howto[data-mode="touch"] .hw-road { width: 88px; height: 42px; }
+  #howto[data-mode="touch"] .hw-swipe { width: 124px; height: 32px; }
+  #howto[data-mode="touch"] .hw-line { width: 104px; left: 10px; right: 10px; top: 2px; }
+  #howto[data-mode="touch"] .hw-thumb { width: 20px; height: 29px; margin-left: -10px; }
+  #howto .controls { font-size: 13px; line-height: 1.2; }
+}
+
+/* Hochformat: Titel unterhalb des Ton-Knopfs, Kompaktmaße für kleine Höhen, Wagen bleibt frei */
+@media (max-width: 600px) and (orientation: portrait) {
+  #screen-start { --ts: min(120px, 14vh, calc((100vw - 28px - var(--sal) - var(--sar)) / 4.7)); padding-top: calc(var(--sat) + 58px); }
+  .logo .l1 { letter-spacing: .14em; margin-right: -.14em; }
+}
+@media (max-width: 600px) and (orientation: portrait) and (max-height: 640px) {
+  #screen-start .panel { gap: 2px; }
+  #screen-start button.primary { min-height: 44px; padding: 6px 32px; font-size: 20px; margin-top: 2px; }
+  #howto { margin-top: 2px; padding: 4px 10px 3px; gap: 1px; }
+  #howto[data-mode="touch"] .hw-road, #howto[data-mode="keys"] .hw-road { width: 78px; height: 34px; }
+  #howto[data-mode="touch"] .hw-swipe { width: 112px; height: 28px; }
+  #howto[data-mode="touch"] .hw-line { width: 96px; left: 8px; right: 8px; }
+  #howto[data-mode="touch"] .hw-thumb { width: 18px; height: 26px; margin-left: -9px; }
+  #howto .controls { font-size: 12px; margin-top: 0; }
+  .key { width: 34px; height: 34px; font-size: 18px; }
+  #screen-start .best { font-size: 12px; }
+}
+
+.hw-road { --hw: 26px; }
+@media (max-width: 600px) and (orientation: portrait) and (max-height: 640px) { .hw-road { --hw: 17px; } }
+@media (orientation: landscape) and (max-height: 520px) { .hw-road { --hw: 19px; } }
+@media (max-width: 380px) { .hw-road { --hw: 21px; } }
+@media (max-width: 600px) and (orientation: portrait) and (max-height: 640px) { .hw-road { --hw: 17px; } }
+
+#testdrive-badge { position: fixed; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 30; padding: 6px 12px; border-radius: 999px; background: rgba(7, 10, 36, 0.82); color: #ffe27a; border: 1px solid rgba(255, 226, 122, 0.55); font: 600 12px/1.2 system-ui, sans-serif; letter-spacing: 0.04em; pointer-events: none; white-space: nowrap; }

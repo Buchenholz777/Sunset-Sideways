@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#070a24" />
+  <title>Sunset Sideways – Neon-Arcade-Racer im Browser</title>
+  <meta name="description" content="Sunset Sideways ist ein kostenloser Arcade-Racer im Browser: Weiche Verkehr aus, sammle Power-ups und rase von Sonnenuntergang bis in die Neonnacht – am PC und Smartphone." />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="__ORIGIN__/" />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Sunset Sideways" />
+  <meta property="og:locale" content="de_DE" />
+  <meta property="og:title" content="Sunset Sideways – Neon-Arcade-Racer im Browser" />
+  <meta property="og:description" content="Weiche Verkehr aus, sammle Power-ups und rase vom Sonnenuntergang in die Neonnacht. Kostenlos im Browser, am PC und Smartphone." />
+  <meta property="og:url" content="__ORIGIN__/" />
+  <meta property="og:image" content="__ORIGIN__/og.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="Sunset Sideways: Sportwagen auf einer Neonstraße vor dem Sonnenuntergang" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Sunset Sideways – Neon-Arcade-Racer im Browser" />
+  <meta name="twitter:description" content="Weiche Verkehr aus, sammle Power-ups und rase vom Sonnenuntergang in die Neonnacht." />
+  <meta name="twitter:image" content="__ORIGIN__/og.png" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="stage" aria-label="Spielfläche"></canvas>
+
+    <div id="hud" hidden>
+      <div class="hud-left">
+        <div class="stat"><span class="lbl">Strecke</span><span id="hud-distance" class="val">0 m</span></div>
+        <div class="stat" id="hud-best-wrap"><span class="lbl">Bestweite</span><span id="hud-best" class="val">0 m</span></div>
+        <ul id="hud-effects" aria-label="Aktive Effekte">
+                    <li id="fx-shield" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 5.5h5v3.2L8 11 5.5 8.7z" fill="currentColor"/></svg><span class="fx-name">Impulsschild</span><span class="fx-time"></span></li>
+                    <li id="fx-magnet" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2v6a5 5 0 0 0 10 0V2h-3v6a2 2 0 0 1-4 0V2z" fill="currentColor"/></svg><span class="fx-name">Magnet</span><span class="fx-time"></span></li>
+          <li id="fx-blitz" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 1L3 9h4l-1 6 7-9H9z" fill="currentColor"/></svg><span class="fx-name">Spurblitz</span><span class="fx-time"></span></li>
+          <li id="fx-glide" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l2 5 5 2-5 1-2 4-2-4-5-1 5-2z" fill="currentColor"/></svg><span class="fx-name">Fliegen</span><span class="fx-time"></span></li>
+          <li id="fx-boost" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8l6-6 6 6M2 14l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg><span class="fx-name">Phantom</span><span class="fx-time"></span></li>
+          <li id="fx-guide" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l5 6H9v8H7V7H3z" fill="currentColor"/></svg><span class="fx-name">Pfadfinder</span><span class="fx-time"></span></li>
+          <li id="fx-slow" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h10M3 14h10M4 2c0 4 4 4 4 6s-4 2-4 6M12 2c0 4-4 4-4 6s4 2 4 6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span class="fx-name">Zeitblase</span><span class="fx-time"></span></li>
+        </ul>
+      </div>
+      <div class="hud-speed"><div class="spd"><span id="hud-speed">165</span><span class="unit">km/h</span></div></div>
+    </div>
+
+    <div id="hud-btns">
+      <button id="btn-pause" type="button" aria-label="Pause" hidden>Ⅱ</button>
+      <button id="btn-sound" type="button" aria-label="Ton ausschalten" aria-pressed="false">♪</button>
+    </div>
+
+
+
+
+    <section id="screen-brief" class="brief" hidden aria-live="polite"></section>
+
+
+    <section id="screen-start" class="overlay" data-default="start" aria-label="Start">
+      <div class="panel">
+        <h1 class="logo" aria-label="Sunset Sideways"><span class="l1">Sunset</span><span class="l2">Sideways</span></h1>
+        <p class="best">Bestweite: <strong id="start-best">0 m</strong></p>
+        <button id="btn-start" class="primary" type="button" data-action="start">Fahren</button>
+        <div id="howto" data-mode="keys">
+          <div class="hw-keys" aria-hidden="true">
+            <b class="key k-l">←</b>
+            <div class="hw-road"><i class="hw-car"></i></div>
+            <b class="key k-r">→</b>
+          </div>
+          <div class="hw-touch" aria-hidden="true">
+            <div class="hw-road"><i class="hw-car"></i></div>
+            <div class="hw-swipe">
+              <svg class="hw-line" viewBox="0 0 120 14" aria-hidden="true"><path d="M14 7h92M14 7l9-6M14 7l9 6M106 7l-9-6M106 7l-9 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <svg class="hw-thumb" viewBox="0 0 28 36" aria-hidden="true"><rect x="9" y="12" width="11" height="22" rx="5.5" fill="#ffd9b0"/><circle cx="14.5" cy="9" r="7" fill="#ffe8c8"/><circle cx="14.5" cy="9" r="7" fill="none" stroke="#1a0f4e" stroke-width="1.2"/></svg>
+            </div>
+          </div>
+          <p id="controls-line" class="controls"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="screen-pause" class="overlay" data-default="resume" aria-label="Pause" hidden>
+      <div class="panel">
+        <h2>Pause</h2>
+        <p id="tip-line" class="controls"></p>
+        <button id="btn-resume" class="primary" type="button" data-action="resume">Fortsetzen</button>
+        <button id="btn-restart" class="secondary" type="button" data-action="restart">Neu starten</button>
+      </div>
+    </section>
+
+    <section id="screen-result" class="overlay" data-default="again" aria-label="Ergebnis" hidden>
+      <div class="panel">
+        <p class="lbl-big">Deine Strecke</p>
+        <p id="res-dist" class="big">0 m</p>
+        <p id="res-record" class="record" hidden>Neuer Rekord!</p>
+        <p class="best">Bestweite: <strong id="res-best">0 m</strong></p>
+        <button id="btn-again" class="primary" type="button" data-action="again" disabled>Nochmal fahren</button>
+      </div>
+    </section>
+  </div>
+  <script type="module" src="./src/main.ts"></script>
+</body>
+</html>
