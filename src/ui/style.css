@@ -178,7 +178,7 @@ button.secondary { padding: 10px 28px; min-height: 44px; font: inherit; font-siz
 
 /* Startbildschirm: Kurztext und aufklappbare Spielbeschreibung (crawlbarer Inhalt im initialen HTML) */
 #screen-start .tagline { margin: -4px 0 -6px; line-height: 1; font-size: clamp(10px, 1.6vh, 13px); letter-spacing: .14em; text-transform: uppercase; opacity: .9; color: #ffd9ec; text-shadow: 0 1px 6px #070a24; }
-.about { position: absolute; left: 50%; bottom: calc(var(--sab) + 8px); transform: translateX(-50%); width: min(94vw, 640px); z-index: 5; text-align: left; }
+.about { position: absolute; left: 50%; bottom: calc(var(--sab) + 32px); transform: translateX(-50%); width: min(94vw, 640px); z-index: 5; text-align: left; }
 .about > summary { list-style: none; cursor: pointer; width: max-content; max-width: 100%; margin: 0 auto; padding: 6px 14px; border-radius: 999px; border: 1px solid #ffffff44; background: #070a24cc; color: #fff; font: 600 12px/1.2 system-ui, sans-serif; letter-spacing: .06em; }
 .about > summary::-webkit-details-marker { display: none; }
 .about > summary:focus-visible { outline: 3px solid #ffe27a; outline-offset: 2px; }
@@ -187,3 +187,11 @@ button.secondary { padding: 10px 28px; min-height: 44px; font: inherit; font-siz
 .about-body h2 { margin: 0 0 6px; font-size: 17px; } .about-body h3 { margin: 12px 0 4px; font-size: 14px; color: #5fe0ff; }
 .about-body p { margin: 0 0 8px; } .about-body ul { margin: 0; padding-left: 18px; } .about-body img { display: block; width: 100%; height: auto; margin-top: 12px; border-radius: 10px; }
 .noscript { color: #ffe27a; text-align: center; max-width: 36ch; }
+
+.legal { position: absolute; left: 50%; bottom: calc(var(--sab) + 6px); transform: translateX(-50%); z-index: 5; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font: 11px/1.2 system-ui, sans-serif; }
+.legal a, .legal button { color: #ffffffcc; background: none; border: 0; padding: 4px 2px; font: inherit; text-decoration: underline; cursor: pointer; }
+.legal a:focus-visible, .legal button:focus-visible { outline: 2px solid #ffe27a; outline-offset: 2px; }
+#consent { position: fixed; left: 50%; bottom: calc(var(--sab, 0px) + 8px); transform: translateX(-50%); z-index: 60; width: min(94vw, 600px); padding: 12px 14px; border-radius: 14px; border: 1px solid #ffffff55; background: #070a24f5; color: #eef0ff; font: 13px/1.45 system-ui, sans-serif; box-shadow: 0 6px 30px #000a; cursor: default; }
+#consent p { margin: 0 0 10px; } #consent a { color: #5fe0ff; }
+.consent-btns { display: flex; gap: 10px; } .consent-btns button { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid #ffffff77; background: #1b2045; color: #fff; font: 700 14px system-ui, sans-serif; cursor: pointer; }
+.consent-btns button:hover { border-color: #5fe0ff; } .consent-btns button:focus-visible { outline: 3px solid #ffe27a; outline-offset: 2px; }

@@ -54,7 +54,7 @@ export function createNodeApp(o: NodeOpts) {
       const u = new URL(request.url);
       const rel = u.pathname === '/' ? 'index.html' : u.pathname.slice(1);
       const origin = o.env.PUBLIC_ORIGIN ?? u.origin;
-      r = fileResponse(rel, (t) => t.replace(/__ORIGIN__/g, origin)) ?? new Response('Nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+      r = fileResponse(rel, (t) => t.replace(/__ORIGIN__/g, origin)) ?? fileResponse(rel + '.html', (t) => t.replace(/__ORIGIN__/g, origin)) ?? new Response('Nicht gefunden', { status: 404, headers: { 'content-type': 'text/plain; charset=utf-8' } });
     }
     const headers: Record<string, string | string[]> = {};
     r.headers.forEach((v, k) => { if (k !== 'set-cookie') headers[k] = v; });
