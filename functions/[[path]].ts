@@ -13,6 +13,8 @@ const JSON_HEAD = { 'content-type': 'application/json; charset=utf-8', 'cache-co
 
 export const onRequest = async (ctx: Ctx): Promise<Response> => {
   const { request, env } = ctx;
+  // Google-Search-Console-Inhaberbestätigung: Pages würde die .html-Datei auf eine Adresse ohne Endung umleiten (308); Google verlangt exakt diese URL mit Status 200.
+  if (new URL(request.url).pathname === '/googleca51093de23aed0e.html') return new Response('google-site-verification: googleca51093de23aed0e.html', { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=3600' } });
   if (!env.DB) {
     // Ohne D1-Datenbank läuft das Spiel mit den eingebauten Standardwerten weiter; Admin und Messung sind dann aus.
     const p = new URL(request.url).pathname;

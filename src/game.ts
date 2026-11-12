@@ -137,7 +137,7 @@ export class Game {
     window.addEventListener('blur', () => this.pause());
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.pause(); });
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
-    window.addEventListener('keyup', (e) => { this.held.delete(e.code); this.blocked.delete(e.code); if (this.isActionKey(e.code) && this.overlayVisible()) e.preventDefault(); });
+    window.addEventListener('keyup', (e) => { this.held.delete(e.code); this.blocked.delete(e.code); if (this.isActionKey(e.code) && this.overlayVisible() && !(e.target as Element | null)?.closest?.('#about')) e.preventDefault(); });
 
     this.el.pause.addEventListener('click', () => this.pause());
     this.el.snd.addEventListener('click', () => { this.sound.unlock(); this.sound.toggle(); this.syncSoundButton(); });
@@ -166,7 +166,7 @@ export class Game {
     }
     if (!this.isActionKey(e.code)) return;
     const t = e.target as HTMLElement | null;
-    if (t && t.closest('#hud-btns')) return; // HUD-Buttons behalten ihr natives Verhalten
+    if (t && (t.closest('#hud-btns') || t.closest('#about'))) return; // HUD-Buttons und die aufklappbare Spielbeschreibung behalten ihr natives Verhalten
     if (!this.overlayVisible()) return;
     e.preventDefault();
     if (e.repeat || this.blocked.has(e.code)) return;
