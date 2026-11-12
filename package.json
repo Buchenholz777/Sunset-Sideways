@@ -21,7 +21,8 @@
     "test:lifecycle": "node scripts/lifecycle.mjs",
     "test:input": "node scripts/input.mjs",
     "build:pages": "tsc --noEmit && node scripts/build_pages.mjs https://www.sunsetsideways.com",
-    "admin:hash": "node dist-server/cli.mjs admin:hash"
+    "admin:hash": "vite build -c vite.server.config.ts --logLevel error && node dist-server/cli.mjs admin:hash",
+    "build:static": "npm run build:pages"
   },
   "devDependencies": {
     "@types/node": "^26.6.6",
