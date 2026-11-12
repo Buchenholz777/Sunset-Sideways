@@ -23,6 +23,19 @@
   <meta name="twitter:title" content="Sunset Sideways – Neon-Arcade-Racer im Browser" />
   <meta name="twitter:description" content="Weiche Verkehr aus, sammle Power-ups und rase vom Sonnenuntergang in die Neonnacht." />
   <meta name="twitter:image" content="__ORIGIN__/og.png" />
+  <!-- Google Tag Manager (GTM-WRM84FRX); nicht in QA-Läufen und privaten Testfahrten -->
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    if (!/[?&](qa|testdrive)=/.test(location.search)) {
+      dataLayer.push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtm.js?id=GTM-WRM84FRX';
+      document.head.appendChild(s);
+    }
+  </script>
 </head>
 <body>
   <div id="app">
