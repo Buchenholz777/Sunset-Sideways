@@ -33,7 +33,8 @@ export function makeLayout(cssW: number, cssH: number): Layout {
   const hy = Math.round(h * (portrait ? 0.36 : 0.34));
   const gy = Math.round(h * 0.82);
   const Hv = (gy - hy) * CAM_BACK;
-  const fx = Math.min(0.87 * h, (0.85 * w * CAM_BACK) / (2 * B.road.halfWidth));
+  // Hochformat: Straße füllt die Bildbreite (Ränder leicht angeschnitten) – sonst wirkt alles schmal und in die Länge gezogen
+  const fx = Math.min(0.87 * h, ((portrait ? 1.0 : 0.85) * w * CAM_BACK) / (2 * B.road.halfWidth));
   // Fernsicht: stärkere Stauchung im schmalen Hochformat, damit alle Spuren früh unterscheidbar bleiben.
   return { w, h, scale, portrait, cx: w / 2, hy, gy, Hv, fx, gamma: portrait ? 0.46 : 0.58, u: 2 / scale };
 }
