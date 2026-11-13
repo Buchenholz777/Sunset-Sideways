@@ -41,7 +41,8 @@ export function pedsInChunk(k: number, side: number): Ped[] {
 /** Zeichnet eine Person am Bodenpunkt (sx, sy); k = Pixel pro Meter. */
 export function drawPed(ctx: CanvasRenderingContext2D, sx: number, sy: number, k: number, p: Ped, clock: number): void {
   const o = OUTFIT[p.type];
-  const kk = Math.max(k, (2.4 * gfx.u) / 0.42);
+  // Mindestgröße nur als Sichtbarkeitsgrenze (≈ 10 px Körperhöhe): größere Werte machten ferne Passanten größer als nahe, vor allem im Hochformat
+  const kk = Math.max(k, (1.2 * gfx.u) / 0.42);
   const H = p.h;
   const wm = p.type % 3 === 1 ? 1.2 : p.type % 3 === 2 ? 0.92 : 1;
   const L = (x0: number, top: number, w: number, h: number, c: string) => rect(ctx, sx + x0 * kk, sy - top * kk, Math.max(1, w * kk), Math.max(1, h * kk), c);
