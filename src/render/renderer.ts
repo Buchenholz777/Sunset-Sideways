@@ -598,7 +598,7 @@ export class Renderer {
       const xr = x * c + z * s, zr = -x * s + z * c;
       const p = this.projectWorld(zc, this.carBx + xr + this.camHead * zr, this.carBz + zr, y * 0.8);
       return [Math.round(p.sx), Math.round(p.sy)];
-    }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth });
+    }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth, zs: L.portrait ? 0.78 : undefined });
     if (v.shield || this.arcFlash > 0) {
       const base = v.shield ? (v.shieldFrac < 0.25 ? (Math.floor(this.clock * 6) % 2 ? 0.45 : 0.95) : 0.9) : 0;
       drawShieldArc(ctx, sx, L.gy - liftPx, k, Math.min(1, base + this.arcFlash * 0.6), this.clock);

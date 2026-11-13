@@ -46,7 +46,7 @@ describe('Projektion', () => {
       const L = makeLayout(w, h);
       expect(L.gy / L.h).toBeGreaterThanOrEqual(0.8);
       expect(L.gy / L.h).toBeLessThanOrEqual(0.85);
-      expect(L.hy / L.h).toBeLessThanOrEqual(0.37);
+      expect(L.hy / L.h).toBeLessThanOrEqual(L.portrait ? 0.42 : 0.37);
     }
   });
 });

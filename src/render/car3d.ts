@@ -10,7 +10,7 @@ import { mixHex } from './scenery';
  * Koordinaten: x seitlich (+ rechts), y oben, z nach vorn; Fahrzeug 1,9 × 4,2 m, Mittelpunkt im Ursprung.
  * Sichtbare Breite (±0,95 m über den Reifen) und Trefferfläche (balance.player) sind aufeinander abgestimmt.
  */
-export interface CarFx { turbo: boolean; grip: boolean; brake: number; steer: number; running: boolean; yaw: number; /** Flughöhe in Modelleinheiten */ lift?: number; /** Phantom-Turbo 0…1: Karosserie wird schwarz, nur die Rückleuchten leuchten */ stealth?: number }
+export interface CarFx { turbo: boolean; grip: boolean; brake: number; steer: number; running: boolean; yaw: number; /** Flughöhe in Modelleinheiten */ lift?: number; /** Phantom-Turbo 0…1: Karosserie wird schwarz, nur die Rückleuchten leuchten */ stealth?: number; /** Darstellung der Länge 0…1 (1 = wahre Länge, deckt sich mit der Kollisionsbox) */ zs?: number }
 
 type V3 = [number, number, number];
 interface Poly { pts: V3[]; col: string; al?: number }
@@ -128,7 +128,8 @@ export function drawCar(ctx: CanvasRenderingContext2D, project: (x: number, y: n
   const st = Math.max(0, Math.min(1, fx.stealth ?? 0));
   const LIGHTS = new Set(['#ff2a2a', '#ff6a5a', '#ffd0c0']);
   const tone = (col: string): string => (st > 0 && !LIGHTS.has(col) && col.length === 7 ? mixHex(col, '#05050c', 0.9 * st) : col);
-  const zc = (z: number) => ZR + (z - ZR) * ZS;
+  const zs = fx.zs ?? ZS;
+  const zc = (z: number) => ZR + (z - ZR) * zs;
   const proj = (p: V3) => project(p[0], p[1] + lift, zc(p[2]));
   const gp = (p: V3) => project(p[0], 0, zc(p[2]));
   const path = (pts: V3[], fn: (p: V3) => [number, number] = proj) => { ctx.beginPath(); pts.map(fn).forEach((r, i) => { if (i) ctx.lineTo(r[0], r[1]); else ctx.moveTo(r[0], r[1]); }); ctx.closePath(); };
