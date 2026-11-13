@@ -98,6 +98,8 @@ export class Game {
           else sim.obstacles.push({ id, kind: (spec.kind ?? 'barrier') as never, x: spec.x, z: sim.s + spec.dz, vz: spec.vz ?? 0, hit: false, knockT: 0, knockVx: 0 });
         },
         noPickups: (on: boolean) => { this.qaNoPickups = on; },
+        /** Nur Tests: Zuordnung Bildzeile → Tiefe des letzten Bildes. */
+        rows: () => Array.from((this.renderer as unknown as { rowD: Float32Array }).rowD),
         state: () => this.sim && ({
           t: this.sim.t, s: this.sim.s, x: this.sim.q, q: this.sim.q, vq: this.sim.vq, v: this.sim.speedKmh, crashed: this.sim.crashed, k: this.sim.road.curv(this.sim.s), X: this.sim.X, rel: this.sim.relAngle,
           pickupEvents: this.qaPickupEvents, glideT: this.sim.glideT, height: this.sim.height, blitzT: this.sim.blitzT, blitzLeft: this.sim.blitzLeft, shieldT: this.sim.shieldT, slowT: this.sim.slowT, magnetT: this.sim.magnetT, phase: this.state.phase, hill: this.sim.road.height(this.sim.s), boostT: this.sim.boostT, guideT: this.sim.guideT, guideQ: this.sim.guideQ,

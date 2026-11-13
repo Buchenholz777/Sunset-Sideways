@@ -3,9 +3,10 @@ import { footprintCorners, obstacleFootprint, pickupFootprint, playerFootprint, 
 import type { Road } from '../sim/road';
 import { KINDS, type Obstacle, type Pickup, type PickupType } from '../sim/world';
 
-import { CAM_BACK, DRAW, chaseSlope, depthEff, depthInv, makeLayout, type Layout } from './projection';
+import { CAM_BACK, DRAW, chaseSlope, depthEff, makeLayout, type Layout } from './projection';
 import { applyLight, decoType, drawDeco, drawMoon, drawMountains, drawPlane, drawPortal, drawSkyline, drawSky, drawSun, hash, lightT, mixHex, PORTAL_Z, stageAt } from './scenery';
 import { CHUNK, drawPed, pedsInChunk } from './people';
+import { computeRows } from './rows';
 import { PAL, drawObstacle, drawPickup, drawShieldArc, gfx, rect } from './sprites';
 import { drawCar } from './car3d';
 
@@ -28,6 +29,9 @@ const smoothStep = (x: number): number => { const t = Math.max(0, Math.min(1, x)
 export type BurstKind = 'crash' | PickupType | 'shieldHit' | 'land';
 
 const MAX_PARTICLES = 120;
+
+/** Abstand der Streckenschilder (m). */
+export const KM_SIGN_EVERY = 5000;
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -224,34 +228,10 @@ export class Renderer {
     ctx.fillRect(0, L.hy - 12 / L.scale, L.w, 22 / L.scale);
   }
 
-  /**
-   * Zuordnung Bildzeile → Tiefe mit Hügeln: Tiefen von nah nach fern abtasten, nur Punkte oberhalb der bisher höchsten
-   * Bildzeile sind sichtbar (Kuppen verdecken die Straße dahinter), Zeilen dazwischen werden linear belegt.
-   */
   private buildRows(zc: number): void {
     const L = this.L;
     if (this.rowD.length !== L.h) this.rowD = new Float32Array(L.h);
-    this.rowD.fill(-1);
-    this.occD.length = 0; this.occY.length = 0;
-    const rd = this.road;
-    let minY = L.h, prevD = -1;
-    const d0 = Math.max(1, depthInv(L.Hv / Math.max(1, L.h - 1 - L.hy), L) - 3);
-    this.hilly = rd.height(zc + 60) !== 0 || rd.height(zc + 300) !== 0 || this.elev0 !== 0;
-    for (let d = d0; d < 2500; d += Math.max(0.6, d * 0.012)) {
-      const de = depthEff(d, L), k = L.fx / de;
-      const y = L.hy + L.Hv / de - (rd.height(zc + d) - this.elev0) * k;
-      if (y < minY) {
-        // sichtbares Gelände auch oberhalb des Horizonts (Hügel vor der Kamera): Zeilen bis ganz nach oben zuordnen
-        const yTop = Math.max(0, Math.ceil(y)), yBot = Math.min(L.h - 1, Math.ceil(minY) - 1);
-        for (let yy = yBot; yy >= yTop; yy--) {
-          const u = prevD < 0 ? 1 : (minY - yy) / Math.max(1e-6, minY - y);
-          this.rowD[yy] = prevD < 0 ? d : prevD + (d - prevD) * Math.min(1, Math.max(0, u));
-        }
-        minY = y; prevD = d;
-        if (minY <= 0) { this.occD.push(d); this.occY.push(minY); break; }
-      }
-      this.occD.push(d); this.occY.push(minY);
-    }
+    this.hilly = computeRows((z) => this.road.height(z), zc, this.elev0, L, this.rowD, this.occD, this.occY);
   }
 
   /** Höchste Bildzeile des Geländes, das Objekte in Tiefe d verdecken kann (nur nähere Geländepunkte zählen). */
@@ -399,6 +379,12 @@ export class Renderer {
         if (p.d < 4) continue;
         items.push({ d: p.d + (side > 0 ? 0 : 0.01), draw: () => { ctx.globalAlpha = this.fade(p.d, p.d > 140 ? 0.6 : 1); this.lamp(p, side); ctx.globalAlpha = 1; } });
       }
+    }
+    // Streckenschilder: alle 5 km ein Straßenschild mit der geschafften Reichweite am rechten Straßenrand
+    for (let m = Math.ceil((zc + 4) / KM_SIGN_EVERY) * KM_SIGN_EVERY; m <= zc + DRAW; m += KM_SIGN_EVERY) {
+      const p = this.proj(zc, B.road.halfWidth + 1.25, m);
+      if (p.d < 3) continue;
+      items.push({ d: p.d, draw: () => { ctx.globalAlpha = this.fade(p.d); this.kmSign(p, m / 1000); ctx.globalAlpha = 1; } });
     }
     if (stageAt(v.s) === 0 || v.s < PORTAL_Z + 40) {
       const p = this.proj(zc, 0, PORTAL_Z);
@@ -566,6 +552,26 @@ export class Renderer {
       const a0 = ctx.globalAlpha; ctx.globalAlpha = a0 * 0.3 * gfx.lights; rect(ctx, hx - 0.5 * k, hy2 - 0.4 * k, 1.7 * k, 1.2 * k, '#ffe7a1'); ctx.globalAlpha = a0;
     }
     rect(ctx, sx - (side > 0 ? 1.2 : -0.5) * k, sy - 5.1 * k, 0.7 * k, 0.35 * k, '#ffe7a1');
+  }
+
+  /** Straßenschild „N km – geschafft“: Pfosten, grüne Tafel mit weißem Rand und Schrift (Nachts leicht beleuchtet). */
+  private kmSign(p: { k: number; sx: number; sy: number }, km: number): void {
+    const { ctx } = this;
+    const { k, sx, sy } = p;
+    rect(ctx, sx - 0.07 * k, sy - 3.4 * k, 0.14 * k, 3.4 * k, '#7e84b4');
+    const bx = sx - 1.1 * k, by = sy - 4.4 * k, bw = 2.2 * k, bh = 1.5 * k;
+    rect(ctx, bx - 0.08 * k, by - 0.08 * k, bw + 0.16 * k, bh + 0.16 * k, '#f2f0e4');      // weißer Rand
+    rect(ctx, bx, by, bw, bh, '#0d6b4a');
+    ctx.globalAlpha *= 0.3 + 0.7 * gfx.lights;                                            // nachts angestrahlt
+    rect(ctx, bx, by, bw, bh * 0.08, '#ffffff22');
+    ctx.globalAlpha /= 0.3 + 0.7 * gfx.lights;
+    if (k < 3) return;                                                                    // zu weit weg für Schrift
+    ctx.save();
+    ctx.fillStyle = '#ffffff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = `800 ${Math.max(5, 0.62 * k)}px system-ui, sans-serif`;
+    ctx.fillText(`${km} km`, sx, by + bh * 0.4);
+    if (k >= 10) { ctx.font = `700 ${Math.max(4, 0.24 * k)}px system-ui, sans-serif`; ctx.fillStyle = '#bff3dc'; ctx.fillText('geschafft', sx, by + bh * 0.8); }
+    ctx.restore();
   }
 
   private culprit(sx: number, sy: number, k: number, o: Obstacle): void {
