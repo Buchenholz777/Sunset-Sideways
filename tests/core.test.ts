@@ -24,7 +24,9 @@ describe('Speicher', () => {
   it('validiert fehlerhafte Werte', () => {
     expect(parseSaved('{kaputt').best).toBe(0);
     expect(parseSaved(JSON.stringify({ v: 1, best: -5 })).best).toBe(0);
-    expect(parseSaved(JSON.stringify({ v: 1, best: 812.7, muted: true }))).toEqual({ best: 812, muted: true });
+    expect(parseSaved(JSON.stringify({ v: 1, best: 812.7, muted: true }))).toEqual({ best: 812, muted: true, dodged: false });
+    expect(parseSaved(JSON.stringify({ v: 1, best: 3, dodged: true })).dodged).toBe(true);
+    expect(parseSaved(JSON.stringify({ v: 1, best: 3, dodged: 'ja' })).dodged).toBe(false);
   });
 });
 

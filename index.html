@@ -72,13 +72,16 @@
 
 
 
+    <div id="hint" role="status" aria-live="polite" hidden><span class="hint-arrow" aria-hidden="true">◀</span><span class="hint-text">Weiche aus</span><span class="hint-arrow" aria-hidden="true">▶</span></div>
+    <div id="fx-toast" role="status" aria-live="polite" hidden></div>
+
     <section id="screen-brief" class="brief" hidden aria-live="polite"></section>
 
 
     <section id="screen-start" class="overlay" data-default="start" aria-label="Start">
       <div class="panel">
         <h1 class="logo" aria-label="Sunset Sideways"><span class="l1">Sunset</span><span class="l2">Sideways</span></h1>
-        <p class="tagline">Arcade-Rennspiel im Browser</p>
+        <p class="tagline">Weiche dem Verkehr aus. Wie weit kommst du?</p>
         <p class="best">Bestweite: <strong id="start-best">0 m</strong></p>
         <button id="btn-start" class="primary" type="button" data-action="start">Fahren</button>
         <div id="howto" data-mode="keys">
@@ -128,6 +131,7 @@
     <section id="screen-pause" class="overlay" data-default="resume" aria-label="Pause" hidden>
       <div class="panel">
         <h2>Pause</h2>
+        <p id="pause-reason" class="pause-reason" role="status" hidden></p>
         <p id="tip-line" class="controls"></p>
         <button id="btn-resume" class="primary" type="button" data-action="resume">Fortsetzen</button>
         <button id="btn-restart" class="secondary" type="button" data-action="restart">Neu starten</button>

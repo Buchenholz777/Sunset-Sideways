@@ -7,6 +7,7 @@ import { GameState } from './core/state';
 import { Input } from './input/input';
 import { Renderer, type View } from './render/renderer';
 import { Sim } from './sim/sim';
+import { KINDS } from './sim/world';
 import { Road } from './sim/road';
 import { lightT } from './render/scenery';
 import { Sound } from './audio/sound';
@@ -15,6 +16,15 @@ import { applyConfig } from './config/runtime';
 import { BUILTIN, Telemetry, eventActive, fetchConfig, randomId, type RemoteConfig } from './net/remote';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+/** Ursache einer Pause: manuell oder automatisch (mit verständlichem Hinweis). */
+type PauseReason = 'manual' | 'blur' | 'hidden' | 'stall';
+const PAUSE_TEXT: Record<PauseReason, string> = {
+  manual: '',
+  blur: 'Automatisch pausiert: Das Fenster hat den Fokus verloren.',
+  hidden: 'Automatisch pausiert: Der Tab war im Hintergrund.',
+  stall: 'Automatisch pausiert: Das Gerät oder der Browser war kurz blockiert.',
+};
 
 export class Game {
   private canvas = $<HTMLCanvasElement>('stage');
@@ -42,6 +52,14 @@ export class Game {
   private qaSceneT: number | null = null;
   private qaPickupEvents = 0;
   private qaNoPickups = false;
+  /** Pausen mit Auslöser (Tests, Fehlersuche) und Fokusstatus: ohne Fokus von Anfang an (z. B. eingebetteter Browser) wird nicht bei blur pausiert. */
+  private pauseLog: string[] = [];
+  private focusKnown = true;
+  /** Erstes-Hindernis-Hinweis und Landungssignal. */
+  private tutorialDone = load().dodged;
+  private firstObsId: number | null = null;
+  private landing = false;
+  private toastTimer: ReturnType<typeof setTimeout> | undefined;
   /** Konfiguration (Admin) und Messung. Testfahrt (?testdrive=) und QA-Läufe zählen weder für KPIs noch für die Bestweite. */
   private remote: RemoteConfig = BUILTIN;
   private previewToken: string | null = null;
@@ -57,7 +75,7 @@ export class Game {
 
   private el = {
     hud: $('hud'), dist: $('hud-distance'), best: $('hud-best'), bestWrap: $('hud-best-wrap'), speed: $('hud-speed'),
-    shield: $('fx-shield'), slow: $('fx-slow'), magnet: $('fx-magnet'), blitz: $('fx-blitz'), glide: $('fx-glide'), boost: $('fx-boost'), guide: $('fx-guide'), pause: $<HTMLButtonElement>('btn-pause'), snd: $<HTMLButtonElement>('btn-sound'),
+    shield: $('fx-shield'), slow: $('fx-slow'), magnet: $('fx-magnet'), blitz: $('fx-blitz'), glide: $('fx-glide'), boost: $('fx-boost'), guide: $('fx-guide'), pause: $<HTMLButtonElement>('btn-pause'), snd: $<HTMLButtonElement>('btn-sound'), hint: $('hint'), toast: $('fx-toast'), pauseReason: $('pause-reason'),
     start: $('screen-start'), paused: $('screen-pause'), result: $('screen-result'),
     again: $<HTMLButtonElement>('btn-again'),
   };
@@ -83,6 +101,7 @@ export class Game {
     if (this.qaHook) {
       (window as unknown as { __qa: unknown }).__qa = {
         pause: () => this.pause(),
+        pauseLog: () => [...this.pauseLog],
         input: () => ({ ...this.input.snapshot() }),
         give: (shield: number, slow = 0, magnet = 0, glide = 0, boost = 0, guide = 0) => { if (this.sim) { this.sim.shieldT = shield; this.sim.slowT = slow; this.sim.magnetT = magnet; if (glide > 0) this.sim.glideT = glide; this.sim.boostT = boost; this.sim.guideT = guide; } },
         scene: (t: number | null) => { this.qaSceneT = t; this.render(1 / 60); },
@@ -113,7 +132,7 @@ export class Game {
     window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') this.setMode(true); }, { passive: true });
     window.addEventListener('keydown', (e) => { if (!e.metaKey && !e.ctrlKey && e.code !== 'Tab') this.setMode(false); }, { passive: true });
     this.input = new Input(this.canvas);
-    this.loop = new FixedLoop((dt) => this.update(dt), (fd) => this.render(fd), () => this.pause());
+    this.loop = new FixedLoop((dt) => this.update(dt), (fd) => this.render(fd), () => this.pause('stall'));
 
     $('start-best').textContent = formatDistance(this.best);
     this.el.best.textContent = formatDistance(this.best);
@@ -136,10 +155,11 @@ export class Game {
   private bind(): void {
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('orientationchange', () => this.resize());
-    window.addEventListener('blur', () => this.pause());
-    document.addEventListener('visibilitychange', () => { if (document.hidden) this.pause(); });
+    // Automatische Pause nur, wenn das Fenster den Fokus tatsächlich verliert. Hatte es ihn beim Start/Fortsetzen nie (eingebettete Ansicht), gäbe es sonst eine Dauer-Pause.
+    window.addEventListener('blur', () => { if (this.focusKnown) this.pause('blur'); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) this.pause('hidden'); });
     window.addEventListener('keydown', (e) => this.onKeyDown(e));
-    window.addEventListener('keyup', (e) => { this.held.delete(e.code); this.blocked.delete(e.code); if (this.isActionKey(e.code) && this.overlayVisible() && !(e.target as Element | null)?.closest?.('#about, #consent, .legal')) e.preventDefault(); });
+    window.addEventListener('keyup', (e) => { this.held.delete(e.code); this.blocked.delete(e.code); if (this.isActionKey(e.code) && this.overlayVisible() && !this.nativeTarget(e.target)) e.preventDefault(); });
 
     this.el.pause.addEventListener('click', () => this.pause());
     this.el.snd.addEventListener('click', () => { this.sound.unlock(); this.sound.toggle(); this.syncSoundButton(); });
@@ -147,6 +167,7 @@ export class Game {
       o.addEventListener('pointerdown', () => { this.overlayArmed = true; });
       o.addEventListener('click', (e) => {
         if (!this.overlayArmed && (e as MouseEvent).detail !== 0) return;
+        if ((e as MouseEvent).detail === 0 && this.blocked.size > 0) return;       // Taste vom Crash noch gehalten: kein Durchstarten
         this.overlayArmed = false;
         const b = (e.target as Element).closest('button[data-action]') as HTMLElement | null;
         // Startbildschirm: nur der Knopf startet (ein Wisch oder Tipp auf Titel und Erklärung löst nichts aus)
@@ -155,6 +176,8 @@ export class Game {
       });
     }
   }
+
+  private nativeTarget(t: EventTarget | null): boolean { return !!(t as HTMLElement | null)?.closest?.('button, a[href], summary, input, select, textarea, [contenteditable]'); }
 
   private isActionKey = (c: string): boolean => c === 'Enter' || c === 'Space' || c === 'NumpadEnter';
   private overlayVisible = (): boolean => !this.el.start.hidden || !this.el.paused.hidden || !this.el.result.hidden;
@@ -167,8 +190,8 @@ export class Game {
       return;
     }
     if (!this.isActionKey(e.code)) return;
-    const t = e.target as HTMLElement | null;
-    if (t && (t.closest('#hud-btns') || t.closest('#about') || t.closest('#consent') || t.closest('.legal'))) return; // HUD-Buttons und die aufklappbare Spielbeschreibung behalten ihr natives Verhalten
+    // Fokussierte Bedienelemente (Buttons, Links, Summary, Eingabefelder) führen Enter/Leertaste selbst aus – genau eine Aktion, die globalen Kürzel greifen sonst
+    if (this.nativeTarget(e.target)) return;
     if (!this.overlayVisible()) return;
     e.preventDefault();
     if (e.repeat || this.blocked.has(e.code)) return;
@@ -230,6 +253,9 @@ export class Game {
     this.input.reset();
     this.input.active = true;
     this.loop.reset();
+    this.focusKnown = document.hasFocus();
+    this.firstObsId = null; this.landing = false;
+    this.el.hint.hidden = true; this.el.toast.hidden = true; this.el.pauseReason.hidden = true;
     this.last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '' };
     for (const chip of [this.el.shield, this.el.slow, this.el.magnet, this.el.blitz, this.el.glide, this.el.boost, this.el.guide]) chip.hidden = true;   // keine Effekt-Anzeigen aus der vorigen Fahrt
     this.el.start.hidden = this.el.paused.hidden = this.el.result.hidden = true;
@@ -255,8 +281,11 @@ export class Game {
     $('howto').dataset.mode = this.touchCapable ? 'touch' : 'keys';
   }
 
-  private pause(): void {
+  private pause(reason: PauseReason = 'manual'): void {
     if (this.state.phase !== 'running') return;
+    this.pauseLog.push(reason);
+    this.el.pauseReason.textContent = PAUSE_TEXT[reason];
+    this.el.pauseReason.hidden = reason === 'manual';
     this.state.go('paused');
     this.input.reset();
     this.input.active = false;
@@ -267,6 +296,7 @@ export class Game {
 
   private resume(): void {
     this.el.paused.hidden = true;
+    this.focusKnown = document.hasFocus();
     this.state.go('running');
     this.input.reset();
     this.input.active = true;
@@ -303,7 +333,7 @@ export class Game {
         else if (ev.type === 'pickup') { this.tele.send('taken', this.runId, this.pickupKey(ev.pickup, ev.id, ev.z), { type: ev.pickup, s: Math.floor(sim.s) }); this.qaPickupEvents++; this.renderer.burst(ev.pickup); this.sound.sfx(ev.pickup); }
         else if (ev.type === 'cleared') { this.renderer.burst('clear'); }
         else if (ev.type === 'blitz') this.renderer.laneFlash(ev.x, ev.z);
-        else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); }
+        else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast('Fliegen'); }
         else if (ev.type === 'glideEnd') { this.renderer.burst('land'); this.sound.sfx('land'); this.sound.setFlight(false); }
         else if (ev.type === 'magnetPull') this.sound.sfx('magnet');
         else if (ev.type === 'effectEnd') this.sound.sfx('effectEnd');
@@ -311,12 +341,40 @@ export class Game {
       sim.events.length = 0;
     }
     this.track(sim);
+    this.coach(sim);
     if (this.best > 0 && !this.beaten && sim.s > this.best) {
       this.beaten = true;
       this.el.bestWrap.classList.add('beat');
       this.sound.sfx('record');
     }
     if (sim.crashed) this.onCrash();
+  }
+
+  private toast(text: string, ms = 1300): void {
+    this.el.toast.textContent = text;
+    this.el.toast.hidden = false;
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => { this.el.toast.hidden = true; }, ms);
+  }
+
+  /**
+   * Hinweis zum ersten Hindernis: erscheint, solange es in der eigenen Spur liegt und noch nie erfolgreich umfahren wurde,
+   * verschwindet beim Ausweichen und wird nach erfolgreichem Passieren dauerhaft gespeichert (nicht in QA-/Testfahrten). Ohne Ton und Farbe lesbar (Pfeile + Text).
+   */
+  private coach(sim: Sim): void {
+    if (this.tutorialDone) { if (!this.el.hint.hidden) this.el.hint.hidden = true; return; }
+    if (this.firstObsId === null && sim.obstacles.length) this.firstObsId = Math.min(...sim.obstacles.map((o) => o.id));
+    if (this.firstObsId === null) return;
+    const o = sim.obstacles.find((x) => x.id === this.firstObsId);
+    if (!o) { this.el.hint.hidden = true; return; }
+    const passed = sim.s > o.z + KINDS[o.kind].len + 2;
+    if (passed && !o.hit) {
+      this.tutorialDone = true; this.el.hint.hidden = true;
+      if (!this.excluded) save({ dodged: true });
+      return;
+    }
+    const inLane = Math.abs(sim.q - o.x) < 2.6;
+    this.el.hint.hidden = !(inLane && !o.hit && o.z > sim.s - 1);
   }
 
   private pickupKey(type: string, id: number, z: number): string { return type === 'glide' ? `glide@${Math.round(z)}` : `${type}#${id}`; }
@@ -402,6 +460,13 @@ export class Game {
     this.fxChip(this.el.magnet, sim.magnetT, 'magnet');
     this.fxChip(this.el.blitz, sim.blitzT, 'blitz');
     this.fxChip(this.el.glide, sim.glideT, 'glide');
+    const landing = sim.glideT > 0 && sim.glideT < 1.0;
+    if (landing !== this.landing) {
+      this.landing = landing;
+      this.el.glide.classList.toggle('landing', landing);
+      const nm = this.el.glide.querySelector('.fx-name'); if (nm) nm.textContent = landing ? 'Landung' : 'Fliegen';
+      if (landing) this.sound.sfx('effectEnd');
+    }
     this.fxChip(this.el.boost, sim.boostT, 'boost');
     this.fxChip(this.el.guide, sim.guideT, 'guide');
   }

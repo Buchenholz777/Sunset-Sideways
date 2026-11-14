@@ -33,13 +33,14 @@ export class FixedLoop {
 
   private tick = (now: number): void => {
     if (!this.active) return;
-    const { dt, maxCatchUpSteps, stallMs } = BALANCE;
+    const { dt, maxCatchUpSteps, stallMs, pauseStallMs } = BALANCE;
     const raw = Math.max(0, now - this.last);
     this.last = now;
     if (raw > stallMs) {
-      // Größere Unterbrechung: nichts nachholen, Spiel pausieren lassen.
+      // Lücke: nichts nachholen (Weltzeit, Distanz und Effektdauer bleiben stehen). Erst eine echte Unterbrechung pausiert das Spiel;
+      // ein einzelner langer Frame (Start, Garbage Collection) wird still verworfen.
       this.acc = 0;
-      this.onStall();
+      if (raw > pauseStallMs) this.onStall();
     } else {
       this.acc += Math.min(raw / 1000, dt * maxCatchUpSteps);
       while (this.acc >= dt) {

@@ -2,8 +2,8 @@ const KEY = 'sunset-sideways:v1';
 /** Alter Schlüssel (Glimmer Mile): wird gelesen und migriert, nie überschrieben oder gelöscht. */
 const OLD_KEY = 'glimmer-mile:v1';
 
-export interface Saved { best: number; muted: boolean }
-const DEFAULTS: Saved = { best: 0, muted: false };
+export interface Saved { best: number; muted: boolean; /** Erstes Hindernis schon einmal erfolgreich umfahren (Hinweis entfällt). */ dodged: boolean }
+const DEFAULTS: Saved = { best: 0, muted: false, dodged: false };
 
 let memory: Saved = { ...DEFAULTS };
 
@@ -14,7 +14,7 @@ export function parseSaved(raw: string | null): Saved {
     const o = JSON.parse(raw) as Record<string, unknown>;
     if (o.v !== 1) return { ...DEFAULTS };
     const best = typeof o.best === 'number' && Number.isFinite(o.best) && o.best >= 0 ? Math.floor(o.best) : 0;
-    return { best, muted: o.muted === true };
+    return { best, muted: o.muted === true, dodged: o.dodged === true };
   } catch {
     return { ...DEFAULTS };
   }

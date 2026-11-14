@@ -33,8 +33,8 @@ export class Input {
     surface.addEventListener('pointerdown', this.onDown, sig);
     surface.addEventListener('pointermove', this.onMove, sig);
     surface.addEventListener('pointerup', this.onUp, sig);
-    surface.addEventListener('pointercancel', this.onUp, sig);
-    surface.addEventListener('lostpointercapture', this.onUp, sig);
+    surface.addEventListener('pointercancel', this.onAbort, sig);
+    surface.addEventListener('lostpointercapture', this.onAbort, sig);
   }
 
   private onKey = (down: boolean) => (e: KeyboardEvent): void => {
@@ -67,6 +67,17 @@ export class Input {
     this.pid = null;
     this.releasedAt = performance.now();                                   // Ziel bleibt kurz bestehen (Settle)
     if (this.drag !== null && Math.abs(this.drag) < 0.05) this.drag = null;  // Tipp: Position halten
+  };
+
+  /**
+   * Abbruch (pointercancel, unbeabsichtigt verlorenes Capture, z. B. Rotation oder Systemgeste): Die alte Lenkanforderung wird sofort neutral,
+   * ohne Nachführen. Der reguläre lostpointercapture nach pointerup trifft auf pid === null und bleibt wirkungslos.
+   */
+  private onAbort = (e: PointerEvent): void => {
+    if (e.pointerId !== this.pid) return;
+    this.pid = null;
+    this.drag = null;
+    this.releasedAt = 0;
   };
 
   /** Alle laufenden Eingaben verwerfen (Pause, Fokus, Größenwechsel, Crash, Neustart). */

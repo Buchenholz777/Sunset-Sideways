@@ -5,6 +5,8 @@ export const BALANCE = {
   maxCatchUpSteps: 8,
   /** Lücken über dieser Dauer (ms) gelten als Unterbrechung ⇒ Pause. */
   stallMs: 250,
+  /** Ab dieser Lückendauer (ms) wird automatisch pausiert; kürzere Lücken (> stallMs) werden still verworfen, ohne Weltzeit nachzuholen. */
+  pauseStallMs: 1000,
   /**
    * Grundtempo nach der gefahrenen Strecke des Versuchs (Stützpunkte [Meter, km/h], dazwischen stetig interpoliert):
    * 210 → 325 (1 km) → 370 (2 km) → 430 (6 km) → 480 (12 km) → 520 (16 km) → 550 (20 km) → 600 (27 km), danach konstant.

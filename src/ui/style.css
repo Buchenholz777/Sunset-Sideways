@@ -195,3 +195,14 @@ button.secondary { padding: 10px 28px; min-height: 44px; font: inherit; font-siz
 #consent p { margin: 0 0 10px; } #consent a { color: #5fe0ff; }
 .consent-btns { display: flex; gap: 10px; } .consent-btns button { flex: 1; min-height: 44px; border-radius: 10px; border: 1px solid #ffffff77; background: #1b2045; color: #fff; font: 700 14px system-ui, sans-serif; cursor: pointer; }
 .consent-btns button:hover { border-color: #5fe0ff; } .consent-btns button:focus-visible { outline: 3px solid #ffe27a; outline-offset: 2px; }
+
+#hint { position: absolute; left: 50%; top: calc(var(--sat) + 22%); transform: translateX(-50%); z-index: 3; display: flex; align-items: center; gap: 14px; padding: 8px 16px; border-radius: 999px; background: #070a24d9; border: 2px solid #ffe27a; color: #fff; font: 800 clamp(15px, 3.2vh, 22px)/1 system-ui, sans-serif; letter-spacing: .04em; pointer-events: none; white-space: nowrap; }
+#hint[hidden], #fx-toast[hidden] { display: none; }
+.hint-arrow { color: #ffe27a; font-size: 1.1em; animation: hintnudge .7s ease-in-out infinite alternate; } .hint-arrow:last-child { animation-direction: alternate-reverse; }
+@keyframes hintnudge { from { transform: translateX(-3px); } to { transform: translateX(3px); } }
+@media (prefers-reduced-motion: reduce) { .hint-arrow { animation: none; } }
+#fx-toast { position: absolute; left: 50%; top: calc(var(--sat) + 34%); transform: translateX(-50%); z-index: 3; padding: 6px 18px; border-radius: 10px; background: #070a24d9; border: 2px solid #5fe0ff; color: #5fe0ff; font: 900 clamp(18px, 3.8vh, 28px)/1 system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; pointer-events: none; }
+.pause-reason { margin: 0; max-width: 36ch; color: #ffe27a; font-size: 14px; }
+#hud-effects li.landing { animation: landblink .45s steps(2, end) infinite; border-color: #ffe27a; }
+@keyframes landblink { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { #hud-effects li.landing { animation: none; } }
