@@ -9,6 +9,8 @@ import ROUTE_V1 from './route_v1.json';
  * Regeln, Tempokurve, Lichtphasen und Verkehrsfolge sind fest und unabhängig von der Live-Konfiguration des Endless-Modus.
  * Gleiche Strecke und Regeln für alle: Die Begegnungen stammen aus einer gespeicherten Route (route_v1.json), nicht aus dem laufenden Weltzustand.
  */
+/** Der Sunset Sprint ist vorerst abgeschaltet: kein Knopf, keine Herausforderungs-Links, kein Start. Auf true setzen, um ihn wieder anzubieten. */
+export const SPRINT_ENABLED = false;
 export const SPRINT_ID = 'S1';
 export const SPRINT_VERSION = 1;
 /** Fester Streckenseed (Straßenverlauf, Hügel) und Zielstrecke in Metern. */

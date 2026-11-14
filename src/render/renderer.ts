@@ -94,6 +94,9 @@ export class Renderer {
   /** Bodenring beim Aufsetzen nach dem Fliegen (0…1, klingt ab). */
   private landRing = 0;
   private lean = 0;
+  /** Projektion der Wagenpunkte des letzten Bildes (Modellkoordinaten → Bild); Düsenstrahl und Wagen teilen sie und bleiben so synchron. */
+  private carPt: ((x: number, y: number, z: number) => [number, number]) | null = null;
+  private carZs = 0.6;
 
   burst(kind: BurstKind): void {
     if (kind === 'land') this.landRing = 1;
@@ -658,11 +661,17 @@ export class Renderer {
     const leanT = this.reducedMotion ? 0 : Math.max(-1, Math.min(1, v.rel * 7)) * 0.2;
     this.lean += (leanT - this.lean) * (1 - Math.exp(-this.dtLast / 0.07));
     const lean = this.lean;
-    drawCar(ctx, (x, y, z) => {
+    const carPt = (x: number, y: number, z: number): [number, number] => {
       const xr = x * c + z * s, zr = -x * s + z * c;
       const p = this.projectWorld(zc, this.carBx + xr - y * lean + this.camHead * zr, this.carBz + zr, y * 0.8);
-      return [Math.round(p.sx), Math.round(p.sy)];
-    }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth, zs: L.portrait ? 0.78 : undefined });
+      return [p.sx, p.sy];
+    };
+    this.carPt = carPt; this.carZs = L.portrait ? 0.78 : 0.6;
+    // Überschlag beim Abheben: eine volle Drehung um die Längsachse in 0,9 s (sanft an- und auslaufend), nur mit normaler Bewegung
+    const elG = B.effects.glide - v.glideLeft;
+    const spinT = v.glideLeft > 0 && elG < 0.9 && !this.reducedMotion ? Math.max(0, elG) / 0.9 : 0;
+    const spin = spinT > 0 ? Math.PI * 2 * (spinT < 0.5 ? 4 * spinT ** 3 : 1 - (-2 * spinT + 2) ** 3 / 2) : 0;
+    drawCar(ctx, (x, y, z) => { const q = carPt(x, y, z); return [Math.round(q[0]), Math.round(q[1])]; }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth, zs: L.portrait ? 0.78 : undefined, spin });
     if (this.landRing > 0) {
       const t = 1 - this.landRing;
       ctx.save(); ctx.globalAlpha = 0.65 * this.landRing; ctx.strokeStyle = '#bff3dc'; ctx.lineWidth = Math.max(1, 0.1 * k);
@@ -712,28 +721,42 @@ export class Renderer {
       }
       ctx.globalAlpha = 1;
     }
-    if (v.glideLeft > 0 && v.running) {
-      // Gleitflug: Lichtschweif hinter dem Wagen (läuft beim Sinken aus) und Glitzerpartikel
-      const k0 = L.fx / CAM_BACK;
+    if (v.glideLeft > 0 && v.running && this.carPt) {
+      // Gleitflug: zwei Düsenstrahlen, die vom Heck nach hinten (zur Kamera) ausströmen wie bei einem Jet. Sie nutzen dieselbe Projektion wie der Wagen
+      // (Höhe, Neigung, Kurvenversatz) und laufen deshalb ohne Nachziehen mit.
       const el = B.effects.glide - v.glideLeft;
       const inten = Math.min(1, el / 0.3) * Math.min(1, v.glideLeft / B.glide.down);
-      const y0 = L.gy - (0.45 * 0.8 + v.lift) * k0;
-      for (const off of [-0.62, 0, 0.62]) {
-        const x0 = this.carSx + off * k0;
-        const len = Math.max(0, Math.min(L.h - y0, (1.5 + 0.4 * v.lift) * k0 * (0.4 + 0.6 * inten)));
-        const g = ctx.createLinearGradient(0, y0, 0, y0 + len);
-        g.addColorStop(0, 'rgba(255,154,224,0.9)'); g.addColorStop(0.5, 'rgba(107,184,255,0.45)'); g.addColorStop(1, 'rgba(107,184,255,0)');
-        ctx.globalAlpha = inten;
-        ctx.fillStyle = g;
-        ctx.fillRect(Math.round(x0 - Math.max(1, 0.07 * k0)), y0, Math.max(2, 0.14 * k0), len);
+      const lift = v.lift / 0.8, ZR = -2.1, zs = this.carZs;
+      const flick = this.reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(this.clock * 48);
+      const len = (3.4 + 1.2 * Math.min(1, v.lift / 3)) * inten * flick;
+      const mz = (z: number): number => ZR + (z - ZR) * zs;
+      const yN = 0.52 + lift;
+      let sparkX = this.carSx, sparkY = L.gy;
+      for (const sg of [-1, 1]) {
+        const x0 = sg * 0.55;
+        const a1 = this.carPt(x0 - 0.16, yN, mz(ZR)), a2 = this.carPt(x0 + 0.16, yN, mz(ZR));
+        const b1 = this.carPt(x0 - 0.04, yN, mz(ZR - len)), b2 = this.carPt(x0 + 0.04, yN, mz(ZR - len));
+        const am: [number, number] = [(a1[0] + a2[0]) / 2, (a1[1] + a2[1]) / 2], bm: [number, number] = [(b1[0] + b2[0]) / 2, (b1[1] + b2[1]) / 2];
+        const g = ctx.createLinearGradient(am[0], am[1], bm[0], bm[1]);
+        g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.25, 'rgba(255,200,240,0.85)'); g.addColorStop(0.6, 'rgba(107,184,255,0.5)'); g.addColorStop(1, 'rgba(107,184,255,0)');
+        ctx.globalAlpha = inten; ctx.fillStyle = g;
+        ctx.beginPath(); ctx.moveTo(Math.round(a1[0]), Math.round(a1[1])); ctx.lineTo(Math.round(a2[0]), Math.round(a2[1])); ctx.lineTo(Math.round(b2[0]), Math.round(b2[1])); ctx.lineTo(Math.round(b1[0]), Math.round(b1[1])); ctx.closePath(); ctx.fill();
+        // heller Kern und Glut an der Düse
+        const c1 = this.carPt(x0 - 0.06, yN, mz(ZR - 0.05)), c2 = this.carPt(x0 + 0.06, yN, mz(ZR - 0.05)), d1 = this.carPt(x0, yN, mz(ZR - len * 0.55));
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath(); ctx.moveTo(Math.round(c1[0]), Math.round(c1[1])); ctx.lineTo(Math.round(c2[0]), Math.round(c2[1])); ctx.lineTo(Math.round(d1[0]), Math.round(d1[1])); ctx.closePath(); ctx.fill();
+        ctx.globalAlpha = inten * 0.5; ctx.fillStyle = '#ffd0f0';
+        ctx.beginPath(); ctx.arc(am[0], am[1], Math.max(2, 0.3 * (L.fx / CAM_BACK)), 0, Math.PI * 2); ctx.fill();
+        if (sg > 0) { sparkX = am[0]; sparkY = am[1]; }
       }
       ctx.globalAlpha = 1;
       if (!this.reducedMotion) {
         this.sparkAcc += dt * 60 * inten * (this.quality > 0 ? 0.5 : 1);
         const COLS = ['#ff9ae0', '#9ae8ff', '#ffffff', '#ffe95a'];
+        const k0 = L.fx / CAM_BACK;
         while (this.sparkAcc >= 1 && this.particles.length < MAX_PARTICLES) {
           this.sparkAcc -= 1;
-          this.particles.push({ x: this.carSx + (Math.random() - 0.5) * 1.7 * k0, y: y0 + Math.random() * 6, vx: (Math.random() - 0.5) * 50, vy: 15 + Math.random() * 50, life: 0, max: 0.35 + Math.random() * 0.35, c: COLS[Math.floor(Math.random() * 4)] });
+          this.particles.push({ x: sparkX - (Math.random() > 0.5 ? 1.1 : 0) * k0 + (Math.random() - 0.5) * 0.3 * k0, y: sparkY + Math.random() * 6, vx: (Math.random() - 0.5) * 30, vy: 30 + Math.random() * 60, life: 0, max: 0.3 + Math.random() * 0.3, c: COLS[Math.floor(Math.random() * 4)] });
         }
       }
     }

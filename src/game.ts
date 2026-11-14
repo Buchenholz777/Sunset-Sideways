@@ -13,7 +13,7 @@ import { lightT } from './render/scenery';
 import { Sound } from './audio/sound';
 import { load, save } from './storage/storage';
 import { PICKUP_LABEL, applyConfig, type PickupKey } from './config/runtime';
-import { SPRINT_CONFIG, SPRINT_FINISH_M, SPRINT_ID, SPRINT_ROUTE, SPRINT_SEED, sprintStageScale } from './sprint/rules';
+import { SPRINT_CONFIG, SPRINT_ENABLED, SPRINT_FINISH_M, SPRINT_ID, SPRINT_ROUTE, SPRINT_SEED, sprintStageScale } from './sprint/rules';
 import { BUILTIN, Telemetry, eventActive, fetchConfig, randomId, type RemoteConfig } from './net/remote';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -130,7 +130,7 @@ export class Game {
     const q = new URLSearchParams(location.search);
     const num = (n: string): number | undefined => { const v = q.get(n); return v !== null && /^\d+$/.test(v) ? Number(v) : undefined; };
     this.qaHook = q.get('qa') === '1';
-    this.challenge = parseChallenge(location.search);
+    this.challenge = SPRINT_ENABLED ? parseChallenge(location.search) : null;           // Herausforderungs-Links öffnen vorerst einfach das Endless-Spiel
     const td = q.get('testdrive');
     this.previewToken = td && /^[A-Za-z0-9_-]{8,128}$/.test(td) ? td : null;
     this.excluded = this.qaHook || this.previewToken !== null;
@@ -184,6 +184,7 @@ export class Game {
     $('start-best').textContent = formatDistance(this.best);
     this.el.best.textContent = formatDistance(this.best);
     this.syncHowto();
+    this.el.sprintBtn.hidden = !SPRINT_ENABLED;
     this.showChallenge();
     $('tip-line').textContent = this.touchCapable ? TEXT.tipTouch : TEXT.tipDesktop;
     this.syncSoundButton();
@@ -291,6 +292,7 @@ export class Game {
   }
 
   private startRun(mode: Mode = this.mode): void {
+    if (!SPRINT_ENABLED) mode = 'endless';
     this.endRun('restart');
     this.mode = mode;
     // Der Versuch übernimmt seine Regeln fest. Endless: veröffentlichte Konfiguration (spätere Änderungen gelten erst für den nächsten Versuch);
@@ -426,7 +428,7 @@ export class Game {
     $('res-best').textContent = sprint ? (this.sprintDone > 0 ? `Ziel erreicht (${this.sprintDone}×)` : formatDistance(this.sprintBest)) : formatDistance(this.best);
     this.el.shareBtn.hidden = !sprint;
     this.el.endlessBtn.hidden = !sprint;
-    this.el.resSprintBtn.hidden = sprint;
+    this.el.resSprintBtn.hidden = sprint || !SPRINT_ENABLED;
     this.el.shareBox.hidden = true;
     this.el.shareMsg.textContent = '';
   }

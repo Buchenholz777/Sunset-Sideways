@@ -10,7 +10,7 @@ import { mixHex } from './scenery';
  * Koordinaten: x seitlich (+ rechts), y oben, z nach vorn; Fahrzeug 1,9 × 4,2 m, Mittelpunkt im Ursprung.
  * Sichtbare Breite (±0,95 m über den Reifen) und Trefferfläche (balance.player) sind aufeinander abgestimmt.
  */
-export interface CarFx { turbo: boolean; grip: boolean; brake: number; steer: number; running: boolean; yaw: number; /** Flughöhe in Modelleinheiten */ lift?: number; /** Phantom-Turbo 0…1: Karosserie wird schwarz, nur die Rückleuchten leuchten */ stealth?: number; /** Darstellung der Länge 0…1 (1 = wahre Länge, deckt sich mit der Kollisionsbox) */ zs?: number }
+export interface CarFx { turbo: boolean; grip: boolean; brake: number; steer: number; running: boolean; yaw: number; /** Flughöhe in Modelleinheiten */ lift?: number; /** Phantom-Turbo 0…1: Karosserie wird schwarz, nur die Rückleuchten leuchten */ stealth?: number; /** Drehwinkel (rad) um die Längsachse (Rolle beim Abheben): aus der Heckansicht eine Drehung in der Bildebene */ spin?: number; /** Darstellung der Länge 0…1 (1 = wahre Länge, deckt sich mit der Kollisionsbox) */ zs?: number }
 
 type V3 = [number, number, number];
 interface Poly { pts: V3[]; col: string; al?: number }
@@ -147,6 +147,7 @@ export function drawCar(ctx: CanvasRenderingContext2D, project: (x: number, y: n
   for (const sg of [-1, 1]) { ctx.fillStyle = '#ff2a2a'; path([[sg * 0.16, 0, ZR - 0.02], [sg * 0.84, 0, ZR - 0.02], [sg * 0.8, 0, ZR - 0.12], [sg * 0.2, 0, ZR - 0.12]], gp); ctx.fill(); }
   ctx.globalAlpha = 1;
 
+  if (fx.spin) { const [cx, cy] = project(0, 0.7 + lift, zc(0)); ctx.save(); ctx.translate(cx, cy); ctx.rotate(fx.spin); ctx.translate(-cx, -cy); }
   const faces = build(fx).filter((f) => f.kind === 'rear' || f.kind === 'top' || (f.kind === 'right' && s > (f.col === COL.glass ? 0.07 : 0.02)) || (f.kind === 'left' && s < -(f.col === COL.glass ? 0.07 : 0.02)));
   const depth = (f: Face) => f.pts.reduce((acc, p) => acc + (-p[0] * s + p[2] * c), 0) / f.pts.length + (f.bias ?? 0);
   faces.sort((x, y) => depth(y) - depth(x));
@@ -170,6 +171,7 @@ export function drawCar(ctx: CanvasRenderingContext2D, project: (x: number, y: n
   ];
   for (const l of lines) { ctx.beginPath(); const p0 = proj(l[0]), p1 = proj(l[1]); ctx.moveTo(p0[0], p0[1]); ctx.lineTo(p1[0], p1[1]); ctx.stroke(); }
   ctx.globalAlpha = 1;
+  if (fx.spin) ctx.restore();
   if (st > 0) {
     // Knight-Rider: kräftig leuchtende Rückleuchten mit Lichthof und Reflex auf dem Asphalt
     for (const sg of [-1, 1]) {
