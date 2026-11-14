@@ -209,7 +209,7 @@ button[disabled]{opacity:.6;cursor:wait}#msg{min-height:1.5em;margin-top:12px;co
     // Kennzahlen
     if (path === '/stats' && method === 'GET') {
       if (d.wait) d.wait(purge(db, t, retentionDays).catch(() => undefined));
-      return json(200, await overview(db, periodOf(u), t, { dev: q1(u, 'dev'), ver: q1(u, 'ver'), ev: evOf(u), cfg: q1(u, 'cfg') }));
+      return json(200, await overview(db, periodOf(u), t, { dev: q1(u, 'dev'), ver: q1(u, 'ver'), ev: evOf(u), cfg: q1(u, 'cfg'), mode: (['endless', 'sprint'].includes(u.searchParams.get('mode') ?? '') ? u.searchParams.get('mode') : null) as 'endless' | 'sprint' | null }));
     }
     if (path === '/stats/compare' && method === 'GET') {
       const a = q1(u, 'a'), b = q1(u, 'b');

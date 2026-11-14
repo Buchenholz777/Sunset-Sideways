@@ -29,9 +29,9 @@ export const SCHEMA: string[] = [
   `CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, csrf TEXT NOT NULL, pwfp TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, last_seen INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked INTEGER NOT NULL DEFAULT 0, ua TEXT)`,
   `CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS config_versions (id INTEGER PRIMARY KEY AUTOINCREMENT, config TEXT NOT NULL, label TEXT, published_at INTEGER NOT NULL, event_start INTEGER, event_end INTEGER)`,
-  `CREATE TABLE IF NOT EXISTS visits (visit TEXT PRIMARY KEY, ts INTEGER NOT NULL, dev TEXT NOT NULL, ver TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS visits (visit TEXT PRIMARY KEY, ts INTEGER NOT NULL, dev TEXT NOT NULL, ver TEXT NOT NULL, ch INTEGER NOT NULL DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS visits_ts ON visits (ts)`,
-  `CREATE TABLE IF NOT EXISTS runs (run TEXT PRIMARY KEY, visit TEXT NOT NULL, ts INTEGER NOT NULL, dev TEXT NOT NULL, ver TEXT NOT NULL, cfg TEXT NOT NULL, ev TEXT, miles INTEGER NOT NULL DEFAULT 0, end_ts INTEGER, end_dist INTEGER, end_reason TEXT, cause TEXT)`,
+  `CREATE TABLE IF NOT EXISTS runs (run TEXT PRIMARY KEY, visit TEXT NOT NULL, ts INTEGER NOT NULL, dev TEXT NOT NULL, ver TEXT NOT NULL, cfg TEXT NOT NULL, ev TEXT, miles INTEGER NOT NULL DEFAULT 0, end_ts INTEGER, end_dist INTEGER, end_reason TEXT, cause TEXT, mode TEXT NOT NULL DEFAULT 'endless', ch INTEGER NOT NULL DEFAULT 0, ctl_ms INTEGER, dodge INTEGER NOT NULL DEFAULT 0, fly INTEGER NOT NULL DEFAULT 0, goal INTEGER NOT NULL DEFAULT 0)`,
   `CREATE INDEX IF NOT EXISTS runs_ts ON runs (ts)`,
   `CREATE INDEX IF NOT EXISTS runs_visit ON runs (visit)`,
   `CREATE TABLE IF NOT EXISTS pickups (run TEXT NOT NULL, k TEXT NOT NULL, type TEXT NOT NULL, seen_s INTEGER NOT NULL, taken INTEGER NOT NULL DEFAULT 0, ts INTEGER NOT NULL, PRIMARY KEY (run, k))`,
@@ -40,11 +40,23 @@ export const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS attempts_k ON attempts (k, ts)`,
 ];
 
+/** Spätere Spalten für bereits bestehende Datenbanken (jede Anweisung einzeln; „Spalte existiert schon“ ist erwartet und wird ignoriert). */
+const ALTERS: string[] = [
+  "ALTER TABLE runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'endless'",
+  'ALTER TABLE runs ADD COLUMN ch INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE runs ADD COLUMN ctl_ms INTEGER',
+  'ALTER TABLE runs ADD COLUMN dodge INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE runs ADD COLUMN fly INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE runs ADD COLUMN goal INTEGER NOT NULL DEFAULT 0',
+  'ALTER TABLE visits ADD COLUMN ch INTEGER NOT NULL DEFAULT 0',
+];
+
 const ready = new WeakSet<object>();
 /** Legt fehlende Tabellen an (einmal je Instanz); so braucht die Einrichtung in Cloudflare keine Migrations-Befehle. */
 export async function ensureSchema(db: Db, key: object): Promise<void> {
   if (ready.has(key)) return;
   await db.batch(SCHEMA.map((s) => [s] as [string]));
+  for (const a of ALTERS) { try { await db.run(a); } catch { /* Spalte ist schon vorhanden */ } }
   ready.add(key);
 }
 

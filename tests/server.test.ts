@@ -477,3 +477,56 @@ describe('Passwort als Cloudflare-Secret (ADMIN_PASSWORD_HASH)', () => {
     z.srv.close();
   });
 });
+
+describe('Einstiegs-, Sprint- und Herausforderungs-Kennzahlen (bekannte Testdaten)', () => {
+  it('Nenner und Werte stimmen: Erstläufe, Ausweichen, Flug, erster steuerbarer Frame, Sprint-Abschluss, Challenge-Starts', async () => {
+    const c = await boot(); await setPassword(c.db, PW, clock);
+    const a = new Client(c); await a.login();
+    const hex = (n: number, len = 12): string => n.toString(16).padStart(len, '0');
+    const post = (body: unknown) => fetch(c.url + '/api/e', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const run = (r: number, o: { mode?: string; ch?: number; ctl?: number; dodge?: boolean; fly?: boolean; goal?: boolean; dist: number; reason?: string }) => [
+      { t: 'start', r: hex(r, 16), d: { cfg: o.mode === 'sprint' ? 'S1' : 'builtin', mode: o.mode ?? 'endless', ch: o.ch ?? 0 } },
+      ...(o.ctl !== undefined ? [{ t: 'ctl', r: hex(r, 16), d: { ms: o.ctl } }] : []),
+      ...(o.dodge ? [{ t: 'dodge', r: hex(r, 16) }] : []), ...(o.fly ? [{ t: 'fly', r: hex(r, 16) }] : []), ...(o.goal ? [{ t: 'goal', r: hex(r, 16) }] : []),
+      { t: 'end', r: hex(r, 16), d: { dist: o.dist, reason: o.goal ? 'goal' : o.reason ?? 'crash', cause: 'taxi' } },
+    ];
+    await post({ v: hex(1), ver: '0.1.0', dev: 'desktop', events: [{ t: 'view' }, ...run(1, { ctl: 120, dodge: true, fly: true, dist: 3000 }), ...run(2, { mode: 'sprint', ctl: 90, goal: true, dist: 7000 })] });
+    await post({ v: hex(2), ver: '0.1.0', dev: 'phone', events: [{ t: 'view' }, ...run(3, { ctl: 300, dist: 175 })] });
+    await post({ v: hex(3), ver: '0.1.0', dev: 'phone', events: [{ t: 'view' }, ...run(4, { ctl: 200, dodge: true, dist: 900 })] });
+    await post({ v: hex(4), ver: '0.1.0', dev: 'desktop', events: [{ t: 'view', d: { ch: 1 } }, ...run(5, { mode: 'sprint', ch: 1, ctl: 150, dist: 2500 })] });
+    // Wiederholte Meldungen und fremde Werte ändern nichts
+    await post({ v: hex(3), ver: '0.1.0', dev: 'phone', events: [{ t: 'dodge', r: hex(4, 16) }, { t: 'ctl', r: hex(4, 16), d: { ms: 5 } }, { t: 'fly', r: hex(99, 16) }, { t: 'ctl', r: hex(4, 16), d: { ms: -4 } }] });
+    const k = await (await a.req('GET', '/api/admin/stats?period=24h')).json() as {
+      metrics: { runs: number; funnel: { firstRuns: number; dodge: { num: number; den: number }; fly: { num: number; den: number }; ctl: { median: number; p90: number; n: number } }; sprint: { starts: number; goals: number; completion: { num: number; den: number }; fromChallenge: number } };
+      challenge: { views: number; started: { num: number; den: number } }; cards: { views: number; repeatRate: { num: number; den: number } };
+    };
+    expect(k.metrics.runs).toBe(5);
+    expect(k.metrics.funnel.firstRuns).toBe(4);                                      // Besuch 1–4: je der erste Lauf
+    expect(k.metrics.funnel.dodge).toMatchObject({ num: 2, den: 4 });
+    expect(k.metrics.funnel.fly).toMatchObject({ num: 1, den: 4 });
+    expect(k.metrics.funnel.ctl).toMatchObject({ n: 4, median: 150, p90: 300 });     // 120, 150, 200, 300; Wiederholung (5 ms) zählt nicht
+    expect(k.metrics.sprint).toMatchObject({ starts: 2, goals: 1, fromChallenge: 1 });
+    expect(k.metrics.sprint.completion).toMatchObject({ num: 1, den: 2 });
+    expect(k.challenge).toMatchObject({ views: 1 });
+    expect(k.challenge.started).toMatchObject({ num: 1, den: 1 });
+    expect(k.cards.repeatRate).toMatchObject({ num: 1, den: 4 });                    // nur Besuch 1 hat zwei Läufe
+    const sp = await (await a.req('GET', '/api/admin/stats?period=24h&mode=sprint')).json() as { metrics: { runs: number } };
+    expect(sp.metrics.runs).toBe(2);
+    const en = await (await a.req('GET', '/api/admin/stats?period=24h&mode=endless')).json() as { metrics: { runs: number } };
+    expect(en.metrics.runs).toBe(3);
+    c.srv.close();
+  });
+
+  it('Datenbank einer älteren Version wird beim Start ergänzt (neue Spalten), ohne Daten zu verlieren', async () => {
+    const { sqliteDb } = await import('../server/sqlite');
+    const { ensureSchema } = await import('../server/db');
+    const db = sqliteDb(':memory:');
+    await db.run('CREATE TABLE runs (run TEXT PRIMARY KEY, visit TEXT NOT NULL, ts INTEGER NOT NULL, dev TEXT NOT NULL, ver TEXT NOT NULL, cfg TEXT NOT NULL, ev TEXT, miles INTEGER NOT NULL DEFAULT 0, end_ts INTEGER, end_dist INTEGER, end_reason TEXT, cause TEXT)');
+    await db.run('CREATE TABLE visits (visit TEXT PRIMARY KEY, ts INTEGER NOT NULL, dev TEXT NOT NULL, ver TEXT NOT NULL)');
+    await db.run("INSERT INTO runs (run, visit, ts, dev, ver, cfg) VALUES ('r1', 'v1', 1, 'desktop', '0.1.0', 'builtin')");
+    await ensureSchema(db, {});
+    const r = await db.get<{ mode: string; ch: number; dodge: number }>("SELECT mode, ch, dodge FROM runs WHERE run = 'r1'");
+    expect(r).toMatchObject({ mode: 'endless', ch: 0, dodge: 0 });
+    db.close();
+  });
+});

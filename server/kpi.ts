@@ -10,6 +10,8 @@ export interface Filter {
   /** 'event' = nur Läufe während einer Flugwoche, 'regular' = nur ohne Ereignis. */
   ev?: 'all' | 'event' | 'regular';
   cfg?: string | null;
+  /** Spielmodus: Endless oder Sunset Sprint. */
+  mode?: 'endless' | 'sprint' | null;
 }
 
 export interface Pct { num: number; den: number; value: number | null }
@@ -23,6 +25,7 @@ function runWhere(f: Filter, alias = 'r'): { sql: string; args: (string | number
   if (f.ev === 'event') sql += ` AND ${alias}.ev IS NOT NULL`;
   if (f.ev === 'regular') sql += ` AND ${alias}.ev IS NULL`;
   if (f.cfg) { sql += ` AND ${alias}.cfg = ?`; a.push(f.cfg); }
+  if (f.mode) { sql += ` AND ${alias}.mode = ?`; a.push(f.mode); }
   return { sql, args: a };
 }
 
@@ -45,11 +48,15 @@ export interface RunMetrics {
   crash: { n: number; bins: Array<{ from: number; to: number | null; count: number }>; causes: Array<{ cause: string; count: number }>; byReason: Record<string, number> };
   pickups: Array<{ type: string; seen: number; taken: number; rate: number | null }>;
   glideFirst: { median: number | null; n: number };
+  /** Einstieg: jeweils der erste gestartete Lauf je Besuch (Nenner = Erstläufe). */
+  funnel: { firstRuns: number; dodge: Pct; fly: Pct; ctl: { median: number | null; p90: number | null; n: number } };
+  /** Sunset Sprint: Starts, erreichte Ziele, Abschlussquote und Starts über Herausforderungs-Links. */
+  sprint: { starts: number; goals: number; completion: Pct; fromChallenge: number };
 }
 
 export async function runMetrics(db: Db, f: Filter): Promise<RunMetrics> {
   const w = runWhere(f);
-  const runs = await db.all<{ run: string; visit: string; ev: string | null; miles: number; end_ts: number | null; end_dist: number | null; end_reason: string | null; cause: string | null }>(`SELECT r.run, r.visit, r.ev, r.miles, r.end_ts, r.end_dist, r.end_reason, r.cause FROM runs r WHERE ${w.sql}`, ...w.args);
+  const runs = await db.all<{ run: string; visit: string; ts: number; ev: string | null; miles: number; end_ts: number | null; end_dist: number | null; end_reason: string | null; cause: string | null; mode: string; ch: number; ctl_ms: number | null; dodge: number; fly: number; goal: number }>(`SELECT r.run, r.visit, r.ts, r.ev, r.miles, r.end_ts, r.end_dist, r.end_reason, r.cause, r.mode, r.ch, r.ctl_ms, r.dodge, r.fly, r.goal FROM runs r WHERE ${w.sql} ORDER BY r.ts, r.run`, ...w.args);
   const n = runs.length;
   const perVisit = new Map<string, number>();
   for (const r of runs) perVisit.set(r.visit, (perVisit.get(r.visit) ?? 0) + 1);
@@ -74,6 +81,11 @@ export async function runMetrics(db: Db, f: Filter): Promise<RunMetrics> {
   const pk = await db.all<{ type: string; seen: number; taken: number }>(`SELECT p.type AS type, COUNT(*) AS seen, SUM(p.taken) AS taken FROM pickups p JOIN runs r ON r.run = p.run WHERE ${pw.sql} GROUP BY p.type`, ...pw.args);
   const gf = await db.all<{ s: number }>(`SELECT MIN(p.seen_s) AS s FROM pickups p JOIN runs r ON r.run = p.run WHERE p.type = 'glide' AND ${pw.sql} GROUP BY p.run`, ...pw.args);
   const types = ['shield', 'slow', 'clear', 'magnet', 'glide', 'boost', 'guide'];
+  const firstOf = new Map<string, (typeof runs)[number]>();
+  for (const r of runs) if (!firstOf.has(r.visit)) firstOf.set(r.visit, r);
+  const firsts = [...firstOf.values()];
+  const ctls = firsts.filter((r) => r.ctl_ms !== null).map((r) => r.ctl_ms as number);
+  const sprintRuns = runs.filter((r) => r.mode === 'sprint');
   return {
     runs: n,
     eventRuns: runs.filter((r) => r.ev !== null).length,
@@ -85,6 +97,13 @@ export async function runMetrics(db: Db, f: Filter): Promise<RunMetrics> {
     crash: { n: crashes.length, bins, causes: [...causes].map(([cause, count]) => ({ cause, count })).sort((a, b) => b.count - a.count).slice(0, 6), byReason },
     pickups: types.map((t) => { const x = pk.find((p) => p.type === t); const seen = x?.seen ?? 0, taken = x?.taken ?? 0; return { type: t, seen, taken, rate: seen > 0 ? taken / seen : null }; }),
     glideFirst: { median: percentile(gf.map((g) => g.s), 50), n: gf.length },
+    funnel: {
+      firstRuns: firsts.length,
+      dodge: pct(firsts.filter((r) => r.dodge === 1).length, firsts.length),
+      fly: pct(firsts.filter((r) => r.fly === 1).length, firsts.length),
+      ctl: { median: percentile(ctls, 50), p90: percentile(ctls, 90), n: ctls.length },
+    },
+    sprint: { starts: sprintRuns.length, goals: sprintRuns.filter((r) => r.goal === 1).length, completion: pct(sprintRuns.filter((r) => r.goal === 1).length, sprintRuns.length), fromChallenge: sprintRuns.filter((r) => r.ch === 1).length },
   };
 }
 
@@ -127,6 +146,8 @@ export interface Overview {
   series: { labels: number[]; cur: number[]; prev: number[] };
   markers: { publishes: Array<{ ts: number; id: number; label: string | null }>; events: Array<{ from: number; to: number; id: number }> };
   filters: { versions: string[]; configs: Array<{ id: number; publishedAt: number; label: string | null }> };
+  /** Besuche über Herausforderungs-Links und davon mit gestartetem Sprint. */
+  challenge: { views: number; started: Pct };
 }
 
 export async function overview(db: Db, period: Period, now: number, extra: Omit<Filter, 'from' | 'to'>): Promise<Overview> {
@@ -141,6 +162,7 @@ export async function overview(db: Db, period: Period, now: number, extra: Omit<
   const events = await db.all<Overview['markers']['events'][number]>('SELECT id, event_start AS "from", event_end AS "to" FROM config_versions WHERE event_start IS NOT NULL AND event_end IS NOT NULL AND event_end > ? AND event_start < ? ORDER BY id', cur.from, cur.to);
   const versions = (await db.all<{ ver: string }>('SELECT DISTINCT ver FROM visits ORDER BY ver')).map((r) => r.ver);
   const configs = await db.all<Overview['filters']['configs'][number]>('SELECT id, published_at AS publishedAt, label FROM config_versions ORDER BY id DESC LIMIT 30');
+  const cv = await db.get<{ n: number; s: number }>(`SELECT COUNT(*) AS n, SUM(CASE WHEN EXISTS (SELECT 1 FROM runs r WHERE r.visit = v.visit AND r.mode = 'sprint' AND r.ch = 1) THEN 1 ELSE 0 END) AS s FROM visits v WHERE v.ch = 1 AND v.ts >= ? AND v.ts < ?${extra.dev ? ' AND v.dev = ?' : ''}${extra.ver ? ' AND v.ver = ?' : ''}`, cur.from, cur.to, ...(extra.dev ? [extra.dev] : []), ...(extra.ver ? [extra.ver] : []));
   return {
     period, from: cur.from, to: cur.to, step: period === '24h' ? 'hour' : 'day',
     coverage: { status: first === null ? 'nodata' : first > cur.from ? 'partial' : 'ok', firstEventAt: first },
@@ -149,6 +171,7 @@ export async function overview(db: Db, period: Period, now: number, extra: Omit<
     series: { labels: Array.from({ length: buckets }, (_, i) => Math.round(cur.from + i * stepMs)), cur: await series(db, cur, buckets), prev: await series(db, prev, buckets) },
     markers: { publishes, events },
     filters: { versions, configs },
+    challenge: { views: cv?.n ?? 0, started: pct(cv?.s ?? 0, cv?.n ?? 0) },
   };
 }
 

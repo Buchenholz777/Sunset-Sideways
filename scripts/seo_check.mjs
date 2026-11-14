@@ -10,6 +10,7 @@ const note = (n, ok, info = '') => { results.push(ok); console.log(ok ? 'OK  ' :
 // 1) Initiales HTML (ohne JavaScript)
 const raw = await (await fetch(BASE + '/')).text();
 note('Initiales HTML: Titel, Beschreibung, Canonical, H1, Tagline, Steuerhinweis, Spielbeschreibung', /<title>Sunset Sideways – Arcade-Rennspiel im Browser<\/title>/.test(raw) && /name="description"/.test(raw) && /rel="canonical" href="https:\/\/www\.sunsetsideways\.com\/"/.test(raw) && /<h1[^>]*>/.test(raw) && raw.includes('Weiche dem Verkehr aus. Wie weit kommst du?</p>') && raw.includes('Mit den Pfeiltasten lenken') && raw.includes('Impulsschild') && raw.includes('<noscript>'));
+note('Meta-Beschreibung hat 70–160 Zeichen', (() => { const m = /name="description" content="([^"]*)"/.exec(raw); return !!m && m[1].length >= 70 && m[1].length <= 160; })(), String(/name="description" content="([^"]*)"/.exec(raw)?.[1].length));
 note('JSON-LD (VideoGame) vorhanden und gültiges JSON', (() => { try { const m = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(raw); const j = JSON.parse(m[1].replace(/__ORIGIN__/g, 'https://www.sunsetsideways.com')); return j['@type'] === 'VideoGame' && j.url === 'https://www.sunsetsideways.com/'; } catch { return false; } })());
 note('Kein noindex im HTML', !/noindex/i.test(raw));
 note('Keine ungefüllten Platzhalter (__ORIGIN__) im Produktionsbuild', !raw.includes('__ORIGIN__'));
@@ -22,6 +23,7 @@ for (const [name, w, h, touch] of [['desktop-1366x768', 1366, 768, false], ['mob
   const page = await ctx.newPage();
   const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
   await page.goto(BASE + '/'); await page.waitForTimeout(600);
+  note(`${name}: Dokumenttitel nach JavaScript-Start unverändert beschreibend`, (await page.title()) === 'Sunset Sideways – Arcade-Rennspiel im Browser', await page.title());
   const vis = await page.evaluate(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const b = r('#btn-start'), h1 = r('h1.logo'), tg = r('.tagline'), s = r('#about > summary'); return { btnInside: b.bottom <= innerHeight && b.top >= 0, h1: h1.width > 0, tag: tg.width > 0, sumInside: s.bottom <= innerHeight + 1 && s.top > b.bottom - 1, overflowX: document.documentElement.scrollWidth > innerWidth }; });
   note(`${name}: H1, Tagline, Startknopf und „So funktioniert“ sichtbar, kein Seitwärts-Scrollen`, vis.btnInside && vis.h1 && vis.tag && vis.sumInside && !vis.overflowX, JSON.stringify(vis));
   await page.screenshot({ path: `${OUT}/${name}-start.png` });

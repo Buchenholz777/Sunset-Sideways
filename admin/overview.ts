@@ -6,8 +6,8 @@ import { PICKUP_LABEL, type PickupKey } from '../src/config/runtime';
 
 const CAUSE: Record<string, string> = { taxi: 'Taxi', cabrio: 'Cabrio', sedan: 'Limousine', truck: 'Lkw', baken: 'Baken', barrier: 'Absperrung', unbekannt: 'Unbekannt' };
 
-interface Q { period: string; dev: string; ver: string; ev: string; cfg: string }
-const saved = (): Q => { try { return { period: '7d', dev: 'all', ver: 'all', ev: 'all', cfg: 'all', ...(JSON.parse(localStorage.getItem('ssw-kpi') ?? '{}') as Partial<Q>) }; } catch { return { period: '7d', dev: 'all', ver: 'all', ev: 'all', cfg: 'all' }; } };
+interface Q { period: string; dev: string; ver: string; ev: string; cfg: string; mode: string }
+const saved = (): Q => { try { return { period: '7d', dev: 'all', ver: 'all', ev: 'all', cfg: 'all', mode: 'all', ...(JSON.parse(localStorage.getItem('ssw-kpi') ?? '{}') as Partial<Q>) }; } catch { return { period: '7d', dev: 'all', ver: 'all', ev: 'all', cfg: 'all', mode: 'all' }; } };
 const store = (q: Q): void => { try { localStorage.setItem('ssw-kpi', JSON.stringify(q)); } catch { /* optional */ } };
 
 function delta(cur: number | null, prev: number | null, unit: 'rel' | 'pp'): HTMLElement {
@@ -45,7 +45,7 @@ export async function renderOverview(root: HTMLElement): Promise<void> {
   async function load(): Promise<void> {
     clear(box);
     box.append(h('p', { class: 'muted', role: 'status' }, 'Lädt Kennzahlen …'));
-    const qs = new URLSearchParams({ period: q.period, dev: q.dev, ver: q.ver, ev: q.ev, cfg: q.cfg }).toString();
+    const qs = new URLSearchParams({ period: q.period, dev: q.dev, ver: q.ver, ev: q.ev, cfg: q.cfg, mode: q.mode }).toString();
     let o: Overview;
     try { o = await api<Overview>('GET', `/stats?${qs}`); } catch (e) {
       clear(box);
@@ -60,6 +60,7 @@ export async function renderOverview(root: HTMLElement): Promise<void> {
     bar.append(periods(),
       sel('Gerät', 'dev', [['all', 'Alle'], ['phone', 'Smartphone'], ['tablet', 'Tablet'], ['desktop', 'Desktop']]),
       sel('Spielversion', 'ver', [['all', 'Alle'], ...o.filters.versions.map((v): [string, string] => [v, v])]),
+      sel('Modus', 'mode', [['all', 'Alle'], ['endless', 'Endless'], ['sprint', 'Sunset Sprint']]),
       sel('Ereignis', 'ev', [['all', 'Alle Fahrten'], ['event', 'Nur Flugwoche'], ['regular', 'Ohne Ereignis']]),
       sel('Konfiguration', 'cfg', [['all', 'Alle'], ['builtin', 'Eingebaute Werte'], ...o.filters.configs.map((c): [string, string] => [String(c.id), `Version ${c.id}${c.label ? ' · ' + c.label : ''}`])]));
     clear(box);
@@ -90,11 +91,31 @@ export async function renderOverview(root: HTMLElement): Promise<void> {
         summary: `${n0(total)} Fahrten insgesamt, Vorperiode ${n0(o.series.prev.reduce((a, b) => a + b, 0))}.`,
       })));
 
-    box.append(h('div', { class: 'grid2' }, reachPanel(m), crashPanel(m)), pickupPanel(m));
+    box.append(funnelPanel(o), h('div', { class: 'grid2' }, reachPanel(m), crashPanel(m)), pickupPanel(m));
     box.append(comparePanel(o, q));
   }
 
   await load();
+}
+
+const FEW = 30;
+const frac = (p: Pct, what: string): { v: string; sub: string; few: boolean } => ({ v: p.value === null ? '–' : pct(p.value), sub: p.den === 0 ? 'noch keine Daten' : `${n0(p.num)} von ${n0(p.den)} ${what}`, few: p.den > 0 && p.den < FEW });
+
+/** Einstieg und Sprint: Quoten mit Nennern; unter 30 Fällen ausdrücklich als „wenig Daten“ gekennzeichnet. */
+function funnelPanel(o: Overview): HTMLElement {
+  const m = o.metrics, f = m.funnel;
+  const tile = (title: string, p: { v: string; sub: string; few: boolean }, help: string): HTMLElement => h('article', { class: 'kpi', title: help }, h('h3', null, title), h('p', { class: 'kpi-v' }, p.v), h('p', { class: 'kpi-s' }, p.sub), p.few ? h('p', { class: 'delta none' }, 'wenig Daten (< 30)') : null);
+  const ctl = f.ctl.n ? { v: `${n0(f.ctl.median ?? 0)} ms`, sub: `P90 ${n0(f.ctl.p90 ?? 0)} ms · Stichprobe ${n0(f.ctl.n)} Erstläufe`, few: f.ctl.n < FEW } : { v: '–', sub: 'noch keine Daten', few: false };
+  return h('section', { class: 'panel' }, h('h2', null, 'Einstieg, Sprint und Herausforderungen'),
+    h('p', { class: 'muted' }, 'Erstlauf = erster gestarteter Lauf eines Besuchs. Quoten zeigen ihren Nenner; unter 30 Fällen gelten sie als vorläufig.'),
+    h('div', { class: 'kpis small' },
+      tile('Erstes Ausweichen geschafft', frac(f.dodge, 'Erstläufen'), 'Erstläufe, in denen das erste Hindernis erfolgreich umfahren wurde'),
+      tile('Flug im Erstlauf', frac(f.fly, 'Erstläufen'), 'Erstläufe mit mindestens einem erlebten Flugeffekt'),
+      tile('Zweiter Start', frac(o.cards.repeatRate, 'Besuchen mit Lauf'), 'Besuche mit mindestens zwei Läufen unter den Besuchen mit mindestens einem Lauf'),
+      tile('Klick → steuerbar (Median)', ctl, 'Zeit vom Start-Klick bis zum ersten simulierten Schritt'),
+      tile('Sprint-Abschluss', frac(m.sprint.completion, 'Sprint-Starts'), 'Sprint-Ziele pro Sprint-Start'),
+      tile('Challenge → Start', frac(o.challenge.started, 'Aufrufen über Link'), 'Besuche über einen Herausforderungs-Link, die danach den Sprint gestartet haben')),
+    h('p', { class: 'muted' }, `Sprint-Starts ${n0(m.sprint.starts)} (davon über Links ${n0(m.sprint.fromChallenge)}), erreichte Ziele ${n0(m.sprint.goals)}. Filter „Modus“ und „Gerät“ oben gelten für alle Werte.`));
 }
 
 function reachPanel(m: RunMetrics): HTMLElement {

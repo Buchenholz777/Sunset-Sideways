@@ -33,6 +33,7 @@ export async function ingest(db: Db, body: unknown, now: number): Promise<Ingest
   // Bekannte Konfigurationsversionen (eine Abfrage für alle Start-Ereignisse)
   const wanted = new Set<string>();
   for (const e of events) { const d = (e as { t?: unknown; d?: { cfg?: unknown } } | null)?.d; if ((e as { t?: unknown } | null)?.t === 'start' && typeof d?.cfg === 'string' && /^\d{1,9}$/.test(d.cfg)) wanted.add(d.cfg); }
+  const SPRINT_CFG = /^S\d{1,3}$/;
   const known = new Set<string>(['builtin']);
   if (wanted.size) for (const r of await db.all<{ id: number }>(`SELECT id FROM config_versions WHERE id IN (${[...wanted].map(() => '?').join(',')})`, ...[...wanted].map(Number))) known.add(String(r.id));
 
@@ -47,11 +48,13 @@ export async function ingest(db: Db, body: unknown, now: number): Promise<Ingest
     const d = (e.d && typeof e.d === 'object' ? e.d : {}) as Record<string, unknown>;
     const run = typeof e.r === 'string' && HEX.test(e.r) ? e.r : null;
     switch (e.t) {
-      case 'view': add(null); break;
+      case 'view': add(d.ch === 1 ? ['UPDATE visits SET ch = 1 WHERE visit = ?', visit] : null); break;
       case 'start': {
-        const cfg = typeof d.cfg === 'string' && known.has(d.cfg) ? d.cfg : 'builtin';
+        const cfg = typeof d.cfg === 'string' && (known.has(d.cfg) || SPRINT_CFG.test(d.cfg)) ? d.cfg : 'builtin';
+        const mode = d.mode === 'sprint' ? 'sprint' : 'endless';
+        const ch = d.ch === 1 && mode === 'sprint' ? 1 : 0;
         const ev = typeof d.ev === 'string' && /^[\w-]{1,40}$/.test(d.ev) ? d.ev : null;
-        add(run ? ['INSERT OR IGNORE INTO runs (run, visit, ts, dev, ver, cfg, ev) VALUES (?, ?, ?, ?, ?, ?, ?)', run, visit, now, dev, ver, cfg, ev] : null);
+        add(run ? ['INSERT OR IGNORE INTO runs (run, visit, ts, dev, ver, cfg, ev, mode, ch) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', run, visit, now, dev, ver, cfg, ev, mode, ch] : null);
         if (!run) at[at.length - 1] = -2;
         break;
       }
@@ -70,6 +73,18 @@ export async function ingest(db: Db, body: unknown, now: number): Promise<Ingest
           add([`INSERT OR IGNORE INTO pickups (run, k, type, seen_s, taken, ts) SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM runs WHERE run = ? AND visit = ?) AND (SELECT COUNT(*) FROM pickups WHERE run = ?) < ${MAX_PICKUPS_PER_RUN}`, run, key, type, s, e.t === 'taken' ? 1 : 0, now, run, visit, run]);
           if (e.t === 'taken') { stmts.push(['UPDATE pickups SET taken = 1 WHERE run = ? AND k = ? AND taken = 0 AND EXISTS (SELECT 1 FROM runs WHERE run = ? AND visit = ?)', run, key, run, visit]); }
         } else { at.push(-2); counted.push(false); }
+        break;
+      }
+      case 'ctl': {
+        const ms = int(d.ms, 0, 60_000);
+        if (run && ms !== null) add(['UPDATE runs SET ctl_ms = ? WHERE run = ? AND visit = ? AND ctl_ms IS NULL', ms, run, visit]); else { at.push(-2); counted.push(false); }
+        break;
+      }
+      case 'dodge':
+      case 'fly':
+      case 'goal': {
+        const col = e.t as 'dodge' | 'fly' | 'goal';
+        if (run) add([`UPDATE runs SET ${col} = 1 WHERE run = ? AND visit = ? AND ${col} = 0`, run, visit]); else { at.push(-2); counted.push(false); }
         break;
       }
       case 'end': {

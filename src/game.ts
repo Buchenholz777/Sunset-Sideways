@@ -92,6 +92,10 @@ export class Game {
   private firstObsId: number | null = null;
   private landing = false;
   private runPickups = 0;
+  private runStartedAt = 0;
+  private runCtl = false;
+  private runDodged = false;
+  private runFlew = false;
   private mode: Mode = 'endless';
   private challenge: { ok: boolean; reach: number | null } | null = null;
   private sprintBest = load().sprintBest;
@@ -131,7 +135,7 @@ export class Game {
     this.previewToken = td && /^[A-Za-z0-9_-]{8,128}$/.test(td) ? td : null;
     this.excluded = this.qaHook || this.previewToken !== null;
     this.tele = new Telemetry(!this.excluded);
-    this.tele.send('view');
+    this.tele.send('view', undefined, undefined, this.challenge?.ok ? { ch: 1 } : undefined);
     void this.refreshConfig();
     if (this.previewToken) this.showBadge();
     window.addEventListener('pagehide', () => this.endRun('leave'));
@@ -312,6 +316,7 @@ export class Game {
     this.loop.reset();
     this.focusKnown = document.hasFocus();
     this.firstObsId = null; this.landing = false; this.runPickups = 0;
+    this.runStartedAt = performance.now(); this.runCtl = false; this.runDodged = false; this.runFlew = false;
     this.el.hint.hidden = true; this.el.toast.hidden = true; this.el.pauseReason.hidden = true;
     this.last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '' };
     for (const chip of [this.el.shield, this.el.slow, this.el.magnet, this.el.blitz, this.el.glide, this.el.boost, this.el.guide]) chip.hidden = true;   // keine Effekt-Anzeigen aus der vorigen Fahrt
@@ -390,13 +395,14 @@ export class Game {
         else if (ev.type === 'pickup') { this.runPickups++; this.tele.send('taken', this.runId, this.pickupKey(ev.pickup, ev.id, ev.z), { type: ev.pickup, s: Math.floor(sim.s) }); this.qaPickupEvents++; this.renderer.burst(ev.pickup); this.sound.sfx(ev.pickup); }
         else if (ev.type === 'cleared') { this.renderer.burst('clear'); }
         else if (ev.type === 'blitz') this.renderer.laneFlash(ev.x, ev.z);
-        else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast('Fliegen'); }
+        else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast('Fliegen'); if (!this.runFlew) { this.runFlew = true; this.tele.send('fly', this.runId); } }
         else if (ev.type === 'glideEnd') { this.renderer.burst('land'); this.sound.sfx('land'); this.sound.setFlight(false); }
         else if (ev.type === 'magnetPull') this.sound.sfx('magnet');
         else if (ev.type === 'effectEnd') this.sound.sfx('effectEnd');
       }
       sim.events.length = 0;
     }
+    if (!this.runCtl) { this.runCtl = true; this.tele.send('ctl', this.runId, undefined, { ms: Math.round(performance.now() - this.runStartedAt) }); }
     this.track(sim);
     this.coach(sim);
     if (this.mode === 'sprint') {
@@ -499,17 +505,17 @@ export class Game {
    * verschwindet beim Ausweichen und wird nach erfolgreichem Passieren dauerhaft gespeichert (nicht in QA-/Testfahrten). Ohne Ton und Farbe lesbar (Pfeile + Text).
    */
   private coach(sim: Sim): void {
-    if (this.tutorialDone) { if (!this.el.hint.hidden) this.el.hint.hidden = true; return; }
     if (this.firstObsId === null && sim.obstacles.length) this.firstObsId = Math.min(...sim.obstacles.map((o) => o.id));
     if (this.firstObsId === null) return;
     const o = sim.obstacles.find((x) => x.id === this.firstObsId);
     if (!o) { this.el.hint.hidden = true; return; }
     const passed = sim.s > o.z + KINDS[o.kind].len + 2;
-    if (passed && !o.hit) {
-      this.tutorialDone = true; this.el.hint.hidden = true;
-      if (!this.excluded) save({ dodged: true });
-      return;
+    if (passed && !o.hit && !this.runDodged) {                         // erstes erfolgreiches Ausweichen dieses Laufs
+      this.runDodged = true;
+      this.tele.send('dodge', this.runId);
+      if (!this.tutorialDone) { this.tutorialDone = true; if (!this.excluded) save({ dodged: true }); }
     }
+    if (this.tutorialDone) { if (!this.el.hint.hidden) this.el.hint.hidden = true; return; }
     const inLane = Math.abs(sim.q - o.x) < 2.6;
     this.el.hint.hidden = !(inLane && !o.hit && o.z > sim.s - 1);
   }
