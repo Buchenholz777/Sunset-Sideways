@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+let f,s; const open=(p)=>{f=p;s=fs.readFileSync(p,'utf8')}; const save=()=>fs.writeFileSync(f,s);
+const rep=(a,b)=>{ if(!s.includes(a)) throw new Error(f+' missing: '+a.slice(0,70)); s=s.replace(a,b); };
+open('src/render/renderer.ts');
+rep("  private lt = 0;","  private lt = 0;\n  /** Nur QA/Vergleich: Grundstücke abschalten (alte Straßenrand-Motive), um Kosten und Bild zu vergleichen. */\n  lotsOn = true;");
+rep("        if (stageAt(z) <= LOT_STAGE_MAX) continue;                   // ersetzt durch Grundstücke (lots.ts)","        if (this.lotsOn && stageAt(z) <= LOT_STAGE_MAX) continue;    // ersetzt durch Grundstücke (lots.ts)");
+rep("    {\n      const env = this.lotEnv(zc);","    if (this.lotsOn) {\n      const env = this.lotEnv(zc);");
+save();
+open('src/game.ts');
+rep("    this.renderer.ghost = this.qa.ghost === true;","    this.renderer.ghost = this.qa.ghost === true;\n    if (this.qaHook && q.get('nolots') === '1') this.renderer.lotsOn = false;");
+save();
+open('src/render/lots.ts');
+rep("function clipNear(","export function clipNear(");
+save();

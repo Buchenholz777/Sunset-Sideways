@@ -143,6 +143,7 @@ export class Game {
     this.qa = this.qaHook ? { startS: num('startS'), startT: num('startT'), ghost: q.get('ghost') === '1' } : {};
     this.renderer.debug = this.qaHook && q.get('debug') === '1';
     this.renderer.ghost = this.qa.ghost === true;
+    if (this.qaHook && q.get('nolots') === '1') this.renderer.lotsOn = false;
     if (this.qaHook) {
       (window as unknown as { __qa: unknown }).__qa = {
         pause: () => this.pause(),

@@ -55,7 +55,7 @@ const place = (page, spec) => page.evaluate((x) => window.__qa.place(x), spec);
 // ---------- Desktop ----------
 {
   const { ctx, page, errors, startText } = await start(Q());
-  note('D: Startbildschirm zeigt nur „← → Lenken“', startText.trim() === '← → Lenken', JSON.stringify(startText));
+  note('D: Startbildschirm zeigt kompakte, wahrheitsgemäße Tastenerklärung', /Pfeiltasten lenken/.test(startText) && !/Drift|Handbremse|Nitro/i.test(startText), JSON.stringify(startText));
   const s0 = await st(page);
   note('D: Eine Aktion startet die Fahrt direkt (kein Countdown)', s0.phase === 'running', `Phase ${s0.phase}`);
   note('D: Starttempo 210 km/h', s0.v >= 209.9 && s0.v < 216, `${s0.v.toFixed(1)} km/h bei t=${s0.t.toFixed(2)} s`);

@@ -7,6 +7,7 @@ import { CAM_BACK, DRAW, chaseSlope, depthEff, makeLayout, type Layout } from '.
 import { applyLight, decoType, drawDeco, drawMoon, drawMountains, drawPlane, drawPortal, drawSkyline, drawSky, drawSun, hash, lightT, mixHex, PORTAL_Z, stageAt } from './scenery';
 import { CHUNK, drawPed, pedsInChunk } from './people';
 import { computeRows } from './rows';
+import { LOT, lotItems, type LotEnv } from './lots';
 import { PAL, drawObstacle, drawPickup, drawShieldArc, gfx, rect } from './sprites';
 import { drawCar } from './car3d';
 
@@ -34,11 +35,15 @@ const MAX_PARTICLES = 120;
 
 /** Abstand der Streckenschilder (m). */
 export const KM_SIGN_EVERY = 5000;
+/** Grundstücke (räumliche Körper) gelten für die Abschnitte bis zu dieser Stufe; darüber bleiben die bisherigen Straßenrand-Motive. */
+const LOT_STAGE_MAX = 1;
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   L: Layout = makeLayout(320, 568);
   private lt = 0;
+  /** Nur QA/Vergleich: Grundstücke abschalten (alte Straßenrand-Motive), um Kosten und Bild zu vergleichen. */
+  lotsOn = true;
   private pal = { g1: '#1b1033', g2: '#21143c', s1: '#3a2a66', s2: '#30235a', a1: '#262944', a2: '#2b2e4c', haze: '#4a2070', w1: '#443a66', w2: '#3e355e', curb: '#7c6ca8', seam: '#271f40' };
   /** Darstellungswinkel des Wagens gegenüber der Kamera: dezent beim Lenken, sonst 0 (Heck waagerecht). */
   private dtLast = 1 / 60;
@@ -134,6 +139,17 @@ export class Renderer {
   }
 
   /** Seitlicher Versatz der Mittellinie im Kamerabild (Weltposition der Kamera und Blickrichtung). */
+  /** Umgebung für Grundstücke: Projektion mit Straßenverlauf und Hügeln, Kamerahöhe, Licht und Qualitätsstufe. */
+  private lotEnv(zc: number): LotEnv {
+    return {
+      ctx: this.ctx, zc, lt: this.lt, lights: gfx.lights, quality: this.quality, clock: this.clock, reduced: this.reducedMotion, haze: this.pal.haze,
+      camH: this.L.Hv / this.L.fx,
+      P: (x, z, h = 0) => { const p = this.projectWorld(zc, this.road.center(z) + x, z, h); return { sx: p.sx, sy: p.sy, d: p.d, k: p.k }; },
+      fade: (d, extra = 1) => this.fade(d, extra),
+      ground: (z) => this.road.height(z) - this.elev0,
+    };
+  }
+
   private lat(z: number, zc: number): number { return this.road.center(z) - this.camXw - this.camHead * (z - zc); }
 
   private fade(d: number, extra = 1): number {
@@ -351,6 +367,7 @@ export class Renderer {
       const z = k * STEP;
       for (const side of [-1, 1]) {
         let type = decoType(k, side, z);
+        if (this.lotsOn && stageAt(z) <= LOT_STAGE_MAX) continue;    // ersetzt durch Grundstücke (lots.ts)
         if (type === 'fountain' && !B.scenery.fountains) type = 'none';
         if (type === 'none' || (this.quality > 1 && k % 2)) continue;
         if (hash(k * 5 + (side > 0 ? 2 : 3)) < 0.18) type = 'none'; // Luft zwischen den Silhouetten
@@ -380,6 +397,15 @@ export class Renderer {
         const p = this.proj(zc, side * (B.road.halfWidth + 1.4), zl);
         if (p.d < 4) continue;
         items.push({ d: p.d + (side > 0 ? 0 : 0.01), draw: () => { ctx.globalAlpha = this.fade(p.d, p.d > 140 ? 0.6 : 1); this.lamp(p, side); ctx.globalAlpha = 1; } });
+      }
+    }
+    // Grundstücke am Straßenrand (Wüstenrand, Motels, Art-déco-Boulevard) als räumliche Körper und Bodenflächen
+    if (this.lotsOn) {
+      const env = this.lotEnv(zc);
+      for (let i = Math.floor((zc + 2) / LOT) - 1; i <= Math.floor((zc + DRAW) / LOT); i++) {
+        const mid = i * LOT + LOT / 2;
+        if (stageAt(mid) > LOT_STAGE_MAX || mid < 40) continue;
+        for (const side of [-1, 1]) lotItems(env, i, side, stageAt(mid), items);
       }
     }
     // Zieltor (Sunset Sprint)
