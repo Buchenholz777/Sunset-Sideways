@@ -178,7 +178,9 @@ export class Generator {
         const lc = cls[lane] as LaneClass;
         const st = statics();
         const kinds = lc === 'static' ? (st.length ? st : (['baken'] as ObjKind[])) : GROUP_KINDS[lc];
-        const kind = lc === 'static' ? kinds[this.int(kinds.length)] : this.pickKind(kinds);
+        const picked = lc === 'static' ? kinds[this.int(kinds.length)] : this.pickKind(kinds);
+        // Erste Begegnung (Mitte blockiert): immer die breite Absperrung – sie ist im Bild weit früher erkennbar als eine schmale Bake (0,9 m)
+        const kind = pat === 'first' && lc === 'static' && kinds.includes('barrier') ? 'barrier' : picked;
         const def = KINDS[kind];
         const x = laneX(lane);
         const half = def.w / 2 + B.player.width / 2 + B.gen.blockMargin;

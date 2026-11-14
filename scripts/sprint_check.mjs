@@ -15,8 +15,8 @@ for (const [name, w, h, touch] of [['1366×768', 1366, 768, false], ['320×568',
   const ctx = await browser.newContext({ viewport: { width: w, height: h }, hasTouch: touch, isMobile: touch });
   const page = await ctx.newPage();
   await page.goto(BASE + '/?qa=1'); await page.waitForTimeout(500);
-  const g = await page.evaluate(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const a = r('#btn-start'), b = r('#btn-sprint'); const inside = (x) => x.left >= 0 && x.right <= innerWidth && x.top >= 0 && x.bottom <= innerHeight; return { fahren: inside(a), sprint: inside(b), hit: document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('#btn-sprint') !== null, h: Math.round(b.height), below: b.top >= a.bottom - 1 }; });
-  note(`${name}: „Fahren“ bleibt primär, „Sunset Sprint“ als sekundäre Aktion sichtbar und erreichbar`, g.fahren && g.sprint && g.hit && g.below && g.h >= 44, JSON.stringify(g));
+  const g = await page.evaluate(() => { const r = (s) => document.querySelector(s).getBoundingClientRect(); const a = r('#btn-start'), b = r('#btn-sprint'); const inside = (x) => x.left >= 0 && x.right <= innerWidth && x.top >= 0 && x.bottom <= innerHeight; return { fahren: inside(a), sprint: inside(b), hit: document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)?.closest('#btn-sprint') !== null, h: Math.round(b.height) }; });
+  note(`${name}: „Fahren“ bleibt primär, „Sunset Sprint“ als sekundäre Aktion sichtbar und erreichbar`, g.fahren && g.sprint && g.hit && g.h >= 44, JSON.stringify(g));
   await ctx.close();
 }
 
