@@ -30,3 +30,24 @@ describe('Sichtbare Warnzeit bei Höchsttempo', () => {
     expect(d).toBeGreaterThan(30);     // Messwert zur Abnahme; die Warnfläche (markers) wird deutlich vorher sichtbar
   });
 });
+
+describe('Einblendung neuer Hindernisse (350 ms) und Vorwarnzeit', () => {
+  it('Einblendung (350 ms) kostet höchstens 0,35 s; wirksame Vorwarnzeit bleibt ≥ 0,8 s (Höchsttempo, alle Formate)', () => {
+    const FADE_S = 0.35;
+    for (const [n, w, h] of LAYOUTS) {
+      const L = makeLayout(w, h);
+      for (const kmh of [DEFAULT_CONFIG.tempo.maxKmh, PROFILES.hard.patch.maxKmh!]) {
+        const v = kmh / 3.6;
+        const spawn = Math.max(300, 2.3 * v);                          // Generator-Horizont (m)
+        const shown = Math.min(DRAW, spawn);                           // gezeichnet ab DRAW
+        const fullAt = shown - FADE_S * v;                             // ab hier voll sichtbar
+        for (const kind of ['taxi', 'cabrio', 'sedan', 'truck', 'barrier'] as const) {
+          const readable = Math.min(DRAW, readableDistance(KINDS[kind].w, READ_OBJECT_PX, L));
+          const effective = Math.min(readable, fullAt) / v;                // erst voll sichtbar UND erkennbar zählt
+          expect(effective, `${n} ${kind} ${kmh} km/h: ${effective.toFixed(2)} s`).toBeGreaterThanOrEqual(NEED_S * (kmh > 600 ? 0.9 : 1));
+          expect(Math.min(readable, shown) / v - effective, `${n} ${kind}: Verlust durch Einblendung`).toBeLessThanOrEqual(0.36);
+        }
+      }
+    }
+  });
+});

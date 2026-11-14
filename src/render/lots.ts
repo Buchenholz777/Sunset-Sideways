@@ -24,7 +24,7 @@ export interface LotEnv {
 export interface Item { d: number; draw: () => void }
 
 type Prim =
-  | { t: 'box'; u0: number; u1: number; z0: number; z1: number; h0: number; h1: number; col: string; trim?: string; win?: 'motel' | 'car' | 'shed'; neon?: string; skip?: 'top' }
+  | { t: 'box'; u0: number; u1: number; z0: number; z1: number; h0: number; h1: number; col: string; trim?: string; win?: 'motel' | 'car' | 'shed' | 'tower' | 'garage'; neon?: string; skip?: 'top' }
   | { t: 'gnd'; pts: Array<[number, number]>; col: string; a: number; glow?: boolean }
   | { t: 'line'; u0: number; u1: number; z: number; w: number; col: string; a: number }
   | { t: 'bush'; u: number; z: number; s: number }
@@ -37,7 +37,7 @@ const CAR_COLS = ['#f2c21a', '#d8453f', '#3f6fb5', '#2fb7a8', '#f0ece0', '#8b93a
 
 // ------------------------------------------------------------------ Grundstücke
 /** Welche Art von Grundstück liegt in Abschnitt i auf dieser Seite? (nur Wüstenrand/Motels und Art-déco-Boulevard) */
-export type LotKind = 'motel' | 'open' | 'shed' | 'pocket' | 'deco' | 'court' | 'garage' | 'plaza';
+export type LotKind = 'motel' | 'open' | 'shed' | 'pocket' | 'deco' | 'court' | 'garage' | 'plaza' | 'tower' | 'neon';
 
 export function lotKind(i: number, side: number, stage: number): LotKind {
   const r = (i % 4 + 4) % 4;
@@ -55,8 +55,11 @@ export function lotKind(i: number, side: number, stage: number): LotKind {
     if (r === 2) return right ? 'deco' : 'open';
     return right ? 'open' : 'deco';
   }
-  if (stage === 2) return (r + (right ? 0 : 2)) % 4 < 2 ? 'garage' : 'plaza';
-  return (r + (right ? 0 : 1)) % 4 < 2 ? 'plaza' : 'garage';
+  // Rhythmus: dichte Passage, Vorplatz, freie Biegung mit Ausblick – Seiten gegenläufig versetzt
+  const q = (r + (right ? 0 : 2)) % 4;
+  if (stage === 2) return q === 0 ? 'garage' : q === 1 ? 'plaza' : q === 2 ? 'open' : 'tower';
+  if (stage === 3) return q === 0 ? 'tower' : q === 1 ? 'plaza' : q === 2 ? 'garage' : 'open';
+  return q === 0 ? 'neon' : q === 1 ? 'tower' : q === 2 ? 'plaza' : 'open';
 }
 
 const cache = new Map<number, Lot>();
@@ -151,14 +154,39 @@ function buildLot(i: number, side: number, stage: number): Lot {
       break;
     }
     case 'garage': {
-      prims.push({ t: 'box', u0: 5.5, u1: 21, z0: z0 + 4, z1: z0 + 46, h0: 0, h1: 12 + h(13) * 6, col: '#cdb8c8', trim: '#2ee6d6', win: 'motel', neon: '#ff4fd8' });
-      prims.push({ t: 'box', u0: 2.2, u1: 5.5, z0: z0 + 16, z1: z0 + 30, h0: 3.2, h1: 3.6, col: '#f4efe2', trim: '#ffe27a' });
+      // Parkhaus: offene Decks mit beleuchteten Wagenreihen, Rampe und Vordach an der Einfahrt, davor ein Vorplatz
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 6], [3.4, z0 + 40], [22, z0 + 40], [22, z0 + 6]], col: '#4f4660', a: 0.9 });
+      prims.push({ t: 'box', u0: 22, u1: 40, z0: z0 + 4, z1: z0 + 46, h0: 0, h1: 10 + h(13) * 8, col: '#bfb4c4', trim: '#ffe27a', win: 'garage', neon: '#2ee6d6' });
+      prims.push({ t: 'box', u0: 14, u1: 22, z0: z0 + 18, z1: z0 + 30, h0: 3.6, h1: 4.0, col: '#f4efe2', trim: '#ff4fd8' });
+      for (let z = z0 + 18.5; z < z0 + 30; z += 5.5) prims.push({ t: 'box', u0: 14.1, u1: 14.4, z0: z, z1: z + 0.3, h0: 0, h1: 3.6, col: '#8d8a9c' });
+      prims.push({ t: 'palm', u: 6, z: z0 + 12, s: 1.2, ph: h(14) * 6 });
       break;
     }
     case 'plaza': {
-      prims.push({ t: 'gnd', pts: [[3.4, z0 + 6], [3.4, z0 + 48], [26, z0 + 48], [26, z0 + 6]], col: '#6a5a78', a: 0.85 });
-      prims.push({ t: 'palm', u: 6, z: z0 + 14, s: 1.2, ph: h(14) * 6 }); prims.push({ t: 'palm', u: 6, z: z0 + 40, s: 1.2, ph: h(15) * 6 });
-      prims.push({ t: 'box', u0: 22, u1: 36, z0: z0 + 8, z1: z0 + 52, h0: 0, h1: 18 + h(16) * 10, col: '#c4b4d4', trim: '#ffe27a', win: 'motel', neon: '#2ee6d6' });
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 6], [3.4, z0 + 50], [30, z0 + 50], [30, z0 + 6]], col: '#6a5a78', a: 0.85 });
+      prims.push({ t: 'gnd', pts: [[8, z0 + 22], [8, z0 + 34], [16, z0 + 34], [16, z0 + 22]], col: '#2a6a8a', a: 0.7 });                                    // Brunnenbecken
+      prims.push({ t: 'palm', u: 6, z: z0 + 14, s: 1.2, ph: h(14) * 6 }); prims.push({ t: 'palm', u: 6, z: z0 + 42, s: 1.2, ph: h(15) * 6 });
+      prims.push({ t: 'box', u0: 30, u1: 46, z0: z0 + 8, z1: z0 + 52, h0: 0, h1: 16 + h(16) * 12, col: '#c4b4d4', trim: '#ffe27a', win: 'tower', neon: '#2ee6d6' });
+      if (stage >= 3) prims.push({ t: 'gnd', pts: [[9, z0 + 23], [9, z0 + 33], [15, z0 + 33], [15, z0 + 23]], col: '#2ee6d6', a: 0.35, glow: true });
+      break;
+    }
+    case 'tower': {
+      // Hotelturm mit zurückgesetztem Eingang: Sockel, Vordach, Vorplatz, darüber gestufter Turm
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 4], [3.4, z0 + 42], [22, z0 + 42], [22, z0 + 4]], col: '#55496a', a: 0.9 });
+      prims.push({ t: 'box', u0: 18, u1: 38, z0: z0 + 6, z1: z0 + 40, h0: 0, h1: 6.5, col: '#d4c4d8', trim: '#ff4fd8', win: 'motel', neon: '#ff4fd8' });
+      prims.push({ t: 'box', u0: 24, u1: 38, z0: z0 + 10, z1: z0 + 36, h0: 6.5, h1: 24 + h(17) * 16, col: '#b8aacb', trim: '#2ee6d6', win: 'tower', neon: '#2ee6d6' });
+      prims.push({ t: 'box', u0: 10, u1: 18, z0: z0 + 16, z1: z0 + 30, h0: 3.6, h1: 4.0, col: '#f4efe2', trim: '#ffe27a' });
+      prims.push({ t: 'palm', u: 5, z: z0 + 10, s: 1.2, ph: h(18) * 6 });
+      break;
+    }
+    case 'neon': {
+      // Neonmeile: Vorplatz mit farbigen Lichtinseln, niedriger Casino-Block mit leuchtender Dachkante, dahinter ein Turm
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 4], [3.4, z0 + 46], [28, z0 + 46], [28, z0 + 4]], col: '#4a3f68', a: 0.9 });
+      prims.push({ t: 'gnd', pts: [[4, z0 + 8], [4, z0 + 22], [18, z0 + 22], [18, z0 + 8]], col: '#ff4fd8', a: 0.4, glow: true });
+      prims.push({ t: 'gnd', pts: [[6, z0 + 28], [6, z0 + 42], [20, z0 + 42], [20, z0 + 28]], col: '#2ee6d6', a: 0.4, glow: true });
+      prims.push({ t: 'box', u0: 24, u1: 40, z0: z0 + 6, z1: z0 + 44, h0: 0, h1: 9.5, col: '#cdb4d8', trim: '#ffe27a', win: 'motel', neon: '#ff4fd8' });
+      prims.push({ t: 'box', u0: 34, u1: 48, z0: z0 + 14, z1: z0 + 40, h0: 9.5, h1: 30 + h(19) * 14, col: '#a99bc0', trim: '#2ee6d6', win: 'tower', neon: '#2ee6d6' });
+      prims.push({ t: 'sign', u: 2.6, z: z0 + 26, h: 7, txt: 'CASINO', col: '#ffe27a' });
       break;
     }
   }
@@ -245,12 +273,20 @@ function drawBox(env: LotEnv, side: number, p: Extract<Prim, { t: 'box' }>, dNea
     if (env.lights > 0.2 && p.neon) { const glow: V3[] = [[x0, p.z0, p.h1 - t * 2], [x0, p.z1, p.h1 - t * 2], [x0, p.z1, p.h1 - t], [x0, p.z0, p.h1 - t]]; fillPoly(env, glow, p.neon, env.lights); }
   }
   // Fenster und Türen auf der Straßenseite (nur nah und bei voller Qualität)
-  if (p.win && dNear < 230 && env.quality < 2) {
+  if (p.win && dNear < 230 && env.quality < 1) {
     const span = p.z1 - p.z0;
-    if (p.win === 'car') {
+    if (p.win === 'garage') {
+      // offene Parkdecks: dunkle Bänder mit warm beleuchteten Wagenreihen
+      const decks = Math.max(2, Math.floor((p.h1 - p.h0) / 3.2));
+      for (let r = 0; r < decks; r++) {
+        const hb = p.h0 + 0.5 + r * 3.2;
+        fillPoly(env, [[x0, p.z0 + 1, hb], [x0, p.z1 - 1, hb], [x0, p.z1 - 1, hb + 2.0], [x0, p.z0 + 1, hb + 2.0]], faceCol(env, '#2a2638', 'road', side, 1 - fog));
+        if (env.lights > 0.25) for (let z = p.z0 + 2; z < p.z1 - 3; z += 4.2) fillPoly(env, [[x0, z, hb + 0.2], [x0, z + 1.6, hb + 0.2], [x0, z + 1.6, hb + 0.8], [x0, z, hb + 0.8]], '#ffb45a', 0.9);
+      }
+    } else if (p.win === 'car') {
       for (const zz of [p.z0 + 0.12, p.z1 - 0.52]) fillPoly(env, [[x0, zz, p.h0 + 0.4], [x0, zz + 0.4, p.h0 + 0.4], [x0, zz + 0.4, p.h0 + 0.6], [x0, zz, p.h0 + 0.6]], '#ff2a2a');
     } else {
-      const wh = (p.h1 - p.h0), rows = wh > 7 ? Math.min(6, Math.floor(wh / 2.8)) : 1;
+      const wh = (p.h1 - p.h0), rows = wh > 7 ? Math.min(p.win === 'tower' ? 12 : 6, Math.floor(wh / (p.win === 'tower' ? 2.4 : 2.8))) : 1;
       const cols = Math.max(1, Math.floor(span / 4));
       for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
         const zz = p.z0 + (c + 0.28) * (span / cols), zw = (span / cols) * 0.44;
@@ -304,7 +340,7 @@ export function lotItems(env: LotEnv, i: number, side: number, stage: number, ou
         if (small && (dNear > 170 || env.quality > 1)) break;
         out.push({ d: dNear + (pr.z1 - pr.z0) * 0.001, draw: () => {
           ctx.globalAlpha = env.fade(dNear, 1);
-          if (env.quality < 2 && dNear < 300) groundShadow(env, side, pr);
+          if (env.quality < 1 && dNear < 300) groundShadow(env, side, pr);
           drawBox(env, side, pr, dNear);
           ctx.globalAlpha = 1;
         } });

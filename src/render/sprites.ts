@@ -55,6 +55,8 @@ export function drawObstacle(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: n
   }
   const P = PAINT[kind][id % 3];
   const nl = gfx.lights;
+  // Rücklichtreflexe auf dem Asphalt (nur nachts, dezent)
+  if (nl > 0.25) { const a0 = ctx.globalAlpha; ctx.globalAlpha = a0 * 0.2 * nl; L(0.12, 0.02, 0.5, 1.3, '#ff2a2a'); L(W - 0.62, 0.02, 0.5, 1.3, '#ff2a2a'); ctx.globalAlpha = a0; }
   /** Nachts: Lichthof und heller Kern an den Rückleuchten sowie farbiges Unterbodenlicht – Verkehr bleibt gut lesbar. */
   const glowAt = (x0: number, top: number, w: number, h: number) => {
     if (nl < 0.12) return;

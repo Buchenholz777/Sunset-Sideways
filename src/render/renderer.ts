@@ -36,7 +36,9 @@ const MAX_PARTICLES = 120;
 /** Abstand der Streckenschilder (m). */
 export const KM_SIGN_EVERY = 5000;
 /** Grundstücke (räumliche Körper) gelten für die Abschnitte bis zu dieser Stufe; darüber bleiben die bisherigen Straßenrand-Motive. */
-const LOT_STAGE_MAX = 1;
+const LOT_STAGE_MAX = 9;
+/** Wahrzeichen bleiben als eigene Motive (Riesenrad, Turm, Fontänensee), alles andere kommt aus den Grundstücken. */
+const LANDMARKS = new Set(['wheel', 'eiffel', 'lake', 'fountain']);
 
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
@@ -89,7 +91,12 @@ export class Renderer {
   }
 
   /** Lokales Feedback am Wagen (Partikel begrenzt). */
+  /** Bodenring beim Aufsetzen nach dem Fliegen (0…1, klingt ab). */
+  private landRing = 0;
+  private lean = 0;
+
   burst(kind: BurstKind): void {
+    if (kind === 'land') this.landRing = 1;
     if (kind === 'shield' || kind === 'shieldHit') this.arcFlash = 1;
     if (kind === 'slow' || kind === 'magnet' || kind === 'clear') { this.iconFlash = 1; this.iconType = kind; }
     if (this.reducedMotion && kind !== 'crash') return;
@@ -367,7 +374,7 @@ export class Renderer {
       const z = k * STEP;
       for (const side of [-1, 1]) {
         let type = decoType(k, side, z);
-        if (this.lotsOn && stageAt(z) <= LOT_STAGE_MAX) continue;    // ersetzt durch Grundstücke (lots.ts)
+        if (this.lotsOn && !LANDMARKS.has(type)) continue;           // ersetzt durch Grundstücke (lots.ts); Wahrzeichen bleiben
         if (type === 'fountain' && !B.scenery.fountains) type = 'none';
         if (type === 'none' || (this.quality > 1 && k % 2)) continue;
         if (hash(k * 5 + (side > 0 ? 2 : 3)) < 0.18) type = 'none'; // Luft zwischen den Silhouetten
@@ -466,7 +473,8 @@ export class Renderer {
       let n = 0;
       const c0 = Math.floor((zc + 5) / CHUNK), c1 = Math.floor((zc + 210) / CHUNK);
       for (let c = c0; c <= c1 && n < cap && B.scenery.peds; c++) for (const side of [-1, 1]) for (const ped of pedsInChunk(c, side)) {
-        const p = this.proj(zc, ped.x, ped.z);
+        const walkDz = ped.pose === 0 && !this.reducedMotion ? Math.sin(this.clock * 0.32 + ped.phase) * 2.4 : 0;        // kurzer Weg auf dem Gehweg
+        const p = this.proj(zc, ped.x, ped.z + walkDz);
         if (p.d < 5 || p.d > 210 || n >= cap) continue;
         n++;
         items.push({ d: p.d, draw: () => { ctx.globalAlpha = this.fade(p.d, 1); drawPed(ctx, p.sx, p.sy, p.k, ped, this.clock); ctx.globalAlpha = 1; } });
@@ -646,11 +654,21 @@ export class Renderer {
     const yaw = this.visYaw;
     const liftPx = v.lift * k;
     const c = Math.cos(this.visYaw), s = Math.sin(this.visYaw);
+    // Seitliche Neigung: Aufbau lehnt zur Außenseite der Querbewegung (v.rel folgt der echten Quergeschwindigkeit); der Bodenschatten bleibt auf der Spur
+    const leanT = this.reducedMotion ? 0 : Math.max(-1, Math.min(1, v.rel * 7)) * 0.2;
+    this.lean += (leanT - this.lean) * (1 - Math.exp(-this.dtLast / 0.07));
+    const lean = this.lean;
     drawCar(ctx, (x, y, z) => {
       const xr = x * c + z * s, zr = -x * s + z * c;
-      const p = this.projectWorld(zc, this.carBx + xr + this.camHead * zr, this.carBz + zr, y * 0.8);
+      const p = this.projectWorld(zc, this.carBx + xr - y * lean + this.camHead * zr, this.carBz + zr, y * 0.8);
       return [Math.round(p.sx), Math.round(p.sy)];
     }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth, zs: L.portrait ? 0.78 : undefined });
+    if (this.landRing > 0) {
+      const t = 1 - this.landRing;
+      ctx.save(); ctx.globalAlpha = 0.65 * this.landRing; ctx.strokeStyle = '#bff3dc'; ctx.lineWidth = Math.max(1, 0.1 * k);
+      ctx.beginPath(); ctx.ellipse(sx, L.gy - 0.05 * k, (1.3 + 3.4 * t) * k, (0.2 + 0.5 * t) * k, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      this.landRing = Math.max(0, this.landRing - this.dtLast * (this.reducedMotion ? 6 : 2.4));
+    }
     if (v.shield || this.arcFlash > 0) {
       const base = v.shield ? (v.shieldFrac < 0.25 ? (Math.floor(this.clock * 6) % 2 ? 0.45 : 0.95) : 0.9) : 0;
       drawShieldArc(ctx, sx, L.gy - liftPx, k, Math.min(1, base + this.arcFlash * 0.6), this.clock);
