@@ -19,6 +19,8 @@ export interface View {
   /** Aktive Szenenzeit (s) für Mond und Flugzeuge, Seed des Laufs für den Flugplan. */
   sceneT: number; seed: number;
   road: Road;
+  /** Sunset Sprint: Streckenposition (m) des Zieltors, sonst nicht gesetzt. */
+  finishZ?: number;
 }
 
 interface Particle { x: number; y: number; vx: number; vy: number; life: number; max: number; c: string }
@@ -380,6 +382,11 @@ export class Renderer {
         items.push({ d: p.d + (side > 0 ? 0 : 0.01), draw: () => { ctx.globalAlpha = this.fade(p.d, p.d > 140 ? 0.6 : 1); this.lamp(p, side); ctx.globalAlpha = 1; } });
       }
     }
+    // Zieltor (Sunset Sprint)
+    if (v.finishZ !== undefined && v.finishZ - zc > 4 && v.finishZ - zc < DRAW) {
+      const pl = this.proj(zc, -(B.road.halfWidth + 0.9), v.finishZ), pr = this.proj(zc, B.road.halfWidth + 0.9, v.finishZ);
+      items.push({ d: pl.d, draw: () => { ctx.globalAlpha = this.fade(pl.d); this.finishGate(pl, pr); ctx.globalAlpha = 1; } });
+    }
     // Streckenschilder: alle 5 km ein Straßenschild mit der geschafften Reichweite am rechten Straßenrand
     for (let m = Math.ceil((zc + 4) / KM_SIGN_EVERY) * KM_SIGN_EVERY; m <= zc + DRAW; m += KM_SIGN_EVERY) {
       const p = this.proj(zc, B.road.halfWidth + 1.25, m);
@@ -552,6 +559,25 @@ export class Renderer {
       const a0 = ctx.globalAlpha; ctx.globalAlpha = a0 * 0.3 * gfx.lights; rect(ctx, hx - 0.5 * k, hy2 - 0.4 * k, 1.7 * k, 1.2 * k, '#ffe7a1'); ctx.globalAlpha = a0;
     }
     rect(ctx, sx - (side > 0 ? 1.2 : -0.5) * k, sy - 5.1 * k, 0.7 * k, 0.35 * k, '#ffe7a1');
+  }
+
+  /** Zieltor: zwei Neonpfosten, Zielbanner mit Karomuster und der Aufschrift ZIEL. */
+  private finishGate(a: { k: number; sx: number; sy: number }, b: { k: number; sx: number; sy: number }): void {
+    const { ctx } = this;
+    const k = a.k, h = 6.2 * k, bh = 1.6 * k;
+    for (const p of [a, b]) { rect(ctx, p.sx - 0.18 * k, p.sy - h, 0.36 * k, h, '#2ee6d6'); rect(ctx, p.sx - 0.1 * k, p.sy - h, 0.2 * k, h, '#d7fff9'); }
+    const x0 = a.sx, w = b.sx - a.sx, y0 = a.sy - h;
+    rect(ctx, x0, y0, w, bh, '#0b0d26');
+    const cols = Math.max(4, Math.round(w / Math.max(3, 0.7 * k)));
+    const cw = w / cols;
+    for (let i = 0; i < cols; i++) for (let j = 0; j < 2; j++) rect(ctx, x0 + i * cw, y0 + j * (bh / 2), cw, bh / 2, (i + j) % 2 ? '#ffffff' : '#ff3fa4');
+    if (k >= 2.5) {
+      ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `900 ${Math.max(6, 1.1 * k)}px system-ui, sans-serif`;
+      ctx.lineWidth = Math.max(1, 0.12 * k); ctx.strokeStyle = '#0b0d26'; ctx.fillStyle = '#ffe27a';
+      ctx.strokeText('ZIEL', (a.sx + b.sx) / 2, y0 + bh / 2); ctx.fillText('ZIEL', (a.sx + b.sx) / 2, y0 + bh / 2);
+      ctx.restore();
+    }
   }
 
   /** Straßenschild „N km – geschafft“: Pfosten, grüne Tafel mit weißem Rand und Schrift (Nachts leicht beleuchtet). */

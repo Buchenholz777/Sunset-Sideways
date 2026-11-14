@@ -13,7 +13,8 @@ export const hash = (n: number): number => {
 export const STAGES = [0, 1500, 5000, 10000, 20000] as const;
 export const stageAt = (z: number): number => {
   let s = 0;
-  for (let i = 1; i < STAGES.length; i++) if (z >= STAGES[i]) s = i;
+  const zz = z / B.scenery.stageScale;            // Sprint komprimiert die Abschnitte
+  for (let i = 1; i < STAGES.length; i++) if (zz >= STAGES[i]) s = i;
   return s;
 };
 

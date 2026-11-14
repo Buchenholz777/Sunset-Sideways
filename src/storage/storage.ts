@@ -2,8 +2,13 @@ const KEY = 'sunset-sideways:v1';
 /** Alter Schlüssel (Glimmer Mile): wird gelesen und migriert, nie überschrieben oder gelöscht. */
 const OLD_KEY = 'glimmer-mile:v1';
 
-export interface Saved { best: number; muted: boolean; /** Erstes Hindernis schon einmal erfolgreich umfahren (Hinweis entfällt). */ dodged: boolean }
-const DEFAULTS: Saved = { best: 0, muted: false, dodged: false };
+export interface Saved {
+  best: number; muted: boolean;
+  /** Erstes Hindernis schon einmal erfolgreich umfahren (Hinweis entfällt). */ dodged: boolean;
+  /** Sunset Sprint: weiteste Sprintstrecke (m, Ziel = Zielstrecke) und Anzahl erreichter Ziele; eigener Schlüssel, nie mit der Endless-Bestweite vermischt. */
+  sprintBest: number; sprintDone: number;
+}
+const DEFAULTS: Saved = { best: 0, muted: false, dodged: false, sprintBest: 0, sprintDone: 0 };
 
 let memory: Saved = { ...DEFAULTS };
 
@@ -14,7 +19,8 @@ export function parseSaved(raw: string | null): Saved {
     const o = JSON.parse(raw) as Record<string, unknown>;
     if (o.v !== 1) return { ...DEFAULTS };
     const best = typeof o.best === 'number' && Number.isFinite(o.best) && o.best >= 0 ? Math.floor(o.best) : 0;
-    return { best, muted: o.muted === true, dodged: o.dodged === true };
+    const nat = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+    return { best, muted: o.muted === true, dodged: o.dodged === true, sprintBest: nat(o.sprintBest), sprintDone: nat(o.sprintDone) };
   } catch {
     return { ...DEFAULTS };
   }

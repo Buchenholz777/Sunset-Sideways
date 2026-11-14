@@ -61,6 +61,7 @@
           <li id="fx-slow" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h10M3 14h10M4 2c0 4 4 4 4 6s-4 2-4 6M12 2c0 4-4 4-4 6s4 2 4 6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span class="fx-name">Zeitblase</span><span class="fx-time"></span></li>
         </ul>
       </div>
+      <div id="sprint-bar" hidden aria-hidden="true"><i></i><span>Ziel</span></div>
       <div class="hud-speed"><div class="spd"><span id="hud-speed">165</span><span class="unit">km/h</span></div></div>
     </div>
 
@@ -83,7 +84,11 @@
         <h1 class="logo" aria-label="Sunset Sideways"><span class="l1">Sunset</span><span class="l2">Sideways</span></h1>
         <p class="tagline">Weiche dem Verkehr aus. Wie weit kommst du?</p>
         <p class="best">Bestweite: <strong id="start-best">0 m</strong></p>
-        <button id="btn-start" class="primary" type="button" data-action="start">Fahren</button>
+        <div class="start-actions">
+          <button id="btn-start" class="primary" type="button" data-action="start">Fahren</button>
+          <button id="btn-sprint" class="secondary sprint-btn" type="button" data-action="sprint"><strong>Sunset Sprint</strong><span>Erreiche die Neonnacht</span></button>
+        </div>
+        <div id="challenge" class="challenge" role="status" hidden></div>
         <div id="howto" data-mode="keys">
           <div class="hw-keys" aria-hidden="true">
             <b class="key k-l">←</b>
@@ -140,11 +145,24 @@
 
     <section id="screen-result" class="overlay" data-default="again" aria-label="Ergebnis" hidden>
       <div class="panel">
-        <p class="lbl-big">Deine Strecke</p>
+        <p id="res-title" class="lbl-big">Deine Strecke</p>
         <p id="res-dist" class="big">0 m</p>
         <p id="res-record" class="record" hidden>Neuer Rekord!</p>
-        <p class="best">Bestweite: <strong id="res-best">0 m</strong></p>
+        <p id="res-cause" class="res-line"></p>
+        <p id="res-goal" class="res-line goal"></p>
+        <p class="best"><span id="res-best-label">Bestweite:</span> <strong id="res-best">0 m</strong></p>
         <button id="btn-again" class="primary" type="button" data-action="again" disabled>Nochmal fahren</button>
+        <div class="res-actions">
+          <button id="btn-share" class="secondary" type="button" data-action="share" hidden>Freund herausfordern</button>
+          <button id="btn-endless" class="secondary" type="button" data-action="endless" hidden>Endless fahren</button>
+          <button id="btn-res-sprint" class="secondary" type="button" data-action="sprint" hidden>Sunset Sprint</button>
+        </div>
+        <div id="share-box" class="share-box" hidden>
+          <label for="share-url">Link zur Herausforderung</label>
+          <input id="share-url" type="text" readonly />
+          <button id="btn-copy" class="secondary" type="button" data-action="copy">Link kopieren</button>
+          <p id="share-msg" role="status"></p>
+        </div>
       </div>
     </section>
   </div>

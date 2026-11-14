@@ -105,9 +105,9 @@ export const FIELDS: Field[] = [
   ...PICKUPS.map((k): Field => ({ path: `pickups.dur.${k}`, label: `Dauer ${pk(k)}`, unit: 's', min: k === 'glide' ? 4 : 3, max: 40, step: 1, group: 'pickups', detail: true, effect: `Wie lange ${pk(k)} wirkt.` })),
   { path: 'controls.key', label: 'Tastatur-Empfindlichkeit', unit: '×', min: 0.5, max: 1.5, step: 0.05, group: 'controls', important: true, effect: 'Wie schnell der Wagen auf Pfeiltasten quer zieht.' },
   { path: 'controls.touch', label: 'Touch-Empfindlichkeit', unit: '×', min: 0.5, max: 1.5, step: 0.05, group: 'controls', important: true, effect: 'Wie weit der Wagen pro Fingerweg wandert.' },
-  { path: 'scenery.duskKm', label: 'Dämmerung ab', unit: 'km', min: 3, max: 30, step: 0.5, group: 'scenery', important: true, effect: 'Ab hier sinkt die Sonne, das Licht wird violett.' },
-  { path: 'scenery.nightKm', label: 'Nacht ab', unit: 'km', min: 6, max: 40, step: 0.5, group: 'scenery', important: true, effect: 'Ab hier ist es Nacht; die Strip-Kulisse blendet ein.' },
-  { path: 'scenery.moonHighKm', label: 'Mond hoch am Himmel ab', unit: 'km', min: 8, max: 50, step: 0.5, group: 'scenery', effect: 'Bis hier steigt der Mond auf seine höchste Position.' },
+  { path: 'scenery.duskKm', label: 'Dämmerung ab', unit: 'km', min: 0.5, max: 30, step: 0.5, group: 'scenery', important: true, effect: 'Ab hier sinkt die Sonne, das Licht wird violett.' },
+  { path: 'scenery.nightKm', label: 'Nacht ab', unit: 'km', min: 2, max: 40, step: 0.5, group: 'scenery', important: true, effect: 'Ab hier ist es Nacht; die Strip-Kulisse blendet ein.' },
+  { path: 'scenery.moonHighKm', label: 'Mond hoch am Himmel ab', unit: 'km', min: 3, max: 50, step: 0.5, group: 'scenery', effect: 'Bis hier steigt der Mond auf seine höchste Position.' },
   { path: 'scenery.neon', label: 'Neon-Intensität der Strip-Kulisse', unit: '%', min: 0, max: 1, step: 0.05, scale: 100, group: 'scenery', effect: 'Sichtbarkeit der Neon-Kulisse ab der Nacht.' },
   { path: 'audio.music', label: 'Synthwave-Musik (Standard)', unit: '%', min: 0, max: 1.5, step: 0.05, scale: 100, group: 'audio', effect: 'Standardlautstärke der Musik; persönliche Stummschaltung hat Vorrang.' },
   { path: 'audio.engine', label: 'Motor (Standard)', unit: '%', min: 0, max: 1.5, step: 0.05, scale: 100, group: 'audio', effect: 'Standardlautstärke des Motors.' },
@@ -243,6 +243,7 @@ export function applyConfig(cfg: GameConfig, eventActive = false): void {
   sc.keys[0] = 0; sc.keys[1] = dusk; sc.keys[2] = Math.round(dusk + 0.4 * (night - dusk)); sc.keys[3] = night;
   sc.moonFrom = Math.max(dusk, night - 2500);
   sc.moonSpan = Math.max(2000, c.scenery.moonHighKm * 1000 - sc.moonFrom);
+  sc.stageScale = 1;
   sc.neon = c.scenery.neon; sc.planes = c.scenery.planes; sc.peds = c.scenery.peds; sc.fountains = c.scenery.fountains;
   B.audio.music = c.audio.music; B.audio.engine = c.audio.engine; B.audio.sfx = c.audio.sfx;
 }

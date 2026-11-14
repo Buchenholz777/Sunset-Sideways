@@ -1,6 +1,7 @@
 import { BALANCE as B } from '../config/balance';
 import { speedAtDist, steerAt } from '../core/speed';
-import { Generator } from '../gen/generator';
+import { Generator, type GenWorld } from '../gen/generator';
+import { ScriptedGen, type RouteEntry } from '../sprint/rules';
 import { contactTime, obstacleFootprint, pickupFootprint, playerFootprint } from './contacts';
 import { planGuide } from './guide';
 import { Road } from './road';
@@ -30,7 +31,7 @@ export type SimEvent =
 
 export interface CrashInfo { kind: ObjKind; id: number; x: number; z: number }
 
-export interface SimOptions { startT?: number; startS?: number; record?: boolean; /** nur Tests: keine Hindernistreffer */ ghost?: boolean }
+export interface SimOptions { /** Feste Begegnungsfolge (Sunset Sprint) statt des laufenden Generators. */ script?: readonly RouteEntry[]; startT?: number; startS?: number; record?: boolean; /** nur Tests: keine Hindernistreffer */ ghost?: boolean }
 
 interface Hit { f: number; pickup: Pickup | null; obstacle: Obstacle | null }
 
@@ -84,7 +85,7 @@ export class Sim {
   crashed = false;
   crash: CrashInfo | null = null;
   events: SimEvent[] = [];
-  readonly gen: Generator;
+  readonly gen: { update(w: GenWorld): void; log?: unknown[] };
   readonly road: Road;
   private lastSeq = 0;
   private dragBase = 0;
@@ -96,7 +97,7 @@ export class Sim {
     this.t0 = this.t;
     this.road = new Road(seed);
     this.speedKmh = speedAtDist(this.s);
-    this.gen = new Generator(seed, { record: opts.record, startS: opts.startS });
+    this.gen = opts.script ? new ScriptedGen(opts.script) : new Generator(seed, { record: opts.record, startS: opts.startS });
     this.gen.update(this);
   }
 

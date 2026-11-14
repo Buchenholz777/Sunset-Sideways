@@ -56,7 +56,7 @@ export const BALANCE = {
     glideBoost: 0,
   },
   /** Kulisse nach Strecke (Admin): Lichtstützpunkte in Metern, Mondaufstieg, Neon-Intensität, Schalter. */
-  scenery: { keys: [0, 15000, 17000, 20000] as number[], moonFrom: 17500, moonSpan: 13500, neon: 1, planes: true, peds: true, fountains: true },
+  scenery: { keys: [0, 15000, 17000, 20000] as number[], moonFrom: 17500, moonSpan: 13500, /** Maßstab der Kulissenabschnitte (1 = normal; Sprint komprimiert). */ stageScale: 1, neon: 1, planes: true, peds: true, fountains: true },
   /** Standardpegel (Admin) für Musik, Motor, Effekte und Effekte; persönliche Einstellungen der Spieler haben Vorrang. */
   audio: { music: 1, engine: 1, sfx: 1 },
   /** Spurblitz: Reichweite und Zahl entfernter Hindernisse; Magnet: Reichweite der Anziehung. */

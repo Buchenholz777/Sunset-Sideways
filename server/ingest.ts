@@ -5,7 +5,7 @@ const DEVS = new Set(['phone', 'tablet', 'desktop']);
 const MILES = [1000, 5000, 15000, 20000, 27000];
 const TYPES = new Set(['shield', 'slow', 'clear', 'magnet', 'glide', 'boost', 'guide']);
 const CAUSES = new Set(['taxi', 'cabrio', 'sedan', 'truck', 'baken', 'barrier']);
-const REASONS = new Set(['crash', 'restart', 'leave']);
+const REASONS = new Set(['crash', 'restart', 'leave', 'goal']);
 
 export const MAX_BODY = 32 * 1024;
 export const MAX_EVENTS = 50;

@@ -206,3 +206,30 @@ button.secondary { padding: 10px 28px; min-height: 44px; font: inherit; font-siz
 #hud-effects li.landing { animation: landblink .45s steps(2, end) infinite; border-color: #ffe27a; }
 @keyframes landblink { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { #hud-effects li.landing { animation: none; } }
+
+.res-line { margin: 0; font-size: 16px; opacity: .92; } .res-line:empty { display: none; }
+.res-line.goal { color: #ffe27a; font-weight: 700; }
+
+/* Sunset Sprint */
+#screen-start .sprint-btn { display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: min(260px, 70vw); padding: 6px 18px; min-height: 46px; line-height: 1.15; }
+#screen-start .sprint-btn strong { font-size: clamp(15px, 2.6vh, 19px); letter-spacing: .06em; text-transform: uppercase; }
+#screen-start .sprint-btn span { font-size: clamp(11px, 1.8vh, 13px); font-weight: 600; opacity: .85; }
+#screen-start .sprint-btn.invited { border-color: #ffe27a; box-shadow: 0 0 14px #ffe27a66; }
+.challenge { max-width: 38ch; padding: 8px 12px; border-radius: 10px; border: 1px solid #ffe27a88; background: #070a24cc; color: #fff; font-size: clamp(12px, 2vh, 14px); line-height: 1.35; }
+.challenge[hidden] { display: none; }
+#sprint-bar { position: absolute; left: 0; right: 0; bottom: calc(var(--sab) + 6px); height: 10px; margin: 0 12px; border-radius: 6px; background: #070a24aa; border: 1px solid #ffffff55; overflow: hidden; pointer-events: none; }
+#sprint-bar i { display: block; height: 100%; width: calc(var(--p, 0) * 100%); background: linear-gradient(90deg, #ffb040, #ff4fa6, #5fe0ff); }
+#sprint-bar span { position: absolute; right: 6px; top: -2px; font: 800 9px/10px system-ui, sans-serif; color: #fff; letter-spacing: .1em; text-transform: uppercase; }
+.res-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.res-actions button[hidden] { display: none; }
+.share-box { display: grid; gap: 6px; width: min(92vw, 420px); text-align: left; font-size: 13px; }
+.share-box[hidden] { display: none; }
+.share-box input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #ffffff66; background: #070a24; color: #fff; font: 13px system-ui, sans-serif; }
+.share-box p { margin: 0; color: #bff3dc; min-height: 1.3em; }
+
+.start-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: stretch; gap: 10px; }
+@media (min-width: 560px) { #screen-start .sprint-btn { min-width: 0; padding: 6px 22px; } }
+@media (max-width: 559px) { .start-actions { flex-direction: column; align-items: center; gap: 6px; } #screen-start .sprint-btn { min-height: 40px; padding: 4px 18px; } #screen-start .sprint-btn span { display: none; } }
+@media (max-height: 640px) { #screen-start .sprint-btn { min-height: 34px; padding: 2px 14px; } #screen-start .sprint-btn strong { font-size: 14px; } .start-actions { gap: 3px; } #screen-start .panel { gap: 3px; } }
+@media (max-width: 380px) and (max-height: 640px) { .hw-road { height: 38px; } }
+@media (max-width: 380px) { .start-actions { flex-direction: row; align-items: stretch; width: 100%; max-width: 300px; gap: 6px; } #screen-start .start-actions button.primary { min-width: 0; flex: 1 1 56%; padding: 8px 10px; } #screen-start .sprint-btn { flex: 1 1 40%; min-width: 0; min-height: 50px; padding: 2px 8px; } #screen-start .sprint-btn strong { font-size: 12px; letter-spacing: .03em; } }

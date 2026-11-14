@@ -9,7 +9,7 @@ const note = (n, ok, info = '') => { results.push(ok); console.log(ok ? 'OK  ' :
 
 // 1) Initiales HTML (ohne JavaScript)
 const raw = await (await fetch(BASE + '/')).text();
-note('Initiales HTML: Titel, Beschreibung, Canonical, H1, Tagline, Steuerhinweis, Spielbeschreibung', /<title>Sunset Sideways – Arcade-Rennspiel im Browser<\/title>/.test(raw) && /name="description"/.test(raw) && /rel="canonical" href="https:\/\/www\.sunsetsideways\.com\/"/.test(raw) && /<h1[^>]*>/.test(raw) && raw.includes('Arcade-Rennspiel im Browser</p>') && raw.includes('Mit den Pfeiltasten lenken') && raw.includes('Impulsschild') && raw.includes('<noscript>'));
+note('Initiales HTML: Titel, Beschreibung, Canonical, H1, Tagline, Steuerhinweis, Spielbeschreibung', /<title>Sunset Sideways – Arcade-Rennspiel im Browser<\/title>/.test(raw) && /name="description"/.test(raw) && /rel="canonical" href="https:\/\/www\.sunsetsideways\.com\/"/.test(raw) && /<h1[^>]*>/.test(raw) && raw.includes('Weiche dem Verkehr aus. Wie weit kommst du?</p>') && raw.includes('Mit den Pfeiltasten lenken') && raw.includes('Impulsschild') && raw.includes('<noscript>'));
 note('JSON-LD (VideoGame) vorhanden und gültiges JSON', (() => { try { const m = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(raw); const j = JSON.parse(m[1].replace(/__ORIGIN__/g, 'https://www.sunsetsideways.com')); return j['@type'] === 'VideoGame' && j.url === 'https://www.sunsetsideways.com/'; } catch { return false; } })());
 note('Kein noindex im HTML', !/noindex/i.test(raw));
 note('Keine ungefüllten Platzhalter (__ORIGIN__) im Produktionsbuild', !raw.includes('__ORIGIN__'));

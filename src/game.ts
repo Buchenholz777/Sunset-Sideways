@@ -13,9 +13,41 @@ import { lightT } from './render/scenery';
 import { Sound } from './audio/sound';
 import { load, save } from './storage/storage';
 import { applyConfig } from './config/runtime';
+import { SPRINT_CONFIG, SPRINT_FINISH_M, SPRINT_ID, SPRINT_ROUTE, SPRINT_SEED, sprintStageScale } from './sprint/rules';
 import { BUILTIN, Telemetry, eventActive, fetchConfig, randomId, type RemoteConfig } from './net/remote';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+
+/** Satz zur tatsächlichen Absturzursache (aus dem Crash-Ereignis). */
+export function crashCauseText(kind: string | undefined): string {
+  const t: Record<string, string> = { taxi: 'Taxi getroffen', cabrio: 'Cabrio getroffen', sedan: 'Limousine getroffen', truck: 'Lkw getroffen', baken: 'Bake getroffen', barrier: 'Absperrung getroffen' };
+  return kind && t[kind] ? t[kind] : '';
+}
+
+/**
+ * Ein konkretes Ziel für den nächsten Versuch – nur aus dem erfassten Zustand abgeleitet:
+ * erstes Power-up (wenn keins eingesammelt wurde), 1 km, Abstand zur Bestweite, sonst das nächste 5-km-Schild.
+ */
+export function nextGoalText(dist: number, best: number, record: boolean, pickups: number): string {
+  const km = (m: number): string => (m % 1000 === 0 ? String(m / 1000) : (m / 1000).toFixed(2).replace('.', ','));
+  if (dist < 1000 && pickups === 0) return 'Ziel: Sammle ein Power-up ein.';
+  if (dist < 1000) return 'Ziel: Schaffe 1 km.';
+  if (!record && best > dist && best - dist <= 3000) return `Ziel: Noch ${Math.max(1, Math.round((best - dist) / 10) * 10)} m bis zu deiner Bestweite.`;
+  const next = (Math.floor(dist / 5000) + 1) * 5000;
+  return `Ziel: Das ${km(next)}-km-Schild.`;
+}
+
+type Mode = 'endless' | 'sprint';
+
+/** Eingehende Herausforderung (?sprint=S1&c=<Meter>): nur bekannte Kennung, Wert als Angabe des Absenders begrenzt auf 0…Ziel. */
+export function parseChallenge(search: string): { ok: boolean; reach: number | null } | null {
+  const q = new URLSearchParams(search);
+  const id = q.get('sprint');
+  if (id === null) return null;
+  if (id !== SPRINT_ID) return { ok: false, reach: null };
+  const c = q.get('c');
+  return { ok: true, reach: c !== null && /^\d{1,6}$/.test(c) ? Math.min(Number(c), SPRINT_FINISH_M) : null };
+}
 
 /** Ursache einer Pause: manuell oder automatisch (mit verständlichem Hinweis). */
 type PauseReason = 'manual' | 'blur' | 'hidden' | 'stall';
@@ -59,6 +91,14 @@ export class Game {
   private tutorialDone = load().dodged;
   private firstObsId: number | null = null;
   private landing = false;
+  private runPickups = 0;
+  private mode: Mode = 'endless';
+  private challenge: { ok: boolean; reach: number | null } | null = null;
+  private sprintBest = load().sprintBest;
+  private sprintDone = load().sprintDone;
+  private lastReach = 0;
+  private lastGoal = false;
+  private crashToken = 0;
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   /** Konfiguration (Admin) und Messung. Testfahrt (?testdrive=) und QA-Läufe zählen weder für KPIs noch für die Bestweite. */
   private remote: RemoteConfig = BUILTIN;
@@ -75,7 +115,7 @@ export class Game {
 
   private el = {
     hud: $('hud'), dist: $('hud-distance'), best: $('hud-best'), bestWrap: $('hud-best-wrap'), speed: $('hud-speed'),
-    shield: $('fx-shield'), slow: $('fx-slow'), magnet: $('fx-magnet'), blitz: $('fx-blitz'), glide: $('fx-glide'), boost: $('fx-boost'), guide: $('fx-guide'), pause: $<HTMLButtonElement>('btn-pause'), snd: $<HTMLButtonElement>('btn-sound'), hint: $('hint'), toast: $('fx-toast'), pauseReason: $('pause-reason'),
+    shield: $('fx-shield'), slow: $('fx-slow'), magnet: $('fx-magnet'), blitz: $('fx-blitz'), glide: $('fx-glide'), boost: $('fx-boost'), guide: $('fx-guide'), pause: $<HTMLButtonElement>('btn-pause'), snd: $<HTMLButtonElement>('btn-sound'), hint: $('hint'), sprintBar: $('sprint-bar'), sprintBtn: $('btn-sprint'), challengeBox: $('challenge'), shareBtn: $('btn-share'), endlessBtn: $('btn-endless'), resSprintBtn: $('btn-res-sprint'), shareBox: $('share-box'), shareUrl: $<HTMLInputElement>('share-url'), shareMsg: $('share-msg'), resTitle: $('res-title'), resBestLabel: $('res-best-label'), toast: $('fx-toast'), pauseReason: $('pause-reason'),
     start: $('screen-start'), paused: $('screen-pause'), result: $('screen-result'),
     again: $<HTMLButtonElement>('btn-again'),
   };
@@ -86,6 +126,7 @@ export class Game {
     const q = new URLSearchParams(location.search);
     const num = (n: string): number | undefined => { const v = q.get(n); return v !== null && /^\d+$/.test(v) ? Number(v) : undefined; };
     this.qaHook = q.get('qa') === '1';
+    this.challenge = parseChallenge(location.search);
     const td = q.get('testdrive');
     this.previewToken = td && /^[A-Za-z0-9_-]{8,128}$/.test(td) ? td : null;
     this.excluded = this.qaHook || this.previewToken !== null;
@@ -102,6 +143,7 @@ export class Game {
       (window as unknown as { __qa: unknown }).__qa = {
         pause: () => this.pause(),
         pauseLog: () => [...this.pauseLog],
+        mode: () => this.mode,
         input: () => ({ ...this.input.snapshot() }),
         give: (shield: number, slow = 0, magnet = 0, glide = 0, boost = 0, guide = 0) => { if (this.sim) { this.sim.shieldT = shield; this.sim.slowT = slow; this.sim.magnetT = magnet; if (glide > 0) this.sim.glideT = glide; this.sim.boostT = boost; this.sim.guideT = guide; } },
         scene: (t: number | null) => { this.qaSceneT = t; this.render(1 / 60); },
@@ -137,6 +179,7 @@ export class Game {
     $('start-best').textContent = formatDistance(this.best);
     this.el.best.textContent = formatDistance(this.best);
     this.syncHowto();
+    this.showChallenge();
     $('tip-line').textContent = this.touchCapable ? TEXT.tipTouch : TEXT.tipDesktop;
     this.syncSoundButton();
     this.bind();
@@ -201,12 +244,20 @@ export class Game {
   private act(action: string): void {
     this.sound.unlock();
     switch (action) {
-      case 'start': if (this.state.phase === 'preview') this.startRun(); break;
-      case 'again':
-        if (this.state.phase === 'crashed' && performance.now() - this.crashAt >= B.restartDelayMs) this.startRun();
+      case 'start': if (this.state.phase === 'preview') this.startRun('endless'); break;
+      case 'sprint':
+        if (this.state.phase === 'preview' || (this.state.phase === 'crashed' && performance.now() - this.crashAt >= B.restartDelayMs)) this.startRun('sprint');
         break;
+      case 'endless':
+        if (this.state.phase === 'crashed' && performance.now() - this.crashAt >= B.restartDelayMs) this.startRun('endless');
+        break;
+      case 'again':
+        if (this.state.phase === 'crashed' && performance.now() - this.crashAt >= B.restartDelayMs) this.startRun(this.mode);
+        break;
+      case 'share': void this.share(); break;
+      case 'copy': void this.copyLink(); break;
       case 'resume': if (this.state.phase === 'paused') this.resume(); break;
-      case 'restart': if (this.state.phase === 'paused') this.startRun(); break;
+      case 'restart': if (this.state.phase === 'paused') this.startRun(this.mode); break;
     }
   }
 
@@ -227,26 +278,32 @@ export class Game {
   }
 
   /** Ende eines Versuchs melden (genau einmal je Versuch). */
-  private endRun(reason: 'crash' | 'restart' | 'leave', cause?: string): void {
+  private endRun(reason: 'crash' | 'restart' | 'leave' | 'goal', cause?: string): void {
     if (!this.runOpen || !this.sim) return;
     this.runOpen = false;
     this.tele.send('end', this.runId, undefined, { dist: Math.floor(this.sim.s), reason, cause });
     if (reason === 'leave') this.tele.flush(true);
   }
 
-  private startRun(): void {
+  private startRun(mode: Mode = this.mode): void {
     this.endRun('restart');
-    // Der Versuch übernimmt die veröffentlichte Konfiguration fest; spätere Änderungen gelten erst für den nächsten Versuch.
-    applyConfig(this.remote.config, eventActive(this.remote));
+    this.mode = mode;
+    // Der Versuch übernimmt seine Regeln fest. Endless: veröffentlichte Konfiguration (spätere Änderungen gelten erst für den nächsten Versuch);
+    // Sprint: feste Regeln der Sprint-Version, unabhängig von der Live-Konfiguration. Beide Wege setzen alle Werte neu, nichts bleibt vom vorigen Modus zurück.
+    if (mode === 'sprint') { applyConfig(SPRINT_CONFIG, false); sprintStageScale(true); }
+    else applyConfig(this.remote.config, eventActive(this.remote));
     this.sound.applyLevels();
     this.runId = randomId(8);
     this.runSeen.clear();
     this.runMiles = 0;
     this.runOpen = true;
-    this.tele.send('start', this.runId, undefined, { cfg: this.remote.id, ev: eventActive(this.remote) ? this.remote.event!.id : null });
-    const seed = this.seedParam !== null ? (this.seedParam + this.runCount) >>> 0 : newSeed();
+    this.tele.send('start', this.runId, undefined, { cfg: mode === 'sprint' ? `${SPRINT_ID}` : this.remote.id, ev: mode === 'endless' && eventActive(this.remote) ? this.remote.event!.id : null, mode, ch: mode === 'sprint' && this.challenge?.ok ? 1 : 0 });
+    const seed = mode === 'sprint' ? SPRINT_SEED : this.seedParam !== null ? (this.seedParam + this.runCount) >>> 0 : newSeed();
     this.runCount++;
-    this.sim = new Sim(seed, this.qa);
+    this.sim = new Sim(seed, mode === 'sprint' ? { ...this.qa, script: SPRINT_ROUTE } : this.qa);
+    this.el.sprintBar.hidden = mode !== 'sprint';
+    this.el.bestWrap.hidden = mode === 'sprint';
+    this.el.shareBox.hidden = true;
     this.state.go('running');
     this.beaten = false;
     this.recordShown = false;
@@ -254,7 +311,7 @@ export class Game {
     this.input.active = true;
     this.loop.reset();
     this.focusKnown = document.hasFocus();
-    this.firstObsId = null; this.landing = false;
+    this.firstObsId = null; this.landing = false; this.runPickups = 0;
     this.el.hint.hidden = true; this.el.toast.hidden = true; this.el.pauseReason.hidden = true;
     this.last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '' };
     for (const chip of [this.el.shield, this.el.slow, this.el.magnet, this.el.blitz, this.el.glide, this.el.boost, this.el.guide]) chip.hidden = true;   // keine Effekt-Anzeigen aus der vorigen Fahrt
@@ -330,7 +387,7 @@ export class Game {
     if (sim.events.length) {
       for (const ev of sim.events) {
         if (ev.type === 'shieldHit') { this.renderer.burst('shieldHit'); this.sound.sfx('shieldHit'); }
-        else if (ev.type === 'pickup') { this.tele.send('taken', this.runId, this.pickupKey(ev.pickup, ev.id, ev.z), { type: ev.pickup, s: Math.floor(sim.s) }); this.qaPickupEvents++; this.renderer.burst(ev.pickup); this.sound.sfx(ev.pickup); }
+        else if (ev.type === 'pickup') { this.runPickups++; this.tele.send('taken', this.runId, this.pickupKey(ev.pickup, ev.id, ev.z), { type: ev.pickup, s: Math.floor(sim.s) }); this.qaPickupEvents++; this.renderer.burst(ev.pickup); this.sound.sfx(ev.pickup); }
         else if (ev.type === 'cleared') { this.renderer.burst('clear'); }
         else if (ev.type === 'blitz') this.renderer.laneFlash(ev.x, ev.z);
         else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast('Fliegen'); }
@@ -342,12 +399,92 @@ export class Game {
     }
     this.track(sim);
     this.coach(sim);
-    if (this.best > 0 && !this.beaten && sim.s > this.best) {
+    if (this.mode === 'sprint') {
+      this.el.sprintBar.style.setProperty('--p', String(Math.min(1, sim.s / SPRINT_FINISH_M)));
+      if (!sim.crashed && sim.s >= SPRINT_FINISH_M) { this.onFinish(sim); return; }
+    }
+    if (this.mode === 'endless' && this.best > 0 && !this.beaten && sim.s > this.best) {
       this.beaten = true;
       this.el.bestWrap.classList.add('beat');
       this.sound.sfx('record');
     }
     if (sim.crashed) this.onCrash();
+  }
+
+  /** Ergebnis-Oberfläche je Modus (Endless / Sprint, Absturz / Ziel). */
+  private resultFor(kind: 'crash' | 'goal'): void {
+    const sprint = this.mode === 'sprint';
+    this.el.resTitle.textContent = kind === 'goal' ? 'Ziel erreicht!' : sprint ? 'Dein Sprint' : 'Deine Strecke';
+    this.el.resBestLabel.textContent = sprint ? 'Sprint-Bestleistung:' : 'Bestweite:';
+    $('res-best').textContent = sprint ? (this.sprintDone > 0 ? `Ziel erreicht (${this.sprintDone}×)` : formatDistance(this.sprintBest)) : formatDistance(this.best);
+    this.el.shareBtn.hidden = !sprint;
+    this.el.endlessBtn.hidden = !sprint;
+    this.el.resSprintBtn.hidden = sprint;
+    this.el.shareBox.hidden = true;
+    this.el.shareMsg.textContent = '';
+  }
+
+  /** Sprint-Ziel erreicht: Lauf endet (kein Absturz), Fortschritt wird gespeichert. */
+  private onFinish(sim: Sim): void {
+    this.endRun('goal');
+    this.tele.send('goal', this.runId, undefined, { t: Math.round(sim.t - sim.t0), ch: this.challenge?.ok ? 1 : 0 });
+    void this.refreshConfig();
+    this.state.go('crashed');
+    this.input.reset(); this.input.active = false;
+    this.crashAt = performance.now();
+    this.sound.stopLoops(); this.sound.sfx('record');
+    this.blocked.clear();
+    for (const c of this.held) if (this.isActionKey(c)) this.blocked.add(c);
+    this.lastReach = SPRINT_FINISH_M; this.lastGoal = true;
+    if (!this.excluded) { this.sprintDone++; this.sprintBest = SPRINT_FINISH_M; save({ sprintDone: this.sprintDone, sprintBest: SPRINT_FINISH_M }); }
+    else this.sprintDone++;
+    this.recordShown = false;
+    $('res-dist').textContent = formatDistance(SPRINT_FINISH_M);
+    $('res-record').hidden = true;
+    $('res-cause').textContent = 'Du hast die Neonnacht erreicht.';
+    $('res-goal').textContent = 'Teile den Sprint und fordere einen Freund heraus.';
+    this.resultFor('goal');
+    this.el.again.disabled = true;
+    this.el.pause.hidden = true;
+    const token = ++this.crashToken;
+    window.setTimeout(() => { if (this.state.phase !== 'crashed' || token !== this.crashToken) return; this.el.result.hidden = false; this.overlayArmed = false; }, 450);
+    window.setTimeout(() => { if (this.state.phase !== 'crashed' || token !== this.crashToken) return; this.el.again.disabled = false; this.el.again.focus(); }, B.restartDelayMs + 150);
+  }
+
+  // ---------- Herausforderung teilen und empfangen ----------
+  private showChallenge(): void {
+    const c = this.challenge;
+    if (!c) return;
+    const km = (m: number): string => (m / 1000).toFixed(1).replace('.', ',');
+    this.el.challengeBox.hidden = false;
+    if (!c.ok) {
+      this.el.challengeBox.textContent = 'Diese Herausforderung gibt es nicht mehr. Starte den aktuellen Sunset Sprint oder fahre Endless.';
+      return;
+    }
+    const from = c.reach === null ? '' : c.reach >= SPRINT_FINISH_M ? ' Absender: Ziel erreicht (Angabe des Absenders).' : ` Absender: ${km(c.reach)} km weit (Angabe des Absenders).`;
+    this.el.challengeBox.textContent = `Herausforderung: Sunset Sprint – erreiche die Neonnacht nach ${km(SPRINT_FINISH_M)} km.${from} Starte, wenn du bereit bist.`;
+    this.el.sprintBtn.classList.add('invited');
+  }
+
+  private shareUrl(): string { return `${location.origin}/?sprint=${SPRINT_ID}&c=${this.lastReach}`; }
+
+  private async share(): Promise<void> {
+    const url = this.shareUrl();
+    const km = (this.lastReach / 1000).toFixed(1).replace('.', ',');
+    const text = this.lastGoal ? 'Ich habe den Sunset Sprint bis in die Neonnacht geschafft. Schaffst du das auch?' : `Ich bin im Sunset Sprint ${km} km weit gekommen. Schaffst du mehr?`;
+    this.el.shareUrl.value = url;
+    this.el.shareBox.hidden = false;
+    try {
+      if (typeof navigator.share === 'function') { await navigator.share({ title: 'Sunset Sideways – Sunset Sprint', text, url }); this.el.shareMsg.textContent = 'Geteilt.'; return; }
+    } catch (e) { if ((e as Error).name === 'AbortError') { this.el.shareMsg.textContent = ''; return; } }
+    await this.copyLink();
+  }
+
+  private async copyLink(): Promise<void> {
+    const url = this.shareUrl();
+    this.el.shareUrl.value = url; this.el.shareBox.hidden = false;
+    try { await navigator.clipboard.writeText(url); this.el.shareMsg.textContent = 'Link kopiert. Du kannst ihn jetzt einfügen und verschicken.'; }
+    catch { this.el.shareUrl.focus(); this.el.shareUrl.select(); this.el.shareMsg.textContent = 'Markiert: Link bitte selbst kopieren.'; }
   }
 
   private toast(text: string, ms = 1300): void {
@@ -407,23 +544,33 @@ export class Game {
     this.blocked.clear();
     for (const c of this.held) if (this.isActionKey(c)) this.blocked.add(c); // gehaltene Taste startet nicht neu
     const dist = Math.floor(sim.s);
-    const record = !this.excluded && dist > this.best;
+    const sprint = this.mode === 'sprint';
+    const record = !sprint && !this.excluded && dist > this.best;
     if (record) { this.best = dist; save({ best: dist }); }
-    this.recordShown = record;
+    let sprintRecord = false;
+    if (sprint) {
+      this.lastReach = Math.min(dist, SPRINT_FINISH_M); this.lastGoal = false;
+      sprintRecord = !this.excluded && this.lastReach > this.sprintBest;
+      if (sprintRecord) { this.sprintBest = this.lastReach; save({ sprintBest: this.sprintBest }); }
+    }
+    this.recordShown = record || sprintRecord;
     $('res-dist').textContent = formatDistance(dist);
-    $('res-best').textContent = formatDistance(this.best);
-    $('start-best').textContent = formatDistance(this.best);
     $('res-record').hidden = !this.recordShown;
+    $('res-cause').textContent = crashCauseText(sim.crash?.kind);
+    $('res-goal').textContent = sprint ? `Ziel: Noch ${Math.max(10, Math.round((SPRINT_FINISH_M - dist) / 10) * 10)} m bis zur Neonnacht.` : nextGoalText(dist, this.best, this.recordShown, this.runPickups);
+    this.resultFor('crash');
+    $('start-best').textContent = formatDistance(this.best);
     this.el.again.disabled = true;
     this.el.pause.hidden = true;
+    const token = ++this.crashToken;                                     // veraltete Timer eines früheren Absturzes wirken nie auf den nächsten Lauf
     window.setTimeout(() => {
-      if (this.state.phase !== 'crashed') return;
+      if (this.state.phase !== 'crashed' || token !== this.crashToken) return;
       this.el.result.hidden = false;
       this.overlayArmed = false;
       if (this.recordShown) this.sound.sfx('record');
     }, 300);
     window.setTimeout(() => {
-      if (this.state.phase !== 'crashed') return;
+      if (this.state.phase !== 'crashed' || token !== this.crashToken) return;
       this.el.again.disabled = false;
       this.el.again.focus();
     }, B.restartDelayMs);
@@ -442,7 +589,7 @@ export class Game {
       v = {
         s: sim.s, x: sim.q, X: sim.X, bodyYaw: sim.bodyYaw, phi: sim.phi, rel: sim.relAngle, slow: sim.slowT > 0, magnet: sim.magnetT > 0, blitz: sim.blitzT > 0, boost: sim.boostT > 0, guide: sim.guideQ, lift: sim.height, glideLeft: sim.glideT, slowAge: sim.slowT > 0 ? B.effects.slow - sim.slowT : -1, road: sim.road, speedKmh: sim.speedKmh, shield: sim.shieldT > 0,
         shieldFrac: sim.shieldT / B.effects.shield, obstacles: sim.obstacles, pickups: sim.pickups,
-        crash: sim.crash ? { id: sim.crash.id } : null, running, sceneT: this.qaSceneT ?? sim.t - sim.t0, seed: sim.seed,
+        crash: sim.crash ? { id: sim.crash.id } : null, running, sceneT: this.qaSceneT ?? sim.t - sim.t0, seed: sim.seed, finishZ: this.mode === 'sprint' ? SPRINT_FINISH_M : undefined,
       };
       if (running) { this.sound.setLight(lightT(sim.s)); this.sound.update(sim.speedKmh, false, 0); }
     }
