@@ -244,3 +244,42 @@ button.secondary { padding: 10px 28px; min-height: 44px; font: inherit; font-siz
 .logo .l2 { animation: neon-b 4.3s linear infinite; }
 .logo::after { animation: neon-line 1.8s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .logo .l1, .logo .l2, .logo::after { animation: none; } }
+
+/* ===== Smartphone (Touch): gemeinsamer Fußbereich im Fluss, Banner nur im Startmenü, Hinweise nur in der Fahrt =====
+   `html.touch` setzt das Spiel nur bei grobem Zeiger oder tatsächlicher Berührung; eine schmale Fensterbreite am PC löst nichts davon aus.
+   Der Fußbereich steht im Fluss unter der Startgruppe (nichts liegt übereinander); reicht die Höhe nicht, scrollt der Startbildschirm,
+   „Fahren“ bleibt dabei oben und ohne Scrollen erreichbar. Die Statistikabfrage (fixiert) reserviert ihre Höhe über --consent-h. */
+.foot { display: contents; }
+html.touch #screen-start { flex-direction: column; justify-content: flex-start; align-items: center; padding-bottom: calc(var(--sab) + var(--consent-h, 0px) + 4px); }
+html.touch #screen-start .panel { margin: 0 auto; flex: 0 0 auto; }
+html.touch .foot { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; margin-top: auto; padding-top: 6px; cursor: default; flex: 0 0 auto; }
+html.touch .about, html.touch .legal { position: static; transform: none; left: auto; bottom: auto; }
+html.touch .about { width: min(94vw, 640px); }
+html.touch .about > summary { min-height: 40px; display: flex; align-items: center; justify-content: center; padding: 0 18px; }
+html.touch .about[open] > summary { margin-bottom: 6px; }
+html.touch #screen-start { scroll-padding-bottom: calc(var(--sab) + var(--consent-h, 0px) + 6px); }
+html.touch .about-body { max-height: min(calc(100dvh - var(--consent-h, 0px) - 110px), 52dvh, 460px); overscroll-behavior: contain; touch-action: pan-y; }
+html.touch .legal { gap: 0 4px; }
+html.touch .legal a, html.touch .legal button { min-height: 40px; display: inline-flex; align-items: center; padding: 0 8px; font-size: 12px; }
+/* Statistikabfrage: kompakt; in Fahrt, Pause, Ergebnis und Briefing aus dem Bedienbereich genommen (ohne Entscheidung zu speichern) */
+html.touch #consent { padding: 8px 12px; font-size: 11.5px; line-height: 1.35; bottom: calc(var(--sab, 0px) + 6px); }
+html.touch #consent p { margin: 0 0 6px; }
+html.touch .consent-btns button { min-height: 44px; }
+html.touch:not([data-phase="preview"]) #consent { display: none; }
+html.touch:not([data-phase="running"]) #hint, html.touch:not([data-phase="running"]) #fx-toast { display: none; }
+/* kleine Hochformate: Dekoratives weicht, Lenkhinweis (Daumen + Text) bleibt */
+@media (orientation: portrait) and (max-height: 640px) {
+  html.touch #howto[data-mode="touch"] .hw-road { display: none; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  html.touch #screen-start { align-items: flex-start; padding-top: calc(var(--sat) + 4px); }
+  html.touch #screen-start .panel { margin: 0; }
+  html.touch .foot { width: 44vw; align-items: flex-start; flex-direction: row; flex-wrap: wrap; column-gap: 4px; }
+  html.touch .about { width: auto; }
+  html.touch .about[open] { width: 100%; }
+  html.touch .about-body { max-height: calc(100dvh - 100px); }
+  html.touch #consent { max-height: calc(100dvh - 16px); }
+  html.touch #howto[data-mode="touch"] .hw-road { display: none; }
+  html.touch #consent { left: auto; right: calc(var(--sar, 0px) + 10px); transform: none; width: min(46vw, 400px); bottom: calc(var(--sab, 0px) + 8px); }
+  html.touch #screen-start { padding-bottom: calc(var(--sab) + 4px); }
+}

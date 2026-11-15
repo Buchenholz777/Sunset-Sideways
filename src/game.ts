@@ -176,6 +176,9 @@ export class Game {
     }
     // Modus folgt der tatsächlichen Eingabe: primärer grober Zeiger = Touch; Tastendruck wechselt zu Desktop, Berührung zu Touch
     this.touchCapable = matchMedia('(pointer: coarse)').matches;
+    this.state.onChange = (p) => { document.documentElement.dataset.phase = p; };
+    document.documentElement.dataset.phase = this.state.phase;
+    document.documentElement.classList.toggle('touch', this.touchCapable);
     window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') this.setMode(true); }, { passive: true });
     window.addEventListener('keydown', (e) => { if (!e.metaKey && !e.ctrlKey && e.code !== 'Tab') this.setMode(false); }, { passive: true });
     this.input = new Input(this.canvas);
@@ -183,6 +186,9 @@ export class Game {
 
     $('start-best').textContent = formatDistance(this.best);
     this.el.best.textContent = formatDistance(this.best);
+    // Spielhilfe geöffnet: im Smartphone-Layout in den sichtbaren Bereich über Statistikabfrage/Browserleiste scrollen
+    const about = document.getElementById('about') as HTMLDetailsElement | null;
+    about?.addEventListener('toggle', () => { if (about.open && document.documentElement.classList.contains('touch')) requestAnimationFrame(() => about.scrollIntoView({ block: 'end' })); });
     this.syncHowto();
     this.el.sprintBtn.hidden = !SPRINT_ENABLED;
     this.showChallenge();
@@ -335,7 +341,9 @@ export class Game {
 
   private setMode(touch: boolean): void {
     if (this.touchCapable === touch) return;
+    if (this.state.phase === 'running') return;     // mitten in der Fahrt ändert ein beiläufiger Tastendruck oder emulierter Mausklick weder Hilfe noch Layout
     this.touchCapable = touch;
+    document.documentElement.classList.toggle('touch', touch);
     this.syncHowto();
     $('tip-line').textContent = touch ? TEXT.tipTouch : TEXT.tipDesktop;
   }
@@ -370,10 +378,16 @@ export class Game {
     if (this.sim && this.sim.glideT > 0) this.sound.setFlight(true);
   }
 
+  private lastW = 0;
+
   private resize(): void {
     const r = this.canvas.getBoundingClientRect();
     this.renderer.resize(r.width || innerWidth, r.height || innerHeight);
-    this.input.reset(); // laufende Eingaben verwerfen, Run bleibt erhalten
+    // Laufende Eingaben verwerfen, Run bleibt erhalten. Auf dem Smartphone ändert eine ein- oder ausfahrende Browserleiste nur die Höhe:
+    // Der Daumenzug (Bezug: x) bleibt dann gültig; erst eine Breitenänderung (Rotation, Split-Screen) beendet ihn.
+    const w = Math.round(r.width || innerWidth);
+    if (!this.touchCapable || w !== this.lastW) this.input.reset();
+    this.lastW = w;
   }
 
   private qaAdvance(sec: number, target: number | null, dir: number): void {

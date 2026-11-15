@@ -46,12 +46,16 @@ function clearGoogleCookies(): void {
 }
 
 let banner: HTMLElement | null = null;
+let ro: ResizeObserver | null = null;
+/** Höhe der Statistikabfrage als CSS-Variable: Der Fußbereich (Hilfe, Rechtslinks) sitzt auf dem Smartphone darüber statt darunter. */
+function setBannerHeight(px: number): void { document.documentElement.style.setProperty('--consent-h', px > 0 ? Math.ceil(px) + 12 + 'px' : '0px'); }
+function dropBanner(): void { banner?.remove(); banner = null; ro?.disconnect(); ro = null; setBannerHeight(0); }
 const store = (): Storage | null => { try { return localStorage; } catch { return null; } };
 
 function decide(d: Decision): void {
   const prev = readConsent(store());
   writeConsent(store(), d);
-  banner?.remove(); banner = null;
+  dropBanner();
   if (d === 'granted') loadGtm();
   else if (prev === 'granted') { clearGoogleCookies(); location.reload(); }   // bereits geladene Skripte lassen sich nicht entladen
 }
@@ -62,19 +66,22 @@ function show(): HTMLElement | null {
   el.id = 'consent';
   el.setAttribute('role', 'region');
   el.setAttribute('aria-label', 'Datenschutz-Einwilligung');
-  el.innerHTML = `<p><strong>Statistik mit Google?</strong> Wir möchten mit dem Google Tag Manager anonyme Nutzungsstatistik erfassen. Dabei werden Daten an Google übertragen und eventuell Cookies gesetzt. Ohne deine Zustimmung wird nichts geladen – das Spiel läuft in jedem Fall. <a href="/datenschutz">Datenschutz</a></p>
+  el.innerHTML = `<p><strong>Statistik mit Google?</strong> Wir möchten mit dem Google Tag Manager anonyme Nutzungsstatistik erfassen. <span class="c-long">Dabei werden Daten an Google übertragen und eventuell Cookies gesetzt. </span>Ohne deine Zustimmung wird nichts geladen – das Spiel läuft in jedem Fall. <a href="/datenschutz">Datenschutz</a></p>
     <div class="consent-btns"><button type="button" data-d="denied">Ablehnen</button><button type="button" data-d="granted">Akzeptieren</button></div>`;
   el.querySelectorAll<HTMLButtonElement>('button[data-d]').forEach((b) => b.addEventListener('click', () => decide(b.dataset.d as Decision)));
   document.body.appendChild(el);
   banner = el;
+  if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(() => setBannerHeight(el.getBoundingClientRect().height)); ro.observe(el); }
+  setBannerHeight(el.getBoundingClientRect().height);
   return el;
 }
 
 /** Beim Start aufrufen. Nicht in QA-Läufen und privaten Testfahrten. */
 export function initConsent(): void {
-  if (/[?&](qa|testdrive)=/.test(location.search)) return;
+  // QA-Läufe haben kein Banner, außer `consent=1` verlangt es ausdrücklich (Abnahme der Banner-Anordnung)
+  if (/[?&]testdrive=/.test(location.search) || (/[?&]qa=/.test(location.search) && !/[?&]consent=1/.test(location.search))) return;
   const d = readConsent(store());
   if (d === 'granted') loadGtm();
   else if (d === null) show();
-  document.getElementById('consent-settings')?.addEventListener('click', () => { banner?.remove(); banner = null; show()?.querySelector<HTMLElement>('button')?.focus(); });
+  document.getElementById('consent-settings')?.addEventListener('click', () => { dropBanner(); show()?.querySelector<HTMLElement>('button')?.focus(); });
 }

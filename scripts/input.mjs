@@ -1,3 +1,4 @@
+// VERALTET: erwartet die frühere Handbremse/Drift- und Nitro-Tasten (#btn-drift). Für den heutigen Stand (Ein-Daumen-Lenkung) gilt scripts/phone_check.mjs.
 // Eingabe-Regression (S03/S04): Bedienhinweis, Tastatur (Pfeile, Leertaste, E) und Mehrfinger-Touch
 // (analoges Lenken, DRIFT-Taste, NITRO-Taste) im Browser. Nutzung: npm run preview (Port 4173), dann: node scripts/input.mjs
 import { chromium } from 'playwright-core';

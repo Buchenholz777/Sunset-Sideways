@@ -83,3 +83,9 @@ Echtes Smartphone, Firefox/WebKit, Handspiel (Gefühl, Klang), Bildrate auf Ger�
 - `src/render/lots.ts`: Grundstücke als räumliche Körper/Bodenflächen je 72-m-Abschnitt und Seite (Motel, offene Fläche, Nebenbau, Parkbucht, Art-déco, Hof, Parkhaus, Plaza, Hotelturm, Neonmeile), ortsgebunden (nur Abschnitt+Seite, nie Spielseed), Nahebenen-Clipping, Lichtrichtung vorn links, Schatten, zweite Ebene. Wahrzeichen (Riesenrad, Turm, Fontänensee) bleiben Sprites. QA: `?qa=1&nolots=1` schaltet die Grundstücke für A/B-Vergleiche ab.
 - Wagenneigung (`lean` im Renderer), Bodenring beim Aufsetzen, gehende Passanten, Rücklichtreflexe (sprites.ts), Qualitätsstufen blenden Fenster/Schatten ab Stufe 1 aus.
 - Nachweise reproduzierbar: `scripts/gfx_shots.mjs`, `gfx_sequence.mjs`, `gfx_gameplay.mjs`, `gfx_perf.mjs`; Tests `tests/lots.test.ts`, `tests/warning.test.ts` (sichtbare Warnzeit inkl. 350-ms-Einblendung).
+
+## Smartphone-Update (2026-11-15)
+- `html.touch` (Klasse, gesetzt bei grobem Zeiger oder echter Berührung; nicht mitten in der Fahrt umgeschaltet) und `html[data-phase]` (Phase des Spiels) steuern alle Smartphone-Regeln in `src/ui/style.css` (Abschnitt „Smartphone (Touch)“). PC-Regeln bleiben unverändert; `.foot` ist am PC `display: contents`.
+- Fußbereich (Spielhilfe + Rechtslinks) liegt auf dem Smartphone im Fluss unter der Startgruppe; die Statistikabfrage meldet ihre Höhe als `--consent-h` und wird nur im Startmenü gezeigt (ohne Entscheidung zu speichern). „Weiche aus“ und Toast nur in der Fahrt.
+- Höhenänderung allein (Browserleiste) lässt einen laufenden Daumenzug bestehen; Breitenänderung (Rotation) beendet ihn (`resize()` in `src/game.ts`).
+- QA: `?qa=1&consent=1` zeigt das Banner auch im QA-Lauf. Abnahme: `node scripts/phone_check.mjs <URL>` (Touch-Emulation, echte Taps, Hit-Tests, PC-Abgrenzung), `scripts/phone_shots.mjs` (Bilder), `scripts/desktop_compare.mjs` (Layout-Vergleich zweier Builds). `scripts/input.mjs` ist veraltet.
