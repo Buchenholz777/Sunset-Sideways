@@ -10,7 +10,7 @@ import { mixHex } from './scenery';
  * Koordinaten: x seitlich (+ rechts), y oben, z nach vorn; Fahrzeug 1,9 × 4,2 m, Mittelpunkt im Ursprung.
  * Sichtbare Breite (±0,95 m über den Reifen) und Trefferfläche (balance.player) sind aufeinander abgestimmt.
  */
-export interface CarFx { turbo: boolean; grip: boolean; brake: number; steer: number; running: boolean; yaw: number; /** Flughöhe in Modelleinheiten */ lift?: number; /** Phantom-Turbo 0…1: Karosserie wird schwarz, nur die Rückleuchten leuchten */ stealth?: number; /** Drehwinkel (rad) um die Längsachse (Rolle beim Abheben): aus der Heckansicht eine Drehung in der Bildebene */ spin?: number; /** Darstellung der Länge 0…1 (1 = wahre Länge, deckt sich mit der Kollisionsbox) */ zs?: number }
+export interface CarFx { turbo: boolean; grip: boolean; brake: number; steer: number; running: boolean; yaw: number; /** Flughöhe in Modelleinheiten */ lift?: number; /** Phantom-Turbo 0…1: Karosserie wird schwarz, nur die Rückleuchten leuchten */ stealth?: number; /** Drehwinkel (rad) um die Längsachse (Rolle beim Abheben): aus der Heckansicht eine Drehung in der Bildebene */ spin?: number; /** Darstellung der Länge 0…1 (1 = wahre Länge, deckt sich mit der Kollisionsbox) */ zs?: number; /** Lauflicht-Position −1…1 (Phantom-Turbo) */ scan?: number }
 
 type V3 = [number, number, number];
 interface Poly { pts: V3[]; col: string; al?: number }
@@ -138,10 +138,19 @@ export function drawCar(ctx: CanvasRenderingContext2D, project: (x: number, y: n
   const a = 1 - 0.55 * air;
   ctx.fillStyle = `rgba(0,0,10,${0.22 * a})`;
   path([[-0.78, 0, -1.95], [0.78, 0, -1.95], [0.7, 0, 1.0], [-0.7, 0, 1.0]], gp); ctx.fill();
+  // Nachts: violetter Lichtteppich unter dem Wagen hebt die Silhouette vom dunklen Asphalt ab (am Tag aus)
+  const glow = gfx.lights * (1 - st) * a;
+  if (glow > 0.05) {
+    ctx.fillStyle = `rgba(150,70,255,${0.12 * glow})`; path([[-1.25, 0, ZR - 0.35], [1.25, 0, ZR - 0.35], [1.1, 0, 1.4], [-1.1, 0, 1.4]], gp); ctx.fill();
+    ctx.fillStyle = `rgba(170,90,255,${0.2 * glow})`; path([[-1.0, 0, ZR - 0.12], [1.0, 0, ZR - 0.12], [0.9, 0, 1.0], [-0.9, 0, 1.0]], gp); ctx.fill();
+  }
   ctx.fillStyle = `rgba(0,0,10,${0.5 * a})`;
   for (const sg of [-1, 1]) {
     path([[sg * 0.62, 0, -1.95], [sg * 0.95, 0, -1.95], [sg * 0.95, 0, -1.1], [sg * 0.62, 0, -1.1]], gp); ctx.fill();
   }
+  // dunkler Kontaktstreifen unter dem Heck zwischen den Reifen: der Wagen sitzt sichtbar auf der Straße
+  ctx.fillStyle = `rgba(0,0,10,${0.42 * a})`;
+  path([[-0.62, 0, ZR + 0.02], [0.62, 0, ZR + 0.02], [0.62, 0, ZR + 0.32], [-0.62, 0, ZR + 0.32]], gp); ctx.fill();
   // kurze Reflexe direkt unter den Rückleuchten
   ctx.globalAlpha = (0.08 + 0.25 * fx.brake) * a;
   for (const sg of [-1, 1]) { ctx.fillStyle = '#ff2a2a'; path([[sg * 0.16, 0, ZR - 0.02], [sg * 0.84, 0, ZR - 0.02], [sg * 0.8, 0, ZR - 0.12], [sg * 0.2, 0, ZR - 0.12]], gp); ctx.fill(); }
@@ -178,6 +187,14 @@ export function drawCar(ctx: CanvasRenderingContext2D, project: (x: number, y: n
       ctx.fillStyle = '#ff2a2a';
       ctx.globalAlpha = 0.28 * st; path([[sg * 0.12, 0.42, ZR - 0.02], [sg * 0.9, 0.42, ZR - 0.02], [sg * 0.9, 0.66, ZR - 0.02], [sg * 0.12, 0.66, ZR - 0.02]]); ctx.fill();
       ctx.globalAlpha = 0.22 * st; path([[sg * 0.1, 0, ZR - 0.02], [sg * 0.86, 0, ZR - 0.02], [sg * 0.8, 0, ZR - 0.5], [sg * 0.16, 0, ZR - 0.5]], gp); ctx.fill();
+    }
+    // Lauflicht: ein heller Punkt wandert über das Heck (eindeutige Form des Phantom-Turbos; bei reduzierter Bewegung mittig und still)
+    if (st > 0.5 && fx.scan !== undefined) {
+      const xs = fx.scan * 0.7;
+      ctx.globalAlpha = st; ctx.fillStyle = '#ffd0c0';
+      path([[xs - 0.13, 0.5, ZR - 0.03], [xs + 0.13, 0.5, ZR - 0.03], [xs + 0.13, 0.6, ZR - 0.03], [xs - 0.13, 0.6, ZR - 0.03]]); ctx.fill();
+      ctx.globalAlpha = 0.45 * st; ctx.fillStyle = '#ff2a2a';
+      path([[xs - 0.32, 0.45, ZR - 0.03], [xs + 0.32, 0.45, ZR - 0.03], [xs + 0.32, 0.65, ZR - 0.03], [xs - 0.32, 0.65, ZR - 0.03]]); ctx.fill();
     }
     ctx.globalAlpha = 1;
   }

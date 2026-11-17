@@ -244,6 +244,17 @@ button.secondary { padding: 10px 28px; min-height: 44px; font: inherit; font-siz
 .logo .l2 { animation: neon-b 4.3s linear infinite; }
 .logo::after { animation: neon-line 1.8s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .logo .l1, .logo .l2, .logo::after { animation: none; } }
+/* Kleine Displays: engerer Neonschein (Logo, Button und Boulevard bleiben getrennt lesbar), Unterzeile mit Luft zur Bestweite,
+   Lenkhilfe durchscheinender, damit der Boulevard dahinter sichtbar bleibt */
+@keyframes neon-a-s { 0%,18%,22%,62%,100% { filter: drop-shadow(0 0 .07em #2ee6d6) drop-shadow(0 0 .18em #2ee6d688) brightness(1.06); } 20% { filter: brightness(.75); } 64% { filter: drop-shadow(0 0 .04em #2ee6d6) brightness(.85); } 80% { filter: drop-shadow(0 0 .1em #2ee6d6) drop-shadow(0 0 .24em #2ee6d688) brightness(1.14); } }
+@keyframes neon-b-s { 0%,40%,44%,86%,100% { filter: drop-shadow(0 0 .07em #ff3fa8) drop-shadow(0 0 .2em #ff3fa888) brightness(1.06); } 42% { filter: brightness(.7); } 88% { filter: drop-shadow(0 0 .04em #ff3fa8) brightness(.85); } 60% { filter: drop-shadow(0 0 .11em #ff3fa8) drop-shadow(0 0 .26em #ff3fa888) brightness(1.15); } }
+@media (max-width: 600px), (max-height: 520px) {
+  .logo .l1 { animation-name: neon-a-s; }
+  .logo .l2 { animation-name: neon-b-s; }
+  .logo::after { box-shadow: 0 0 6px #2ee6d699; }
+  #screen-start .tagline { margin: 0 0 3px; }
+  #howto { background: #070a2470; }
+}
 
 /* ===== Smartphone (Touch): gemeinsamer Fußbereich im Fluss, Banner nur im Startmenü, Hinweise nur in der Fahrt =====
    `html.touch` setzt das Spiel nur bei grobem Zeiger oder tatsächlicher Berührung; eine schmale Fensterbreite am PC löst nichts davon aus.

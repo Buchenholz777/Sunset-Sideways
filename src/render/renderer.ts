@@ -106,7 +106,12 @@ export class Renderer {
     if (p) this.impact = { sx: p.sx, sy: p.sy, t: 0 };
   }
 
+  /** Effektende: Schild läuft ohne Treffer ab (Bogen zerfällt), Phantom-Turbo endet (violette Lichtkante kehrt zurück). */
+  private prevShield = false; private shieldUsed = false; private shieldEnd = 0;
+  private prevBoost = false; private boostEnd = 0;
+
   burst(kind: BurstKind): void {
+    if (kind === 'shieldHit') this.shieldUsed = true;
     if (kind === 'land') this.landRing = 1;
     if (kind === 'shield' || kind === 'shieldHit') this.arcFlash = 1;
     if (kind === 'slow' || kind === 'magnet' || kind === 'clear') { this.iconFlash = 1; this.iconType = kind; }
@@ -190,7 +195,7 @@ export class Renderer {
     const ctx = this.ctx;
     this.road = v.road;
     if (v.running) this.clock += dt;
-    if (v.s < this.prevS - 1) { this.brake = 0; this.prevSpeed = 0; this.firstSeen.clear(); this.snap = true; this.visYaw = 0; this.stealth = 0; this.particles.length = 0; this.flashes.length = 0; this.iconFlash = 0; this.arcFlash = 0; this.flash = 0; }
+    if (v.s < this.prevS - 1) { this.brake = 0; this.prevSpeed = 0; this.firstSeen.clear(); this.snap = true; this.visYaw = 0; this.stealth = 0; this.particles.length = 0; this.flashes.length = 0; this.iconFlash = 0; this.arcFlash = 0; this.flash = 0; this.shieldEnd = 0; this.boostEnd = 0; this.prevShield = false; this.prevBoost = false; this.shieldUsed = false; }
     this.prevS = v.s;
     // Bremslicht nur bei tatsächlicher Verzögerung (z. B. Tempo fällt nach Turbo oder Zeitlupe)
     if (v.running && this.prevSpeed > 0 && v.speedKmh < this.prevSpeed - 0.02) this.brake = 1;
@@ -324,6 +329,13 @@ export class Renderer {
         }
       }
       rect(ctx, l, y, r - l, 1, seg ? P.a1 : P.a2);
+      // Bodenfluss: Querfugen im Asphalt alle 18 m – genau eine Bildzeile je Fuge (Fugengrenze liegt zwischen dieser und der nächstnäheren Zeile), nur im Nahbereich
+      if (far < 0.4 && y + 1 < L.h) {
+        const dn = this.rowD[y + 1];
+        if (dn >= 0 && dn < d && Math.floor((zc + d) / 18) !== Math.floor((zc + dn) / 18)) {
+          ctx.globalAlpha = 0.32 * (1 - far / 0.4); rect(ctx, l, y, r - l, 1, '#17132a'); ctx.globalAlpha = 1;
+        }
+      }
       // Zeitblase: Welle läuft vom Wagen über den Asphalt
       if (v.slowAge >= 0 && v.slowAge < 1.8) {
         const dd = Math.abs(d - (10 + v.slowAge * 95));
@@ -709,7 +721,35 @@ export class Renderer {
     const elG = B.effects.glide - v.glideLeft;
     const spinT = v.glideLeft > 0 && elG < 0.9 && !this.reducedMotion ? Math.max(0, elG) / 0.9 : 0;
     const spin = spinT > 0 ? Math.PI * 2 * (spinT < 0.5 ? 4 * spinT ** 3 : 1 - (-2 * spinT + 2) ** 3 / 2) : 0;
-    drawCar(ctx, (x, y, z) => { const q = carPt(x, y, z); return [Math.round(q[0]), Math.round(q[1])]; }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth, zs: L.portrait ? 0.78 : undefined, spin });
+    const scan = this.reducedMotion ? 0 : Math.sin(this.clock * 5.2);
+    drawCar(ctx, (x, y, z) => { const q = carPt(x, y, z); return [Math.round(q[0]), Math.round(q[1])]; }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth, zs: L.portrait ? 0.78 : undefined, spin, scan });
+    // Effektende erkennen (Zustandswechsel), unabhängig von Toasts
+    if (v.running) {
+      if (this.prevShield && !v.shield && !this.shieldUsed) this.shieldEnd = 1;
+      if (!v.shield) this.shieldUsed = false;
+      if (this.prevBoost && !v.boost) this.boostEnd = 1;
+      this.prevShield = v.shield; this.prevBoost = v.boost;
+    }
+    if (this.boostEnd > 0) {
+      // Turbo-Ende: kurze violette Lichtkante um den Wagen – „Farbe kehrt zurück“
+      ctx.save(); ctx.globalAlpha = 0.8 * this.boostEnd; ctx.strokeStyle = '#c9a8ff'; ctx.lineWidth = Math.max(1, 0.08 * k);
+      const r = (1.25 + (this.reducedMotion ? 0 : 0.5 * (1 - this.boostEnd))) * k;
+      ctx.beginPath(); ctx.ellipse(sx, L.gy - 0.55 * k - liftPx, r, r * 0.62, 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.restore();
+      this.boostEnd = Math.max(0, this.boostEnd - this.dtLast / 0.5);
+    }
+    if (this.shieldEnd > 0) {
+      // Schild läuft ab: der Bogen zerfällt in Splitter, die nach außen treiben und verblassen (eigene Form statt Blinken)
+      const t = 1 - this.shieldEnd;
+      ctx.save(); ctx.translate(Math.round(sx), Math.round(L.gy - 0.7 * k - liftPx));
+      ctx.strokeStyle = PAL.mint; ctx.lineWidth = Math.max(1.5, k * 0.11); ctx.globalAlpha = Math.min(1, 1.3 * this.shieldEnd);
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI * (1.1 + i * 0.135), out = this.reducedMotion ? 0 : t * 0.9;
+        const rx = (1.55 + out) * k, ry = (1.25 + out * 0.8) * k;
+        ctx.beginPath(); ctx.ellipse(Math.cos(a) * out * k * 0.6, Math.sin(a) * out * k * 0.6 + (this.reducedMotion ? 0 : t * 0.6 * k), rx, ry, 0, a, a + 0.15 * (1 - 0.5 * t)); ctx.stroke();
+      }
+      ctx.restore();
+      this.shieldEnd = Math.max(0, this.shieldEnd - this.dtLast / 0.55);
+    }
     if (this.landRing > 0) {
       const t = 1 - this.landRing;
       ctx.save(); ctx.globalAlpha = 0.65 * this.landRing; ctx.strokeStyle = '#bff3dc'; ctx.lineWidth = Math.max(1, 0.1 * k);
@@ -817,7 +857,7 @@ export class Renderer {
     if (v.running && !this.reducedMotion && this.quality < 2) {
       // Tempolinien: Zahl, Länge und Deckkraft wachsen von 200 bis 600 km/h stetig (360 / 500 / 600 sind klar unterscheidbar)
       const vn = Math.max(0, Math.min(1, (v.speedKmh - 200) / 400));
-      const n = 6 + Math.round(22 * vn);
+      const n = 8 + Math.round(30 * vn);                 // etwa die Hälfte fällt auf die Fahrbahn und entfällt
       const sp = v.speedKmh / 260;
       ctx.globalAlpha = 0.18 + 0.3 * vn;
       for (let i = 0; i < n; i++) {
@@ -825,6 +865,9 @@ export class Renderer {
         const side = hash(i) > 0.5 ? 1 : -1;
         const xx = L.cx + side * (L.cx * (0.4 + 0.6 * ph) * (0.6 + hash(i + 40) * 0.5));
         const yy = L.hy + (L.h - L.hy) * ph;
+        // nie über der Fahrbahn: der Blick bleibt ruhig auf Spur und Hindernissen, das Tempo zeigt sich an Rand und Gehweg
+        const dRow = this.rowD[Math.min(L.h - 1, Math.max(0, Math.round(yy)))];
+        if (dRow > 0) { const kk = L.fx / depthEff(dRow, L), rcx = L.cx + this.lat(this.lastZc + dRow, this.lastZc) * kk; if (Math.abs(xx - rcx) < (B.road.halfWidth + 0.5) * kk) continue; }
         rect(ctx, xx, yy, 1, (2 + ph * 10 * (0.5 + sp)) * gfx.u, '#9aa0ff');
       }
       ctx.globalAlpha = 1;
