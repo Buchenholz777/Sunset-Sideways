@@ -17,7 +17,7 @@ describe('Grundstücke am Straßenrand (räumliche Anordnung)', () => {
   });
 
   it('nichts ragt in die aktive Fahrbahn; Bordstein bleibt außer an Einfahrten unberührt; Körper stehen auf dem Boden', () => {
-    for (let i = 0; i < 40; i++) for (const side of [-1, 1]) for (const stage of [0, 1]) {
+    for (let i = 0; i < 40; i++) for (const side of [-1, 1]) for (const stage of [0, 1, 2, 3, 4]) {
       for (const p of lotAt(i, side, stage).prims) {
         if (p.t === 'box') {
           expect(p.u0, `Abschnitt ${i}`).toBeGreaterThanOrEqual(1.2);                  // Vordach/Schild beginnen erst hinter dem Gehwegrand

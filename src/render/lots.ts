@@ -1,6 +1,6 @@
 import { B_HALF } from './lotsconst';
 import { rect } from './sprites';
-import { drawDeco, hash, mixHex } from './scenery';
+import { drawDeco, hash, landmarkInLot, mixHex } from './scenery';
 
 /**
  * Grundstücke am Straßenrand: feste, ortsgebundene Anordnung (nur aus Streckenabschnitt und Seite abgeleitet, nie aus dem Spielseed),
@@ -24,7 +24,7 @@ export interface LotEnv {
 export interface Item { d: number; draw: () => void }
 
 type Prim =
-  | { t: 'box'; u0: number; u1: number; z0: number; z1: number; h0: number; h1: number; col: string; trim?: string; win?: 'motel' | 'car' | 'shed' | 'tower' | 'garage'; neon?: string; skip?: 'top' }
+  | { t: 'box'; u0: number; u1: number; z0: number; z1: number; h0: number; h1: number; col: string; trim?: string; win?: 'motel' | 'car' | 'shed' | 'tower' | 'garage'; neon?: string; skip?: 'top'; /** senkrechte Lisenen auf der Straßenseite (gliedern große helle Flächen) */ bands?: number }
   | { t: 'gnd'; pts: Array<[number, number]>; col: string; a: number; glow?: boolean }
   | { t: 'line'; u0: number; u1: number; z: number; w: number; col: string; a: number }
   | { t: 'bush'; u: number; z: number; s: number }
@@ -37,11 +37,13 @@ const CAR_COLS = ['#f2c21a', '#d8453f', '#3f6fb5', '#2fb7a8', '#f0ece0', '#8b93a
 
 // ------------------------------------------------------------------ Grundstücke
 /** Welche Art von Grundstück liegt in Abschnitt i auf dieser Seite? (nur Wüstenrand/Motels und Art-déco-Boulevard) */
-export type LotKind = 'motel' | 'open' | 'shed' | 'pocket' | 'deco' | 'court' | 'garage' | 'plaza' | 'tower' | 'neon';
+export type LotKind = 'motel' | 'open' | 'shed' | 'pocket' | 'deco' | 'court' | 'garage' | 'plaza' | 'tower' | 'neon' | 'hotel' | 'show' | 'fair' | 'quiet';
 
 export function lotKind(i: number, side: number, stage: number): LotKind {
   const r = (i % 4 + 4) % 4;
   const right = side > 0;
+  // Wahrzeichen stehen auf einem offenen Vorplatz ihres Grundstücks (kein Turm davor, Fußpunkt sichtbar)
+  if (stage >= 2 && landmarkInLot(i, side, LOT)) return 'fair';
   if (stage === 0) {
     // Muster mit Wiederholung nur alle vier Abschnitte, Seiten gegenläufig
     if (r === 0) return right ? 'motel' : 'open';
@@ -55,12 +57,24 @@ export function lotKind(i: number, side: number, stage: number): LotKind {
     if (r === 2) return right ? 'deco' : 'open';
     return right ? 'open' : 'deco';
   }
-  // Rhythmus: dichte Passage, Vorplatz, freie Biegung mit Ausblick – Seiten gegenläufig versetzt
+  // Rhythmus je Viertel, Seiten gegenläufig versetzt:
+  // Hotelviertel – Türme unterschiedlicher Breite mit gestaffelten Dächern, niedriger Hotelriegel mit Vorbau, offene Lücke, Parkhaus;
+  // Unterhaltungsviertel – Showhalle mit Vorplatz, offene Lücke mit Blick in den Mittelgrund, Turm;
+  // Neonmeile – einzelne helle Fassade, danach ruhiger Abschnitt.
   const q = (r + (right ? 0 : 2)) % 4;
-  if (stage === 2) return q === 0 ? 'garage' : q === 1 ? 'plaza' : q === 2 ? 'open' : 'tower';
-  if (stage === 3) return q === 0 ? 'tower' : q === 1 ? 'plaza' : q === 2 ? 'garage' : 'open';
-  return q === 0 ? 'neon' : q === 1 ? 'tower' : q === 2 ? 'plaza' : 'open';
+  if (stage === 2) return q === 0 ? 'tower' : q === 1 ? 'hotel' : q === 2 ? 'open' : 'garage';
+  if (stage === 3) return q === 0 ? 'show' : q === 1 ? 'open' : q === 2 ? 'tower' : 'plaza';
+  return q === 0 ? 'neon' : q === 1 ? 'quiet' : q === 2 ? 'tower' : 'quiet';
 }
+
+/** Farbstimmung je Viertel (Fassade, Zierleiste, Neon): Hotelviertel kühles Weiß und Gold, Unterhaltung Violett, Neonmeile dunkle Körper. */
+const DISTRICT = [
+  { body: '#b8aacb', alt: '#c4b4d4', trim: '#2ee6d6', neon: '#2ee6d6' },
+  { body: '#b8aacb', alt: '#c4b4d4', trim: '#2ee6d6', neon: '#2ee6d6' },
+  { body: '#cfd5e2', alt: '#e2dccb', trim: '#ffcf6b', neon: '#9fe8ff' },
+  { body: '#a99ac4', alt: '#b9a2c8', trim: '#ff4fd8', neon: '#ff4fd8' },
+  { body: '#6f6596', alt: '#5e5582', trim: '#2ee6d6', neon: '#2ee6d6' },
+];
 
 const cache = new Map<number, Lot>();
 
@@ -163,20 +177,66 @@ function buildLot(i: number, side: number, stage: number): Lot {
       break;
     }
     case 'plaza': {
+      const D = DISTRICT[Math.min(4, stage)];
       prims.push({ t: 'gnd', pts: [[3.4, z0 + 6], [3.4, z0 + 50], [30, z0 + 50], [30, z0 + 6]], col: '#6a5a78', a: 0.85 });
       prims.push({ t: 'gnd', pts: [[8, z0 + 22], [8, z0 + 34], [16, z0 + 34], [16, z0 + 22]], col: '#2a6a8a', a: 0.7 });                                    // Brunnenbecken
       prims.push({ t: 'palm', u: 6, z: z0 + 14, s: 1.2, ph: h(14) * 6 }); prims.push({ t: 'palm', u: 6, z: z0 + 42, s: 1.2, ph: h(15) * 6 });
-      prims.push({ t: 'box', u0: 30, u1: 46, z0: z0 + 8, z1: z0 + 52, h0: 0, h1: 16 + h(16) * 12, col: '#c4b4d4', trim: '#ffe27a', win: 'tower', neon: '#2ee6d6' });
+      prims.push({ t: 'box', u0: 30, u1: 46, z0: z0 + 8, z1: z0 + 52, h0: 0, h1: 16 + h(16) * 12, col: D.alt, trim: D.trim, win: 'tower', neon: D.neon, bands: 3 });
       if (stage >= 3) prims.push({ t: 'gnd', pts: [[9, z0 + 23], [9, z0 + 33], [15, z0 + 33], [15, z0 + 23]], col: '#2ee6d6', a: 0.35, glow: true });
       break;
     }
     case 'tower': {
-      // Hotelturm mit zurückgesetztem Eingang: Sockel, Vordach, Vorplatz, darüber gestufter Turm
+      // Hotelturm mit zurückgesetztem Eingang: Sockel, Vordach, Vorplatz, darüber ein Turm mit eigener Breite und gestaffeltem Dach
+      const D = DISTRICT[Math.min(4, stage)];
+      const tw = 10 + Math.floor(h(21) * 4) * 3, tz0 = z0 + 8 + h(22) * 6, tz1 = Math.min(z0 + 40, tz0 + 18 + h(23) * 14);   // Breite 10–19 m, Länge 18–32 m
+      const th = 24 + h(17) * 18;
       prims.push({ t: 'gnd', pts: [[3.4, z0 + 4], [3.4, z0 + 42], [22, z0 + 42], [22, z0 + 4]], col: '#55496a', a: 0.9 });
-      prims.push({ t: 'box', u0: 18, u1: 38, z0: z0 + 6, z1: z0 + 40, h0: 0, h1: 6.5, col: '#d4c4d8', trim: '#ff4fd8', win: 'motel', neon: '#ff4fd8' });
-      prims.push({ t: 'box', u0: 24, u1: 38, z0: z0 + 10, z1: z0 + 36, h0: 6.5, h1: 24 + h(17) * 16, col: '#b8aacb', trim: '#2ee6d6', win: 'tower', neon: '#2ee6d6' });
+      prims.push({ t: 'box', u0: 18, u1: 38, z0: z0 + 6, z1: z0 + 40, h0: 0, h1: 6.5, col: mixHex(D.alt, '#f4efe2', 0.3), trim: '#ff4fd8', win: 'motel', neon: '#ff4fd8' });
+      prims.push({ t: 'box', u0: 24, u1: 24 + tw, z0: tz0, z1: tz1, h0: 6.5, h1: th, col: D.body, trim: D.trim, win: 'tower', neon: D.neon, bands: stage === 2 ? 2 : 0 });
+      // Dachstufe (zurückgesetzt) und bei jedem zweiten Turm eine schlanke Spitze: unterscheidbare Silhouetten statt gleicher Quader
+      prims.push({ t: 'box', u0: 24 + tw * 0.3, u1: 24 + tw, z0: tz0 + (tz1 - tz0) * 0.2, z1: tz1 - (tz1 - tz0) * 0.2, h0: th, h1: th + 4 + h(24) * 4, col: D.alt, trim: D.trim, neon: D.neon });
+      if (h(25) > 0.5) prims.push({ t: 'box', u0: 24 + tw * 0.6, u1: 24 + tw * 0.6 + 0.8, z0: (tz0 + tz1) / 2 - 0.4, z1: (tz0 + tz1) / 2 + 0.4, h0: th + 4, h1: th + 13, col: '#f4efe2', trim: D.neon });
       prims.push({ t: 'box', u0: 10, u1: 18, z0: z0 + 16, z1: z0 + 30, h0: 3.6, h1: 4.0, col: '#f4efe2', trim: '#ffe27a' });
+      prims.push({ t: 'gnd', pts: [[11, z0 + 17], [11, z0 + 29], [18, z0 + 29], [18, z0 + 17]], col: '#ffcf6b', a: 0.3, glow: true });                      // Licht unter dem Vordach
       prims.push({ t: 'palm', u: 5, z: z0 + 10, s: 1.2, ph: h(18) * 6 });
+      break;
+    }
+    case 'hotel': {
+      // Hotelviertel: breiter, niedriger Riegel mit zurückgesetztem Obergeschoss und Vorbau am Eingang – bricht die Reihe hoher Türme
+      const D = DISTRICT[Math.min(4, stage)];
+      const hb = 10 + h(26) * 5, len = 30 + h(27) * 20;
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 4], [3.4, z0 + 8 + len], [16, z0 + 8 + len], [16, z0 + 4]], col: '#5b5070', a: 0.9 });
+      prims.push({ t: 'box', u0: 16, u1: 34, z0: z0 + 6, z1: z0 + 6 + len, h0: 0, h1: hb, col: D.alt, trim: D.trim, neon: D.neon, bands: 3 });   // große Fläche, nur durch Lisenen gegliedert (kein Fensterraster: ruhiger und günstiger)
+      prims.push({ t: 'box', u0: 21, u1: 34, z0: z0 + 9, z1: z0 + 3 + len, h0: hb, h1: hb + 5, col: D.body, trim: D.trim, win: 'motel' });
+      prims.push({ t: 'box', u0: 9, u1: 16, z0: z0 + 6 + len * 0.35, z1: z0 + 6 + len * 0.65, h0: 0, h1: 4.2, col: mixHex(D.alt, '#2a2638', 0.25), trim: '#ffcf6b', win: 'shed' });   // Vorbau mit Eingang
+      prims.push({ t: 'sign', u: 2.6, z: z0 + 6 + len * 0.5, h: 5.2, txt: 'HOTEL', col: '#ffcf6b' });
+      prims.push({ t: 'palm', u: 5, z: z0 + 8, s: 1.0, ph: h(28) * 6 });
+      break;
+    }
+    case 'show': {
+      // Unterhaltungsviertel: Showhalle weit hinten, davor ein heller Vorplatz mit Leuchtmarkise und senkrechtem Schild
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 2], [3.4, z0 + 58], [22, z0 + 58], [22, z0 + 2]], col: '#5e4f78', a: 0.9 });
+      prims.push({ t: 'gnd', pts: [[6, z0 + 18], [6, z0 + 42], [21, z0 + 42], [21, z0 + 18]], col: '#ff4fd8', a: 0.35, glow: true });
+      prims.push({ t: 'box', u0: 22, u1: 44, z0: z0 + 4, z1: z0 + 56, h0: 0, h1: 11 + h(29) * 4, col: '#8a6aa8', trim: '#ffcf6b', neon: '#ff4fd8', bands: 3 });   // ruhige Wand: Markise und Schild tragen das Licht (günstiger als ein Lichtraster)
+      prims.push({ t: 'box', u0: 17, u1: 22, z0: z0 + 16, z1: z0 + 44, h0: 4.2, h1: 5.2, col: '#ffcf6b', trim: '#fff2b0' });                       // Leuchtmarkise
+      prims.push({ t: 'box', u0: 21.4, u1: 22, z0: z0 + 28, z1: z0 + 31, h0: 5.2, h1: 17, col: '#2a1d4a', trim: '#2ee6d6', neon: '#2ee6d6' });   // senkrechtes Schild
+      prims.push({ t: 'palm', u: 5, z: z0 + 8, s: 1.2, ph: h(30) * 6 }); prims.push({ t: 'palm', u: 5, z: z0 + 52, s: 1.1, ph: h(31) * 6 });
+      break;
+    }
+    case 'fair': {
+      // Vorplatz eines Wahrzeichens: offene Fläche, Kassenhäuschen, Lichterketten-Masten – nichts Hohes davor
+      prims.push({ t: 'gnd', pts: [[3.4, z0], [3.4, z0 + LOT], [64, z0 + LOT], [64, z0]], col: '#5a4c74', a: 0.9 });
+      prims.push({ t: 'gnd', pts: [[8, z0 + 10], [8, z0 + LOT - 10], [30, z0 + LOT - 10], [30, z0 + 10]], col: '#ffcf6b', a: 0.22, glow: true });
+      prims.push({ t: 'box', u0: 5, u1: 8, z0: z0 + 6, z1: z0 + 10, h0: 0, h1: 3, col: '#e8d8c8', trim: '#ff4fd8', win: 'shed' });
+      prims.push({ t: 'box', u0: 5, u1: 8, z0: z0 + LOT - 10, z1: z0 + LOT - 6, h0: 0, h1: 3, col: '#e8d8c8', trim: '#2ee6d6', win: 'shed' });
+      for (let z = z0 + 14; z < z0 + LOT - 12; z += 11) prims.push({ t: 'box', u0: 4.2, u1: 4.5, z0: z, z1: z + 0.3, h0: 0, h1: 5.5, col: '#3b3f6e', trim: '#fff2b0', neon: '#fff2b0' });
+      break;
+    }
+    case 'quiet': {
+      // Neonmeile, ruhiger Abschnitt: dunkler, niedriger Block ohne Reklame, Palmen – Atempause zwischen den hellen Fassaden
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 4], [3.4, z0 + LOT - 4], [18, z0 + LOT - 4], [18, z0 + 4]], col: '#3a3354', a: 0.85 });
+      prims.push({ t: 'box', u0: 20, u1: 34, z0: z0 + 10, z1: z0 + 54, h0: 0, h1: 7 + h(32) * 3, col: '#4a4266', trim: '#2a2448', win: 'motel' });
+      for (let n = 0; n < 3; n++) prims.push({ t: 'palm', u: 5 + h(33 + n) * 6, z: z0 + 10 + n * 22, s: 1.1, ph: h(36 + n) * 6 });
       break;
     }
     case 'neon': {
@@ -190,8 +250,10 @@ function buildLot(i: number, side: number, stage: number): Lot {
       break;
     }
   }
+  // Neonschilder färben nachts ihren Eingangsbereich (örtliches Licht auf Gehweg und Vorplatz)
+  for (const p of [...prims]) if (p.t === 'sign') prims.push({ t: 'gnd', pts: [[0.4, p.z - 3.5], [0.4, p.z + 3.5], [5.5, p.z + 3.5], [5.5, p.z - 3.5]], col: p.col, a: 0.22, glow: true });
   // Zweite räumliche Ebene hinter der ersten Reihe: niedrige Baukörper mit größerem Abstand, ruhiger im Kontrast
-  const back = stage <= 1 ? 3 : 4;
+  const back = kind === 'fair' ? 0 : stage <= 1 ? 3 : 4;            // Vorplatz eines Wahrzeichens bleibt bis hinten frei
   for (let n = 0; n < back; n++) {
     if (h(200 + n) < 0.35) continue;
     const bz = z0 + 4 + h(210 + n) * (LOT - 22), bw = 8 + h(220 + n) * 12, bh = (stage <= 1 ? 3 : 7) + h(230 + n) * (stage <= 1 ? 3 : 14);
@@ -271,6 +333,15 @@ function drawBox(env: LotEnv, side: number, p: Extract<Prim, { t: 'box' }>, dNea
     const edge: V3[] = [[x0, p.z0, p.h1 - t], [x0, p.z1, p.h1 - t], [x0, p.z1, p.h1], [x0, p.z0, p.h1]];
     fillPoly(env, edge, faceCol(env, p.trim, 'road', side, 1 - fog));
     if (env.lights > 0.2 && p.neon) { const glow: V3[] = [[x0, p.z0, p.h1 - t * 2], [x0, p.z1, p.h1 - t * 2], [x0, p.z1, p.h1 - t], [x0, p.z0, p.h1 - t]]; fillPoly(env, glow, p.neon, env.lights); }
+  }
+  // Lisenen: wenige dunklere senkrechte Bänder gliedern große Fassaden (nah und nur bei voller Qualität)
+  if (p.bands && dNear < 220 && env.quality < 1) {
+    const n = p.bands, span = p.z1 - p.z0, bw = Math.min(1.6, span / (n * 4 + 2));
+    const bc = faceCol(env, mixHex(p.col, '#2a2448', 0.32), 'road', side, 1 - fog);
+    for (let j = 1; j <= n; j++) {
+      const zz = p.z0 + (j * span) / (n + 1) - bw / 2;
+      fillPoly(env, [[x0, zz, p.h0], [x0, zz + bw, p.h0], [x0, zz + bw, p.h1], [x0, zz, p.h1]], bc);
+    }
   }
   // Fenster und Türen auf der Straßenseite (nur nah und bei voller Qualität)
   if (p.win && dNear < 230 && env.quality < 1) {

@@ -229,8 +229,7 @@ const SKY: SkyItem[] = (() => {
       });
     }
   }
-  items.push({ x: 0.2, w: 0.1, h: 0.14, tier: 2, kind: 'wheel', a: 0.5 });
-  items.push({ x: 0.66, w: 0.075, h: 0.3, tier: 4, kind: 'eiffel', a: 0.3 });
+  // Riesenrad und Eiffelturm stehen nicht mehr als feste Bildmotive in der Skyline: sie werden an ihrer echten Weltposition gezeichnet (landmarksAhead)
   return items;
 })();
 
@@ -319,11 +318,11 @@ export function decoType(k: number, side: number, z: number): DecoType {
   const h = hash(k * 7 + side * 3 + 1);
   if (stage > 0 && hash(k * 11 + side) < 0.28) stage -= 1;
   const st = stageAt(z);
-  // Je Viertel eine Hauptlandmarke, abwechselnd rechts und links und seltener als zuvor (vorher alle ≈ 340 m bzw. 300 m): Riesenrad in Hotel-/Unterhaltungsviertel, Eiffelturm am Strip
-  if (st >= 2 && st < 4 && k % 60 === (side > 0 ? 7 : 37)) return 'wheel';
+  // Je Viertel eine Hauptlandmarke mit fester Weltposition, abwechselnd rechts und links: Riesenrad im Unterhaltungsviertel (alle 1,32 km), Eiffelturm am Strip (alle 1,06 km)
+  if (st === 3 && k % 120 === (side > 0 ? 7 : 67)) return 'wheel';
   if (st >= 4) {
     // Strip: Eiffelturm, Fontänensee, mehrstöckige Casino-/Hotelfassaden mit bunten Leuchtdächern
-    if (k % 48 === (side > 0 ? 5 : 29)) return 'eiffel';
+    if (k % 96 === (side > 0 ? 5 : 53)) return 'eiffel';
     if (k % 9 === (side > 0 ? 2 : 6)) return 'lake';
     return h < 0.5 ? 'casino' : h < 0.68 ? 'show' : h < 0.82 ? 'tower' : h < 0.92 ? 'canopy' : 'palm';
   }
@@ -333,6 +332,45 @@ export function decoType(k: number, side: number, z: number): DecoType {
     case 2: return h < 0.55 ? 'tower' : h < 0.72 ? 'deco' : h < 0.85 ? 'canopy' : 'palm';
     default: return h < 0.5 ? 'show' : h < 0.78 ? 'tower' : h < 0.9 ? 'canopy' : 'palm';
   }
+}
+
+/** Raster der Straßenrand-Motive (m). */
+export const DECO_STEP = 22;
+/** Wahrzeichen: werden aus großer Entfernung an ihrer echten Weltposition gezeigt (eine Position für Fern- und Nahsicht). */
+export const LANDMARK_TYPES: ReadonlySet<DecoType> = new Set<DecoType>(['wheel', 'eiffel']);
+/** Sichtweite der Wahrzeichen (m): früh in der Ferne, danach wächst die Silhouette an derselben Stelle. */
+export const LANDMARK_FAR = 1700;
+/** Maßstab der Wahrzeichen um ihren Fußpunkt: Riesenrad ≈ 80 m, Eiffelturm ≈ 130 m – ragen über die Häuserschlucht und bleiben aus der Ferne lesbar. */
+export const LANDMARK_SCALE: Partial<Record<DecoType, number>> = { wheel: 2.3, eiffel: 2.9 };
+export interface Landmark { k: number; side: number; type: DecoType; z: number; x: number; hs: number }
+
+/** Seitlicher Abstand eines Straßenrand-Motivs zur Straßenmitte (m) – dieselbe Formel für Kulisse, Wahrzeichen und Grundstücke. */
+export function decoX(type: DecoType, k: number, side: number): number {
+  const hs = hash(k * 2 + (side > 0 ? 1 : 0));
+  const big = type === 'tower' || type === 'show' || type === 'wheel' || type === 'deco' || type === 'casino' || type === 'lake' || type === 'eiffel';
+  return side * (B.road.halfWidth + 6 + hs * 4 + (big ? 5 : 0));
+}
+
+/** Alle Wahrzeichen mit Fußpunkt zwischen z0 und z1 (nach Strecke sortiert). */
+export function landmarksAhead(z0: number, z1: number): Landmark[] {
+  const out: Landmark[] = [];
+  for (let k = Math.ceil(z0 / DECO_STEP); k * DECO_STEP <= z1; k++) {
+    const z = k * DECO_STEP;
+    for (const side of [-1, 1]) {
+      const type = decoType(k, side, z);
+      if (LANDMARK_TYPES.has(type)) out.push({ k, side, type, z, x: decoX(type, k, side), hs: hash(k * 2 + (side > 0 ? 1 : 0)) });
+    }
+  }
+  return out;
+}
+
+/** Liegt in diesem Grundstücksabschnitt (Länge `lot` m) auf dieser Seite ein Wahrzeichen? Dann bleibt dort ein offener Vorplatz. */
+export function landmarkInLot(i: number, side: number, lot: number): DecoType | null {
+  for (let k = Math.ceil((i * lot - 6) / DECO_STEP); k * DECO_STEP < (i + 1) * lot + 6; k++) {
+    const t = decoType(k, side, k * DECO_STEP);
+    if (LANDMARK_TYPES.has(t)) return t;
+  }
+  return null;
 }
 
 const ICONS: string[][] = [
@@ -464,18 +502,31 @@ export function drawDeco(type: DecoType, dc: DecoCtx): void {
       return;
     }
     case 'wheel': {
-      const r = 11, cy = 14;
-      const x0 = side > 0 ? 6 : -6;
-      R(x0 - 0.3, cy, 0.6, cy, '#2a2a7a');
-      ctx.strokeStyle = '#4a4ab0'; ctx.lineWidth = Math.max(1, sc * 0.35);
+      // Hauptlandmarke des Unterhaltungsviertels: großes Rad auf A-Stützen über dem eigenen Vorplatz (Fußpunkt = Grundstück)
+      const r = 15, cy = 18.5;
+      const x0 = side > 0 ? 15 : -15;
+      const lw = Math.max(1, sc * 0.4);
+      ctx.strokeStyle = '#2a2a7a'; ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.moveTo(sx + (x0 - 6) * sc, sy); ctx.lineTo(sx + x0 * sc, sy - cy * sc); ctx.lineTo(sx + (x0 + 6) * sc, sy); ctx.stroke();   // A-Stützen
+      const night = gfx.lights;
+      ctx.strokeStyle = night > 0.3 ? mixHex('#4a4ab0', '#ff4fd8', night * 0.8) : '#4a4ab0';
+      ctx.lineWidth = Math.max(1, sc * 0.45);
       ctx.beginPath(); ctx.arc(sx + x0 * sc, sy - cy * sc, r * sc, 0, Math.PI * 2); ctx.stroke();
+      if (pxOK(0.08)) { ctx.lineWidth = Math.max(1, sc * 0.2); ctx.beginPath(); ctx.arc(sx + x0 * sc, sy - cy * sc, r * 0.82 * sc, 0, Math.PI * 2); ctx.stroke(); }
       const rot = reduced ? 0 : clock * 0.05;
-      for (let i = 0; i < 10; i++) {
-        const a = rot + (i * Math.PI) / 5;
+      const n = pxOK(0.12) ? 12 : 6;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#4a4ab0';
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) { const a = rot + (i * Math.PI * 2) / n; ctx.moveTo(sx + x0 * sc, sy - cy * sc); ctx.lineTo(sx + (x0 + Math.cos(a) * r) * sc, sy - (cy + Math.sin(a) * r) * sc); }
+      ctx.stroke();
+      const g = Math.max(1.6, 1.2 / Math.max(0.05, sc));            // Gondeln bleiben auch fern als Lichtpunkte sichtbar
+      for (let i = 0; i < 12; i++) {
+        const a = rot + (i * Math.PI) / 6;
         const gx = x0 + Math.cos(a) * r, gy = cy + Math.sin(a) * r;
-        if (i < 5 || pxOK(0.3)) { ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(sx + x0 * sc, sy - cy * sc); ctx.lineTo(sx + gx * sc, sy - gy * sc); ctx.stroke(); }
-        R(gx - 0.7, gy + 0.7, 1.4, 1.4, i % 2 ? PAL.mint : warm);
+        R(gx - g / 2, gy + g / 2, g, g, i % 2 ? PAL.mint : warm);
       }
+      R(x0 - 1, cy + 1, 2, 2, night > 0.3 ? '#fff2b0' : warm);       // Nabe
       return;
     }
     case 'casino': {

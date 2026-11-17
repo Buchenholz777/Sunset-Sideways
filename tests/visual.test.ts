@@ -144,7 +144,10 @@ describe('Himmel und Kulisse', () => {
     expect(kinds(5500).has('tower')).toBe(true);
     expect(kinds(10500).has('show')).toBe(true);
     // Strip erst ab 20 km: Eiffelturm, Fontänensee und Casino-Fassaden
-    for (const t of ['eiffel', 'lake', 'casino'] as const) { expect(kinds(0).has(t)).toBe(false); expect(kinds(15000).has(t)).toBe(false); expect(kinds(20500).has(t)).toBe(true); }
+    // Wahrzeichen sind seltener (Eiffelturm alle ≈ 1,06 km im Seitenwechsel): beide Seiten über 2,2 km abtasten
+    const both = (z0: number) => new Set(Array.from({ length: 200 }, (_, i) => [decoType(i + Math.floor(z0 / 22), 1, z0 + i * 22), decoType(i + Math.floor(z0 / 22), -1, z0 + i * 22)]).flat());
+    expect(both(20500).has('eiffel')).toBe(true); expect(both(0).has('eiffel')).toBe(false); expect(both(15000).has('eiffel')).toBe(false);
+    for (const t of ['lake', 'casino'] as const) { expect(kinds(0).has(t)).toBe(false); expect(kinds(15000).has(t)).toBe(false); expect(kinds(20500).has(t)).toBe(true); }
   });
 });
 

@@ -4,7 +4,7 @@ import type { Road } from '../sim/road';
 import { KINDS, type Obstacle, type Pickup, type PickupType } from '../sim/world';
 
 import { CAM_BACK, DRAW, chaseSlope, depthEff, makeLayout, type Layout } from './projection';
-import { applyLight, decoType, drawDeco, drawMoon, drawMountains, drawPlane, drawPortal, drawSkyline, drawSky, drawSun, hash, lightT, mixHex, PORTAL_Z, stageAt } from './scenery';
+import { applyLight, decoType, decoX, drawDeco, LANDMARK_FAR, LANDMARK_SCALE, LANDMARK_TYPES, landmarksAhead, drawMoon, drawMountains, drawPlane, drawPortal, drawSkyline, drawSky, drawSun, hash, lightT, mixHex, PORTAL_Z, stageAt } from './scenery';
 import { CHUNK, drawPed, pedsInChunk } from './people';
 import { computeRows } from './rows';
 import { LOT, lotItems, type LotEnv } from './lots';
@@ -394,15 +394,15 @@ export class Renderer {
       const z = k * STEP;
       for (const side of [-1, 1]) {
         let type = decoType(k, side, z);
+        if (LANDMARK_TYPES.has(type)) continue;                       // Wahrzeichen: eigene Schleife mit Fernsicht (unten)
         if (this.lotsOn && !LANDMARKS.has(type)) continue;           // ersetzt durch Grundstücke (lots.ts); Wahrzeichen bleiben
         if (type === 'fountain' && !B.scenery.fountains) type = 'none';
         if (type === 'none' || (this.quality > 1 && k % 2)) continue;
         if (hash(k * 5 + (side > 0 ? 2 : 3)) < 0.18) type = 'none'; // Luft zwischen den Silhouetten
         if (type === 'none') continue;
         const hs = hash(k * 2 + (side > 0 ? 1 : 0));
-        const big = type === 'tower' || type === 'show' || type === 'wheel' || type === 'deco' || type === 'casino' || type === 'lake' || type === 'eiffel';
         const strip = type === 'casino' || type === 'lake' || type === 'eiffel' || stageAt(z) >= 4;
-        const x = side * (B.road.halfWidth + 6 + hs * 4 + (big ? 5 : 0));
+        const x = decoX(type, k, side);
         const p = this.proj(zc, x, z);
         if (p.d < 4 || p.k * 3 < 0.4) continue;
         items.push({
@@ -425,6 +425,27 @@ export class Renderer {
         if (p.d < 4) continue;
         items.push({ d: p.d + (side > 0 ? 0 : 0.01), draw: () => { ctx.globalAlpha = this.fade(p.d, p.d > 140 ? 0.6 : 1); this.lamp(p, side); ctx.globalAlpha = 1; } });
       }
+    }
+    // Wahrzeichen: eine Weltposition für Fern- und Nahsicht. Schon ab ≈ 1,7 km sichtbar (gedämpft), wachsen an derselben Stelle,
+    // werden von näheren Grundstücken und Kuppen verdeckt (Zeichenreihenfolge, occlusionY) und ziehen auf ihrer Straßenseite vorbei.
+    for (const m of landmarksAhead(zc + 4, zc + LANDMARK_FAR)) {
+      const p = this.proj(zc, m.x, m.z);
+      if (p.d < 4) continue;
+      const stripIn = m.type === 'eiffel' ? smoothStep((v.s - (B.scenery.keys[3] - 200)) / 900) * Math.min(1, B.scenery.neon) : 1;
+      const near = 1 - smoothStep((p.d - 380) / 700);                            // fern: in Dunst getaucht, nah: volle Farbe
+      const aIn = smoothStep((LANDMARK_FAR - p.d) / 250);                          // weiches Auftauchen am Rand der Sichtweite
+      items.push({
+        d: p.d, draw: () => {
+          ctx.save();
+          const edge = L.cx + (this.lat(m.z, zc) + m.side * (B.road.halfWidth + 1.6)) * p.k;
+          ctx.beginPath();
+          if (m.side > 0) ctx.rect(edge, 0, L.w, L.h); else ctx.rect(0, 0, edge, L.h);
+          ctx.clip();
+          ctx.globalAlpha = aIn * stripIn * (0.55 + 0.45 * near);
+          drawDeco(m.type, { ctx, sx: p.sx, sy: p.sy, sc: p.k * (LANDMARK_SCALE[m.type] ?? 1), side: m.side, hs: m.hs, k: m.k, clock: this.clock, reduced: this.reducedMotion, lod: this.quality > 0 || p.d > 500 });
+          ctx.restore();
+        },
+      });
     }
     // Grundstücke am Straßenrand (Wüstenrand, Motels, Art-déco-Boulevard) als räumliche Körper und Bodenflächen
     if (this.lotsOn) {
