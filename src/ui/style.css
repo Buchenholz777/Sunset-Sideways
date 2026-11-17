@@ -283,3 +283,6 @@ html.touch:not([data-phase="running"]) #hint, html.touch:not([data-phase="runnin
   html.touch #consent { left: auto; right: calc(var(--sar, 0px) + 10px); transform: none; width: min(46vw, 400px); bottom: calc(var(--sab, 0px) + 8px); }
   html.touch #screen-start { padding-bottom: calc(var(--sab) + 4px); }
 }
+
+/* „Weiche aus“ wandert mit dem ersten Hindernis (Position per Skript); ohne Position bleibt die feste Lage */
+#hint.at { transform: translate(-50%, -100%); }

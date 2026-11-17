@@ -160,6 +160,15 @@ export class Renderer {
     };
   }
 
+  /** Bildposition (CSS-Pixel) eines Streckenpunkts im letzten Bild, z. B. um Hinweise an ein Hindernis zu heften. */
+  screenAt(x: number, z: number, h = 0): { sx: number; sy: number } | null {
+    if (!this.L.w || !this.road) return null;
+    const p = this.projectWorld(this.lastZc, this.road.center(z) + x, z, h);
+    return { sx: p.sx, sy: p.sy };
+  }
+
+  get viewSize(): { w: number; h: number; hy: number } { return { w: this.L.w, h: this.L.h, hy: this.L.hy }; }
+
   private lat(z: number, zc: number): number { return this.road.center(z) - this.camXw - this.camHead * (z - zc); }
 
   private fade(d: number, extra = 1): number {

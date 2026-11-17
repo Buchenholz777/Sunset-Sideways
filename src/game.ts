@@ -534,7 +534,21 @@ export class Game {
     }
     if (this.tutorialDone) { if (!this.el.hint.hidden) this.el.hint.hidden = true; return; }
     const inLane = Math.abs(sim.q - o.x) < 2.6;
-    this.el.hint.hidden = !(inLane && !o.hit && o.z > sim.s - 1);
+    const show = inLane && !o.hit && o.z > sim.s - 1;
+    this.el.hint.hidden = !show;
+    if (show) this.placeHint(o.x, o.z, o.kind === 'truck' ? 4.2 : 2.4);
+  }
+
+  /** Der Hinweis sitzt knapp über dem Hindernis und wandert mit ihm nach unten: nah am Gefahrenort, ohne es zu verdecken (Grenzen: unter dem HUD, über dem Wagen). */
+  private placeHint(x: number, z: number, h: number): void {
+    const p = this.renderer.screenAt(x, z, h), v = this.renderer.viewSize;
+    if (!p || !v.w) return;
+    const st = this.el.hint.style;
+    const k = this.canvas.clientWidth / v.w;                          // Zeichenfläche → CSS-Pixel (die Zeichenauflösung kann kleiner sein)
+    const top = Math.min(v.h * 0.56, Math.max(v.hy + 26 / k, p.sy - 16 / k));
+    st.left = Math.round(Math.min(this.canvas.clientWidth - 110, Math.max(110, p.sx * k))) + 'px';
+    st.top = Math.round(top * k) + 'px';
+    this.el.hint.classList.add('at');
   }
 
   private pickupKey(type: string, id: number, z: number): string { return type === 'glide' ? `glide@${Math.round(z)}` : `${type}#${id}`; }

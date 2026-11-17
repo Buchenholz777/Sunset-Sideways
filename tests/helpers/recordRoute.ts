@@ -14,7 +14,7 @@ const r2 = (x: number): number => Math.round(x * 100) / 100;
 export function recordSprintRoute(extra = 300): RouteEntry[] {
   applyConfig(SPRINT_CONFIG, false);
   try {
-    const g = new Generator(SPRINT_SEED, { startS: 0 });
+    const g = new Generator(SPRINT_SEED, { startS: 0, classic: true });
     const w: GenWorld = { s: 0, t: 0, obstacles: [], pickups: [], nextId: 1 };
     const out: RouteEntry[] = [];
     const seenO = new Set<number>(), seenP = new Set<number>();

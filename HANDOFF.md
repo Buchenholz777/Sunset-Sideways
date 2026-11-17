@@ -89,3 +89,8 @@ Echtes Smartphone, Firefox/WebKit, Handspiel (Gefühl, Klang), Bildrate auf Ger�
 - Fußbereich (Spielhilfe + Rechtslinks) liegt auf dem Smartphone im Fluss unter der Startgruppe; die Statistikabfrage meldet ihre Höhe als `--consent-h` und wird nur im Startmenü gezeigt (ohne Entscheidung zu speichern). „Weiche aus“ und Toast nur in der Fahrt.
 - Höhenänderung allein (Browserleiste) lässt einen laufenden Daumenzug bestehen; Breitenänderung (Rotation) beendet ihn (`resize()` in `src/game.ts`).
 - QA: `?qa=1&consent=1` zeigt das Banner auch im QA-Lauf. Abnahme: `node scripts/phone_check.mjs <URL>` (Touch-Emulation, echte Taps, Hit-Tests, PC-Abgrenzung), `scripts/phone_shots.mjs` (Bilder), `scripts/desktop_compare.mjs` (Layout-Vergleich zweier Builds). `scripts/input.mjs` ist veraltet.
+
+## Begegnungen und erster Lauf (2026-11-17)
+- Generator (`src/gen/generator.ts`): neue Muster `truck` (langsamer Lkw), `works` (zwei versetzte Absperrungsreihen, 1,35× Reihenabstand, 0,9 s Erholung danach) und `detour` (Hindernis + Pickup in anderer Spur, wenn ein Power-up fällig ist). `classic: true` schaltet sie ab (feste Sprint-Aufnahme in `tests/helpers/recordRoute.ts`). Golden neu erzeugt: die ersten ≈ 15 s (erste Begegnung, Flugangebot) sind unverändert.
+- „Weiche aus“ sitzt über dem ersten Hindernis (`placeHint` in `src/game.ts`, `Renderer.screenAt`).
+- Abnahme: `tests/encounters.test.ts`, `scripts/first_run.mjs` (echte Eingaben), `scripts/soak_check.mjs` (Pausen-Auslöser), `scripts/world_shots.mjs`.

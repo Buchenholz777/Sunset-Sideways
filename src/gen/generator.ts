@@ -8,7 +8,13 @@ export interface GenWorld {
   s: number; t: number; obstacles: Obstacle[]; pickups: Pickup[]; nextId: number;
 }
 
-type Pattern = 'first' | 'single' | 'wall2' | 'stagger' | 'slalom' | 'weave' | 'chain';
+/**
+ * Begegnungen mit eigener Entscheidung:
+ * - truck: langsamer, breiter Lkw in einer Spur – überholen, Fluchtweg früh lesbar.
+ * - works: versetzte Baustelle, zwei Absperrungsreihen (zwei Entscheidungen), danach Zeit zum Neuausrichten.
+ * - detour: einfaches Hindernis plus Pickup in einer anderen Spur – der Umweg lohnt, ist aber freiwillig.
+ */
+export type Pattern = 'first' | 'single' | 'wall2' | 'stagger' | 'slalom' | 'weave' | 'chain' | 'truck' | 'works' | 'detour';
 type Group = 'fast' | 'mid' | 'slow';
 /** Tempoklasse einer Spur: statischer Block oder Verkehr mit festem Tempo (Lkw nur in der langsamen Klasse). */
 type LaneClass = 'static' | Group;
@@ -26,7 +32,7 @@ interface Candidate { objs: PlannedObj[]; gates: Gate[]; rows: number; endA: num
 
 export interface GenStat { pattern: Pattern; mult: number; fallback: boolean; anchor: number; gates: Gate[] }
 
-export interface GenOptions { record?: boolean; startS?: number }
+export interface GenOptions { record?: boolean; startS?: number; /** Nur die ursprünglichen Muster (feste Sprint-Aufnahme). */ classic?: boolean }
 
 export class Generator {
   private rng: () => number;
@@ -39,6 +45,8 @@ export class Generator {
   private queue: PickupType[] = [];
   private lastType: PickupType | null = null;
   private pickupCount = 0;
+  private curPat: Pattern = 'single';
+  private curLane = -1;
   /** Das erste Angebot jedes Versuchs ist Fliegen (ab 550 m nach dem ersten Ausweichmanöver). */
   private firstDone = false;
   readonly log: GenStat[] = [];
@@ -94,6 +102,8 @@ export class Generator {
   private pickPattern(t: number, km: number): Pattern {
     const f = (x: number) => Math.max(0, Math.min(1, x));
     const opts: [Pattern, number][] = [['single', 45 * (1 - 0.7 * f(km / 8))], ['stagger', 40]];
+    if (!this.opts.classic && t >= 6 && W('truck') > 0 && B.traffic.slow > 0) opts.push(['truck', 34]);
+    if (!this.opts.classic && t >= 14 && statics().length) opts.push(['works', 28]);
     if (t >= 12) opts.push(['wall2', 25]);
     if (t >= 20) opts.push(['slalom', 25 + 25 * f(km / 4)]);
     if (t >= 35) opts.push(['weave', 20 + 45 * f(km / 6)]);
@@ -110,7 +120,8 @@ export class Generator {
     const c = 3 - a - b;
     switch (p) {
       case 'first': return [[1]];                       // Mitte blockiert: links und rechts sind frei
-      case 'single': return [[a]];
+      case 'single': case 'truck': case 'detour': return [[a]];
+      case 'works': return [[a], [b]];
       case 'wall2': return [[b, c]];
       case 'stagger': return [[a], [b]];
       case 'slalom': {
@@ -155,6 +166,8 @@ export class Generator {
   private pickClass(pat: Pattern): LaneClass {
     const st = statics();
     if (pat === 'first') return st.length ? 'static' : (this.pickGroup() ?? 'static');
+    if (pat === 'truck' && W('truck') > 0) return 'slow';
+    if (pat === 'works' && st.length) return 'static';
     const wantStatic = this.rng() >= 0.65;
     if (wantStatic && st.length) return 'static';
     return this.pickGroup() ?? 'static';
@@ -162,7 +175,7 @@ export class Generator {
 
   private build(w: GenWorld, pat: Pattern, anchor: number): Candidate | null {
     const p = this.plan(w, anchor);
-    const rowGap = (B.gen.rowBase + B.gen.rowGain * Math.exp(-p.tArr / B.gen.rowTau)) * p.vNom * (pat === 'slalom' ? 0.95 : 1);
+    const rowGap = (B.gen.rowBase + B.gen.rowGain * Math.exp(-p.tArr / B.gen.rowTau)) * p.vNom * (pat === 'slalom' ? 0.95 : pat === 'works' ? 1.35 : 1);
     const rows = this.rowsFor(pat);
     const cls = this.laneClasses(w);
     const L = B.player.len;
@@ -176,11 +189,12 @@ export class Generator {
         used.add(lane);
         if (cls[lane] === null) cls[lane] = this.pickClass(pat);
         const lc = cls[lane] as LaneClass;
+        if ((pat === 'works' && lc !== 'static') || (pat === 'truck' && lc !== 'slow')) { bad = true; return; }   // reine Begegnung: sonst anderes Muster wählen
         const st = statics();
         const kinds = lc === 'static' ? (st.length ? st : (['baken'] as ObjKind[])) : GROUP_KINDS[lc];
         const picked = lc === 'static' ? kinds[this.int(kinds.length)] : this.pickKind(kinds);
         // Erste Begegnung (Mitte blockiert): immer die breite Absperrung – sie ist im Bild weit früher erkennbar als eine schmale Bake (0,9 m)
-        const kind = pat === 'first' && lc === 'static' && kinds.includes('barrier') ? 'barrier' : picked;
+        const kind = (pat === 'first' || pat === 'works') && lc === 'static' && kinds.includes('barrier') ? 'barrier' : pat === 'truck' && lc === 'slow' && kinds.includes('truck') ? 'truck' : picked;
         const def = KINDS[kind];
         const x = laneX(lane);
         const half = def.w / 2 + B.player.width / 2 + B.gen.blockMargin;
@@ -219,6 +233,8 @@ export class Generator {
       const tArr = this.plan(w, base + gap0).tArr;
       const km = (base + gap0) / 1000;
       const pats = [this.pickPattern(tArr, km), this.pickPattern(tArr, km), 'single' as Pattern];
+      // Ist ein Power-up fällig, wird die Begegnung öfter zum freiwilligen Umweg (Hindernis plus Pickup in einer anderen Spur)
+      if (!this.opts.classic && this.firstDone && B.pickups.freq > 0 && tArr >= this.nextPickupT && this.rng() < 0.55 && this.queue[0] !== 'magnet') pats[0] = 'detour';
       // Ist das Magnetfeld an der Reihe, braucht die Begegnung mehr Vorlauf (Magnet-Pickup und Folge-Pickup davor)
       if (this.firstDone && this.queue.length === 0) this.refillQueue();
       const mults = this.firstDone && tArr >= this.nextPickupT && this.queue[0] === 'magnet' ? [1.9, 2.4, 3.5] : B.gen.mults;
@@ -246,11 +262,12 @@ export class Generator {
     for (const o of c.objs) {
       w.obstacles.push({ id: w.nextId++, kind: o.kind, x: laneX(o.lane), z: o.z, vz: o.vz, hit: false, knockT: 0, knockVx: 0 });
     }
+    this.curPat = pat; this.curLane = c.objs[0]?.lane ?? -1;
     const pk = this.placePickup(w, c, anchor);
     if (pk) r = pk;
     this.reach = r.reach;
     this.sEnd = r.sEnd;
-    this.lastEnd = c.endA;
+    this.lastEnd = c.endA + (pat === 'works' ? 0.9 * this.plan(w, c.endA).vNom : 0);     // nach der Baustelle: Zeit zum Neuausrichten
     this.encounters++;
     if (this.opts.record) this.log.push({ pattern: pat, mult, fallback: mult >= 5, anchor, gates: c.gates });
   }
@@ -319,8 +336,9 @@ export class Generator {
     const order: PickupType[] = this.firstDone ? this.queue : ['glide'];
     for (let qi = 0; qi < order.length; qi++) {
       const type = order[qi];
-      const lanes = [0, 1, 2];
+      let lanes = [0, 1, 2];
       for (let i = lanes.length - 1; i > 0; i--) { const j = this.int(i + 1); [lanes[i], lanes[j]] = [lanes[j], lanes[i]]; }
+      if (this.curPat === 'detour') lanes = lanes.filter((l) => l !== this.curLane);      // der Umweg liegt neben dem Hindernis, nicht in dessen Spur
       for (const lane of lanes) {
         let zp = first - 1.3 * p.vNom;
         let musts: Gate[] = [];
