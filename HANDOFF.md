@@ -94,3 +94,7 @@ Echtes Smartphone, Firefox/WebKit, Handspiel (Gefühl, Klang), Bildrate auf Ger�
 - Generator (`src/gen/generator.ts`): neue Muster `truck` (langsamer Lkw), `works` (zwei versetzte Absperrungsreihen, 1,35× Reihenabstand, 0,9 s Erholung danach) und `detour` (Hindernis + Pickup in anderer Spur, wenn ein Power-up fällig ist). `classic: true` schaltet sie ab (feste Sprint-Aufnahme in `tests/helpers/recordRoute.ts`). Golden neu erzeugt: die ersten ≈ 15 s (erste Begegnung, Flugangebot) sind unverändert.
 - „Weiche aus“ sitzt über dem ersten Hindernis (`placeHint` in `src/game.ts`, `Renderer.screenAt`).
 - Abnahme: `tests/encounters.test.ts`, `scripts/first_run.mjs` (echte Eingaben), `scripts/soak_check.mjs` (Pausen-Auslöser), `scripts/world_shots.mjs`.
+
+## Effekte und Welt (2026-11-17, zweiter Teil)
+- Flug: gestrichelte Landespur (gelb) unter dem Wagen in den letzten ≈ 1,9 s des Flugs (`Renderer.player`); Schild fängt Treffer mit Stoßring am Hindernis (`shieldImpact`) und Toast „Abgefangen!“; Toasts „Normales Tempo“ (Ende Phantom-Turbo) und „Schild abgelaufen“.
+- Landmarken (`decoType` in `src/render/scenery.ts`): Riesenrad nur in Stufen 2–3 (alle ≈ 1,3 km, Seitenwechsel), Eiffelturm am Strip (alle ≈ 1,06 km, Seitenwechsel); vorher je Seite alle ≈ 680 bzw. 594 m. Test: `tests/landmarks.test.ts`. Bilder: `scripts/fx_shots.mjs`, `scripts/world_shots.mjs`.

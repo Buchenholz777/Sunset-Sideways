@@ -97,6 +97,14 @@ export class Renderer {
   /** Projektion der Wagenpunkte des letzten Bildes (Modellkoordinaten → Bild); Düsenstrahl und Wagen teilen sie und bleiben so synchron. */
   private carPt: ((x: number, y: number, z: number) => [number, number]) | null = null;
   private carZs = 0.6;
+  /** Stoßring an der Stelle, an der das Impulsschild einen Treffer abgefangen hat (Bildposition, Fortschritt 0…1). */
+  private impact: { sx: number; sy: number; t: number } | null = null;
+
+  /** Impulsschild hat einen Treffer abgefangen: sichtbarer Stoßring am Hindernis. */
+  shieldImpact(x: number, z: number): void {
+    const p = this.screenAt(x, z, 0.8);
+    if (p) this.impact = { sx: p.sx, sy: p.sy, t: 0 };
+  }
 
   burst(kind: BurstKind): void {
     if (kind === 'land') this.landRing = 1;
@@ -686,6 +694,22 @@ export class Renderer {
       ctx.save(); ctx.globalAlpha = 0.65 * this.landRing; ctx.strokeStyle = '#bff3dc'; ctx.lineWidth = Math.max(1, 0.1 * k);
       ctx.beginPath(); ctx.ellipse(sx, L.gy - 0.05 * k, (1.3 + 3.4 * t) * k, (0.2 + 0.5 * t) * k, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
       this.landRing = Math.max(0, this.landRing - this.dtLast * (this.reducedMotion ? 6 : 2.4));
+    }
+    if (v.glideLeft > 0 && v.glideLeft < B.glide.down + 0.9 && v.running) {
+      // Landespur: Rechteck am Boden unter dem Wagen – blinkt in der letzten Sekunde vor dem Aufsetzen und zeigt, in welcher Spur er landet
+      const hw = 1.05, hl = 2.1;
+      const q = [[-hw, -hl], [hw, -hl], [hw, hl], [-hw, hl]].map(([dx, dz]) => this.projectWorld(zc, this.carBx + dx + this.camHead * dz, this.carBz + dz, 0));
+      const pulse = this.reducedMotion ? 0.85 : 0.6 + 0.4 * Math.sin(this.clock * 14);
+      ctx.save(); ctx.globalAlpha = pulse; ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = Math.max(1.5, 0.07 * k); ctx.setLineDash([Math.max(3, 0.35 * k), Math.max(2, 0.2 * k)]);
+      ctx.beginPath(); q.forEach((p, i) => { if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy); }); ctx.closePath(); ctx.stroke(); ctx.restore();
+    }
+    if (this.impact) {
+      const im = this.impact; const t = im.t;
+      ctx.save(); ctx.globalAlpha = 0.85 * (1 - t); ctx.strokeStyle = PAL.mint; ctx.lineWidth = Math.max(2, 0.12 * k);
+      const r = (0.5 + (this.reducedMotion ? 0.6 : 2.4 * t)) * k;
+      ctx.beginPath(); ctx.ellipse(im.sx, im.sy, r, r * 0.6, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      im.t += this.dtLast / (this.reducedMotion ? 0.25 : 0.45);
+      if (im.t >= 1) this.impact = null;
     }
     if (v.shield || this.arcFlash > 0) {
       const base = v.shield ? (v.shieldFrac < 0.25 ? (Math.floor(this.clock * 6) % 2 ? 0.45 : 0.95) : 0.9) : 0;

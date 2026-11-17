@@ -407,15 +407,21 @@ export class Game {
     if (this.qaNoPickups) sim.pickups = [];
     sim.step(dt, this.input.snapshot());
     if (sim.events.length) {
+      let shieldHit = false;
       for (const ev of sim.events) {
-        if (ev.type === 'shieldHit') { this.renderer.burst('shieldHit'); this.sound.sfx('shieldHit'); this.toast('Schild verbraucht'); }
+        if (ev.type === 'shieldHit') { this.renderer.burst('shieldHit'); this.renderer.shieldImpact(ev.x, ev.z); this.sound.sfx('shieldHit'); this.toast('Abgefangen!'); shieldHit = true; }
         else if (ev.type === 'pickup') { this.runPickups++; this.tele.send('taken', this.runId, this.pickupKey(ev.pickup, ev.id, ev.z), { type: ev.pickup, s: Math.floor(sim.s) }); this.qaPickupEvents++; this.renderer.burst(ev.pickup); this.sound.sfx(ev.pickup); if (ev.pickup !== 'glide') this.toast(PICKUP_LABEL[ev.pickup as PickupKey] ?? ev.pickup, 1000); }
         else if (ev.type === 'cleared') { this.renderer.burst('clear'); }
         else if (ev.type === 'blitz') this.renderer.laneFlash(ev.x, ev.z);
         else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast('Fliegen'); if (!this.runFlew) { this.runFlew = true; this.tele.send('fly', this.runId); } }
         else if (ev.type === 'glideEnd') { this.renderer.burst('land'); this.sound.sfx('land'); this.sound.setFlight(false); }
         else if (ev.type === 'magnetPull') this.sound.sfx('magnet');
-        else if (ev.type === 'effectEnd') this.sound.sfx('effectEnd');
+        else if (ev.type === 'effectEnd') {
+          this.sound.sfx('effectEnd');
+          // Ende eines Effekts sichtbar machen (der Schild-Treffer meldet sich schon selbst)
+          if (ev.effect === 'boost') this.toast('Normales Tempo', 900);
+          else if (ev.effect === 'shield' && !shieldHit) this.toast('Schild abgelaufen', 900);
+        }
       }
       sim.events.length = 0;
     }

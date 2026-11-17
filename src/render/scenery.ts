@@ -319,10 +319,11 @@ export function decoType(k: number, side: number, z: number): DecoType {
   const h = hash(k * 7 + side * 3 + 1);
   if (stage > 0 && hash(k * 11 + side) < 0.28) stage -= 1;
   const st = stageAt(z);
-  if (st >= 2 && k % 31 === (side > 0 ? 7 : 19)) return 'wheel';
+  // Je Viertel eine Hauptlandmarke, abwechselnd rechts und links und seltener als zuvor (vorher alle ≈ 340 m bzw. 300 m): Riesenrad in Hotel-/Unterhaltungsviertel, Eiffelturm am Strip
+  if (st >= 2 && st < 4 && k % 60 === (side > 0 ? 7 : 37)) return 'wheel';
   if (st >= 4) {
     // Strip: Eiffelturm, Fontänensee, mehrstöckige Casino-/Hotelfassaden mit bunten Leuchtdächern
-    if (k % 27 === (side > 0 ? 5 : 20)) return 'eiffel';
+    if (k % 48 === (side > 0 ? 5 : 29)) return 'eiffel';
     if (k % 9 === (side > 0 ? 2 : 6)) return 'lake';
     return h < 0.5 ? 'casino' : h < 0.68 ? 'show' : h < 0.82 ? 'tower' : h < 0.92 ? 'canopy' : 'palm';
   }
