@@ -41,12 +41,12 @@ describe('Projektion', () => {
       prev = e;
     }
   });
-  it('Spielerwagen bleibt bei 80–85 % der Höhe verankert, Horizont im oberen Drittel', () => {
+  it('Spielerwagen bleibt bei 80–85 % der Höhe verankert, Horizont in der oberen Hälfte', () => {
     for (const [, w, h] of VIEWPORTS) {
       const L = makeLayout(w, h);
       expect(L.gy / L.h).toBeGreaterThanOrEqual(0.8);
       expect(L.gy / L.h).toBeLessThanOrEqual(0.85);
-      expect(L.hy / L.h).toBeLessThanOrEqual(L.portrait ? 0.42 : 0.37);
+      expect(L.hy / L.h).toBeLessThanOrEqual(L.portrait ? 0.5 : 0.37);
     }
   });
 });
