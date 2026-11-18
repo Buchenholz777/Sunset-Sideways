@@ -10,7 +10,7 @@ import { KINDS, type Obstacle } from './world';
  * des Schritts, mit Zeit bis zum Zusammenstoß aus Annäherungsgeschwindigkeit (framerate-unabhängig, kein Bildzähler).
  */
 export type StyleEvent =
-  | { type: 'nearMiss'; pts: number; mult: number; combo: number; rush: boolean; slow: boolean; x: number; z: number; charge: number }
+  | { type: 'nearMiss'; pts: number; mult: number; combo: number; rush: boolean; slow: boolean; x: number; z: number; charge: number; perfect: boolean }
   | { type: 'comboLost'; reason: 'time' | 'hit' }
   | { type: 'rushStart' }
   | { type: 'rushEnd'; reason: 'time' | 'hit' };
@@ -42,6 +42,12 @@ export class StyleState {
   rushActive = false;
   rushRemaining = 0;
   rushCooldown = 0;
+  /** Neon Rush 2.0: vergangene Rush-Zeit (s), Rush-Chain (eingesammelte Neon Gates dieses Rushs), Gate-Punkte insgesamt, Tore und Slashes insgesamt. */
+  rushElapsed = 0;
+  rushChain = 0;
+  gatePoints = 0;
+  gatesTaken = 0;
+  slashCount = 0;
   private tracks = new Map<number, Track>();
   private tick = 0;
   events: StyleEvent[] = [];
@@ -60,14 +66,23 @@ export class StyleState {
   /** Treffer (Schild fängt ab oder Absturz): Combo und Rush enden, Rush-Energie wird 0. */
   onHit(): void {
     if (this.comboCount > 0) { this.comboCount = 0; this.events.push({ type: 'comboLost', reason: 'hit' }); }
-    if (this.rushActive) { this.rushActive = false; this.rushRemaining = 0; this.events.push({ type: 'rushEnd', reason: 'hit' }); }
+    if (this.rushActive) { this.rushActive = false; this.rushRemaining = 0; this.rushChain = 0; this.events.push({ type: 'rushEnd', reason: 'hit' }); }
     this.rushCharge = 0;
     this.rushCooldown = 0;
     this.tracks.clear();
   }
 
+  /** Neon Gate eingesammelt: Rush-Chain +1, Bonus aus gateBonuses (nicht mit der Combo multipliziert). */
+  gateTaken(): { n: number; pts: number } {
+    const bon = B.style.rush.gateBonuses;
+    const n = Math.min(this.rushChain + 1, bon.length);
+    const pts = bon[n - 1];
+    this.rushChain = n; this.gatesTaken++; this.gatePoints += pts; this.styleScore += pts;
+    return { n, pts };
+  }
+
   private startRush(): void {
-    this.rushActive = true; this.rushRemaining = B.style.rush.duration; this.rushCount++;
+    this.rushActive = true; this.rushRemaining = B.style.rush.duration; this.rushElapsed = 0; this.rushChain = 0; this.rushCount++;
     this.events.push({ type: 'rushStart' });
   }
 
@@ -75,14 +90,15 @@ export class StyleState {
     const R = B.style.rush;
     // Neon-Rush-Zeit und Abklingzeit
     if (this.rushActive) {
-      this.rushRemaining -= dt;
+      this.rushRemaining -= dt; this.rushElapsed += dt;
+      this.lastNearMissT += dt;                       // die Combo läuft während des Rushs nicht ab
       if (this.rushRemaining <= 0) {
-        this.rushActive = false; this.rushRemaining = 0; this.rushCharge = 0; this.rushCooldown = R.cooldown;
+        this.rushActive = false; this.rushRemaining = 0; this.rushCharge = 0; this.rushCooldown = R.cooldown; this.rushChain = 0;
         this.events.push({ type: 'rushEnd', reason: 'time' });
       }
     } else if (this.rushCooldown > 0) {
       this.rushCooldown = Math.max(0, this.rushCooldown - dt);
-      if (this.rushCooldown === 0 && this.rushCharge >= 100) this.startRush();      // während der Abklingzeit geladen: jetzt aktivieren
+      if (this.rushCooldown === 0 && this.rushCharge >= R.maxCharge) this.startRush();      // während der Abklingzeit geladen: jetzt aktivieren
     }
     // Combo-Ablauf (Magnet verlängert das Fenster, bei Ablauf gilt wieder die normale Regel)
     if (this.comboCount > 0 && c.t - this.lastNearMissT > this.comboWindow(c.magnetActive)) {
@@ -118,14 +134,14 @@ export class StyleState {
       if (passed) {
         this.tracks.delete(o.id);
         const gap = Number.isFinite(tr.minGap) ? tr.minGap : lat - half;
-        if (tr.shifted && !onCourse && gap <= N.maxGap) this.award(c, o);
+        if (tr.shifted && !onCourse && gap <= N.maxGap) this.award(c, o, gap <= B.style.rush.perfectGap);
       }
     }
     // Hindernisse, die nicht mehr existieren (entfernt, außer Reichweite): Verfolgung beenden
     if (this.tracks.size) for (const [id, tr] of this.tracks) if (tr.tick !== tick) this.tracks.delete(id);
   }
 
-  private award(c: StyleCtx, o: Obstacle): void {
+  private award(c: StyleCtx, o: Obstacle, perfect: boolean): void {
     const S = B.style;
     this.comboCount = this.comboCount > 0 && c.t - this.lastNearMissT <= this.comboWindow(c.magnetActive) ? this.comboCount + 1 : 1;
     this.lastNearMissT = c.t;
@@ -134,9 +150,9 @@ export class StyleState {
     const mult = this.multiplier;
     const pts = StyleState.points(mult, this.rushActive, c.slowActive);
     this.styleScore += pts;
-    // Rush-Energie: nicht während Neon Rush; Zeitblase lädt nur halb
-    if (!this.rushActive) this.rushCharge = Math.min(100, this.rushCharge + (c.slowActive ? S.rush.chargeSlow : S.rush.chargePerMiss));
-    this.events.push({ type: 'nearMiss', pts, mult, combo: this.comboCount, rush: this.rushActive, slow: c.slowActive, x: o.x, z: o.z, charge: this.rushCharge });
-    if (!this.rushActive && this.rushCharge >= 100 && this.rushCooldown <= 0) this.startRush();
+    // Rush-Energie: nicht während Neon Rush; besonders knappe Near Misses laden mehr, die Zeitblase nur anteilig
+    if (!this.rushActive) this.rushCharge = Math.min(S.rush.maxCharge, this.rushCharge + (perfect ? S.rush.chargePerfect : S.rush.chargePerMiss) * (c.slowActive ? S.rush.chargeSlowK : 1));
+    this.events.push({ type: 'nearMiss', pts, mult, combo: this.comboCount, rush: this.rushActive, slow: c.slowActive, x: o.x, z: o.z, charge: this.rushCharge, perfect });
+    if (!this.rushActive && this.rushCharge >= S.rush.maxCharge && this.rushCooldown <= 0) this.startRush();
   }
 }

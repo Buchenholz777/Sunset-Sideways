@@ -46,6 +46,7 @@
 <body>
   <div id="app">
     <canvas id="stage" aria-label="Spielfläche"></canvas>
+    <canvas id="stage-fx" aria-hidden="true"></canvas>
 
     <div id="hud" hidden>
       <div class="hud-left">
@@ -54,7 +55,7 @@
         <div id="hud-style" role="group" aria-label="Stilwertung">
           <div class="st-score"><span class="lbl">Stil</span><span id="hud-style-score" class="val">0</span></div>
           <div id="hud-combo" hidden><span id="hud-combo-x" class="cx">x1</span><span class="cap">Combo</span><i class="bar"><b id="hud-combo-bar"></b></i></div>
-          <div id="hud-rush"><span id="hud-rush-lbl" class="rl">Neon Rush</span><i class="bar"><b id="hud-rush-bar"></b></i><span id="hud-rush-txt" class="rt">0 %</span></div>
+          <div id="hud-rush"><span id="hud-rush-lbl" class="rl">Neon Rush</span><i class="bar"><b id="hud-rush-bar"></b></i><span id="hud-rush-txt" class="rt">0 %</span><span id="hud-rush-chain" class="rc" aria-live="off"></span></div>
         </div>
         <ul id="hud-effects" aria-label="Aktive Effekte">
                     <li id="fx-shield" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 5.5h5v3.2L8 11 5.5 8.7z" fill="currentColor"/></svg><span class="fx-name">Impulsschild</span><span class="fx-time"></span></li>

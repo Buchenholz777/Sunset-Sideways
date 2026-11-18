@@ -36,6 +36,8 @@ export interface Obstacle {
   /** Vom Impulsschild weggestoßen. */
   impulse?: boolean;
 }
+/** Neon Gate (nur während Neon Rush): Spurmitte x, Streckenposition z; eingesammelt oder verpasst, sobald der Wagen z erreicht. */
+export interface Gate { id: number; n: number; x: number; z: number; taken: boolean; missed: boolean; age: number }
 export interface Pickup { id: number; type: PickupType; x: number; z: number; taken: boolean; /** vom Magnetfeld angezogen */ pull?: boolean }
 
 export const laneX = (i: number): number => (i - 1) * B.road.laneWidth;

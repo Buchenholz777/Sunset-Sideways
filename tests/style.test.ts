@@ -37,7 +37,7 @@ describe('Gruppe A – Near Miss', () => {
     expect(st.nearMissCount).toBe(1);
     expect(st.styleScore).toBe(100);
     expect(st.comboCount).toBe(1);
-    expect(st.rushCharge).toBe(20);
+    expect(st.rushCharge).toBe(B.style.rush.chargePerMiss);
     expect(find(st, 'nearMiss')[0].pts).toBe(100);
   });
   it('2. frühes, ungefährliches Ausweichen (3,4 s vor dem Zusammenstoß) erzeugt keine Punkte', () => {
@@ -96,23 +96,23 @@ describe('Gruppe A – Near Miss', () => {
     dodge(st, 0, { toQ: 8 });
     expect(st.nearMissCount).toBe(0);
   });
-  it('6. Neon Rush verdoppelt die Near-Miss-Punkte exakt einmal (Combo x3 → 600)', () => {
+  it('6. Neon Rush 2.0 verdoppelt die Near-Miss-Punkte nicht mehr (Combo x3 → 300, Faktor 1)', () => {
     const st = new StyleState();
     st.rushActive = true; st.rushRemaining = 5; st.comboCount = 2; st.lastNearMissT = 0;
     dodge(st, 0.5);
     const e = find(st, 'nearMiss')[0];
     expect(e.mult).toBe(3);
-    expect(e.pts).toBe(600);
+    expect(e.pts).toBe(300);
     expect(st.rushCharge).toBe(0);                                  // während Rush keine neue Energie
   });
-  it('7. Zeitblase halbiert die Near-Miss-Punkte (50) und lädt Neon Rush nur um 10 %', () => {
+  it('7. Zeitblase halbiert die Near-Miss-Punkte (50) und lädt Neon Rush nur anteilig (7 statt 14 %)', () => {
     const st = new StyleState();
     dodge(st, 0, { slow: true });
     const e = find(st, 'nearMiss')[0];
     expect(e.pts).toBe(50);
-    expect(st.rushCharge).toBe(10);
+    expect(st.rushCharge).toBe(B.style.rush.chargePerMiss * B.style.rush.chargeSlowK);
     expect(st.comboCount).toBe(1);                                    // Combo funktioniert weiter
-    expect(StyleState.points(3, true, true)).toBe(300);               // Combo x3 × Rush 2 × Zeitblase 0,5: jeder Faktor genau einmal
+    expect(StyleState.points(3, true, true)).toBe(150);               // Combo x3 × Rush 1 × Zeitblase 0,5: jeder Faktor genau einmal
   });
   it('FPS-unabhängig: 30, 60 und 120 FPS vergeben dieselben Punkte', () => {
     const res = [1 / 30, 1 / 60, 1 / 120, 1 / 144].map((dt) => { const st = new StyleState(); dodge(st, 0, { dt }); dodge(st, 2, { dt }); return [st.nearMissCount, st.styleScore, st.comboCount]; });
@@ -125,13 +125,13 @@ describe('Gruppe B – Combo', () => {
     const st = new StyleState();
     let t = 0; const pts: number[] = [];
     for (let i = 0; i < 7; i++) { t = dodge(st, t).t; pts.push(find(st, 'nearMiss').at(-1)!.pts); }
-    // Der 5. Near Miss lädt Neon Rush voll; der 6. fällt in die Rush-Zeit (×2), der 7. liegt wieder außerhalb
-    expect(pts).toEqual([100, 200, 300, 400, 500, 1000, 500]);
+    // 7 normale Near Misses laden 98 %: kein Rush
+    expect(pts).toEqual([100, 200, 300, 400, 500, 500, 500]);
     expect(find(st, 'nearMiss').map((e) => e.mult)).toEqual([1, 2, 3, 4, 5, 5, 5]);   // Multiplikator bei x5 gedeckelt
     expect(st.comboCount).toBe(7);                                      // interner Zähler wächst weiter
     expect(st.multiplier).toBe(5);
     expect(st.maxCombo).toBe(7);
-    expect(st.styleScore).toBe(100 + 200 + 300 + 400 + 500 + 1000 + 500);
+    expect(st.styleScore).toBe(100 + 200 + 300 + 400 + 500 + 500 + 500);
   });
   it('11. Combo fällt nach 4 s ohne neuen Near Miss zurück (aktive Zeit), danach beginnt sie wieder bei x1', () => {
     const st = new StyleState();
@@ -168,47 +168,47 @@ describe('Gruppe B – Combo', () => {
 
 describe('Gruppe C – Neon Rush', () => {
   const tick = (st: StyleState, t: number, dt: number, invulnerable = false): void => st.update({ t, s: 1e4, q: 0, speed: 58, ts: 1, obstacles: [], slowActive: false, magnetActive: false, invulnerable, driven: false }, dt);
-  it('14–15. Energie steigt je Near Miss um 20 Punkte; bei 100 % startet Neon Rush automatisch (ohne Tasteneingabe)', () => {
+  it('14–15. Energie steigt je Near Miss um 14 Punkte (4 Near Misses lösen keinen Rush aus); beim 8. startet Neon Rush automatisch (ohne Tasteneingabe)', () => {
     const st = new StyleState();
     let t = 0; const charges: number[] = [];
-    for (let i = 0; i < 5; i++) { t = dodge(st, t).t; charges.push(st.rushCharge); }
-    expect(charges).toEqual([20, 40, 60, 80, 100]);
+    for (let i = 0; i < 8; i++) { t = dodge(st, t).t; charges.push(st.rushCharge); if (i === 3) expect(st.rushActive).toBe(false); }
+    expect(charges).toEqual([14, 28, 42, 56, 70, 84, 98, 100]);
     expect(st.rushActive).toBe(true);
     expect(st.rushCount).toBe(1);
     expect(find(st, 'rushStart')).toHaveLength(1);
-    // Der auslösende Near Miss (5. = 500) wird vor der Aktivierung gewertet, ab dem nächsten gilt Rush
-    expect(st.styleScore).toBe(100 + 200 + 300 + 400 + 500);
+    // Der auslösende Near Miss wird vor der Aktivierung gewertet
+    expect(st.styleScore).toBe(100 + 200 + 300 + 400 + 500 + 500 + 500 + 500);
   });
-  it('16. Rush läuft exakt 5 s aktiver Spielzeit (bei 30, 60 und 120 FPS)', () => {
+  it('16. Rush läuft exakt 6 s aktiver Spielzeit (bei 30, 60 und 120 FPS)', () => {
     for (const dt of [1 / 30, 1 / 60, 1 / 120]) {
       const st = new StyleState();
       st.rushCharge = 100; st.rushActive = true; st.rushRemaining = B.style.rush.duration;
       let t = 0, ended = -1;
       for (let i = 0; i < 1000 && ended < 0; i++) { t += dt; tick(st, t, dt); if (find(st, 'rushEnd').length) ended = t; }
-      expect(Math.abs(ended - 5), `dt ${dt}`).toBeLessThanOrEqual(dt + 1e-9);
+      expect(Math.abs(ended - B.style.rush.duration), `dt ${dt}`).toBeLessThanOrEqual(dt + 1e-9);
       expect(st.rushCharge).toBe(0);                                   // Anzeige zurück auf 0 %
     }
   });
-  it('17. während Rush wird keine neue Energie aufgebaut; Punkte sind verdoppelt', () => {
+  it('17. während Rush wird keine neue Energie aufgebaut (Punkte nicht verdoppelt)', () => {
     const st = new StyleState();
     st.rushActive = true; st.rushRemaining = 5; st.rushCharge = 100;
     dodge(st, 0);
     expect(st.rushCharge).toBe(100);
-    expect(find(st, 'nearMiss')[0].pts).toBe(200);
+    expect(find(st, 'nearMiss')[0].pts).toBe(100);
   });
-  it('18. nach Rush gilt 6 s Abklingzeit: Energie lädt, aber die Aktivierung folgt erst nach Ablauf (keine Mehrfachaktivierung)', () => {
+  it('18. nach Rush gilt 8 s Abklingzeit: Energie lädt, aber die Aktivierung folgt erst nach Ablauf (keine Mehrfachaktivierung)', () => {
     const st = new StyleState();
     st.rushActive = true; st.rushRemaining = 0.02; st.rushCount = 1;
     tick(st, 0.1, 0.05);
     expect(st.rushActive).toBe(false);
-    expect(st.rushCooldown).toBeCloseTo(6, 5);
-    st.rushCharge = 80;
+    expect(st.rushCooldown).toBeCloseTo(8, 5);
+    st.rushCharge = 90;
     const t1 = dodge(st, 0.2).t;                                          // lädt auf 100, aktiviert aber nicht
     expect(st.rushCharge).toBe(100);
     expect(st.rushActive).toBe(false);
     let t = t1, started = -1;
     for (let i = 0; i < 1000 && started < 0; i++) { t += 0.05; tick(st, t, 0.05); if (st.rushActive) started = t; }
-    expect(started - 0.1).toBeGreaterThan(5.9);                           // erst nach den 6 s (gemessen ab Rush-Ende)
+    expect(started - 0.1).toBeGreaterThan(7.9);                           // erst nach den 8 s (gemessen ab Rush-Ende)
     expect(st.rushCount).toBe(2);
     for (let i = 0; i < 100; i++) tick(st, (t += 0.05), 0.05);
     expect(st.rushCount).toBe(2);                                         // nicht mehrfach
@@ -254,16 +254,22 @@ describe('Gruppe C/Integration – Sim', () => {
     expect(s.style.nearMissCount).toBe(0);
     expect(s.style.comboCount).toBe(0);
   });
-  it('Neon Rush verändert weder Tempo noch Kollision (Treffer bleibt möglich)', () => {
+  it('Neon Rush 2.0: Tempo ×1,15 und Unverwundbarkeit (kein Treffer), Ende stellt Tempo und Kollision wieder her', () => {
     const a = base(), b = base();
-    b.style.rushActive = true; b.style.rushRemaining = 5; b.style.rushCharge = 100;
+    b.style.rushActive = true; b.style.rushRemaining = B.style.rush.duration; b.style.rushCharge = 100;
     for (let i = 0; i < 240; i++) { a.step(DT, { dir: 0, target: 0 }); b.step(DT, { dir: 0, target: 0 }); a.obstacles = []; b.obstacles = []; }
-    expect(b.speedKmh).toBe(a.speedKmh);
-    expect(b.s).toBe(a.s);
-    const c = base(); c.style.rushActive = true; c.style.rushRemaining = 5;
+    expect(b.speedKmh / a.speedKmh).toBeGreaterThan(1.13);
+    expect(b.speedKmh / a.speedKmh).toBeLessThanOrEqual(B.style.rush.speedMult + 0.02);
+    const c = base(); c.style.rushActive = true; c.style.rushRemaining = B.style.rush.duration;
     c.obstacles = [mkObs('barrier', 0, c.s + 60)];
     for (let i = 0; i < 120 * 3 && !c.crashed; i++) c.step(DT, { dir: 0, target: 0 });
-    expect(c.crashed).toBe(true);                                        // keine Unverwundbarkeit
+    expect(c.crashed).toBe(false);                                       // Durchfahren
+    expect(c.style.rushActive).toBe(true);
+    c.style.rushRemaining = 0.001;
+    for (let i = 0; i < 20; i++) c.step(DT, { dir: 0, target: 0 });
     expect(c.style.rushActive).toBe(false);
+    c.obstacles = [mkObs('barrier', 0, c.s + 400)];
+    for (let i = 0; i < 120 * 12 && !c.crashed; i++) c.step(DT, { dir: 0, target: 0 });
+    expect(c.crashed).toBe(true);                                        // danach wieder reguläre Kollision
   });
 });

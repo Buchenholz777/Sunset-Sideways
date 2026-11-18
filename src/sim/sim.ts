@@ -7,7 +7,7 @@ import { planGuide } from './guide';
 import { Road } from './road';
 import { StyleState, type StyleEvent } from './style';
 import { TrafficDirector, lcX, type TrafficEvent } from './traffic';
-import { KINDS, laneOf, laneX, type ObjKind, type Obstacle, type Pickup, type PickupType } from './world';
+import { KINDS, laneOf, laneX, type Gate, type ObjKind, type Obstacle, type Pickup, type PickupType } from './world';
 
 export interface SteerInput {
   /** Tastatur: −1 links, 0 neutral, 1 rechts. */
@@ -30,6 +30,13 @@ export type SimEvent =
   | { type: 'glideEnd' }
   | { type: 'crash'; kind: ObjKind }
   | { type: 'effectEnd'; effect: PickupType }
+  | { type: 'rushPass'; x: number; z: number }
+  | { type: 'slash'; dir: number; x: number; z: number }
+  | { type: 'gate'; n: number; pts: number; x: number; z: number }
+  | { type: 'gateMiss'; x: number; z: number }
+  | { type: 'gateSpawn'; x: number; z: number }
+  | { type: 'shockwave'; x: number; z: number }
+  | { type: 'rushExit'; cleared: number }
   | { type: 'queued'; effect: 'glide' | 'boost' }
   | StyleEvent
   | TrafficEvent;
@@ -90,6 +97,16 @@ export class Sim {
   private readonly director: TrafficDirector | null;
   /** Objekte, die beim Aufsetzen überlappt wurden und bis zur Trennung als passiert gelten. */
   private passed = new Set<number>();
+  /** Neon Rush: Tempofaktor 1 … speedMult (weich ein-/ausgeblendet); Neon Gates; bereits durchfahrene Fahrzeuge; Slash-Zustand. */
+  rushF = 1;
+  gates: Gate[] = [];
+  private gateSpawned = 0;
+  private gateId = 1;
+  private rushPassed = new Set<number>();
+  private laneIdx = 1;
+  private slashT = -Infinity;
+  private drivenT = -Infinity;
+  private prevRush = false;
   /** Zeitlupenfaktor 1 … 0,78 (weich ein-/ausgeblendet). */
   slowF = 1;
   /** Phantom-Turbo: Tempofaktor 1 … 1,2 (weich ein-/ausgeblendet). */
@@ -118,7 +135,7 @@ export class Sim {
   }
 
   /** Keine Kontakte mit Verkehr: Fliegen, Phantom-Turbo oder kurze Schutzphase. */
-  get invulnerable(): boolean { return this.glideT > 0 || this.boostT > 0 || this.graceT > 0; }
+  get invulnerable(): boolean { return this.glideT > 0 || this.boostT > 0 || this.graceT > 0 || this.style.rushActive; }
 
   /** Weltposition quer. */
   get X(): number { return this.road.center(this.s) + this.q; }
@@ -174,7 +191,8 @@ export class Sim {
     this.slowF += ((this.slowT > 0 ? B.speed.slowFactor : 1) - this.slowF) * (1 - Math.exp(-dt / B.speed.slowTau));
     this.boostF += ((this.boostT > 0 ? B.speed.boostFactor : 1) - this.boostF) * (1 - Math.exp(-dt / B.speed.boostTau));
     this.lateral(dt, inp);
-    this.speedKmh = speedAtDist(this.s) * this.slowF * this.boostF;
+    this.rushF += ((this.style.rushActive ? B.style.rush.speedMult : 1) - this.rushF) * (1 - Math.exp(-dt / B.style.rush.speedTau));
+    this.speedKmh = speedAtDist(this.s) * this.slowF * Math.min(1.4, this.boostF * this.rushF);   // Phantom-Turbo und Rush stapeln nur bis ×1,4
     const vm = this.speedKmh / 3.6;
 
     const ds = vm * dt;
@@ -188,6 +206,7 @@ export class Sim {
     const hits: Hit[] = [];
     const pads = this.pullPickups(dt, qNew, vm);
 
+    if (this.style.rushActive) this.rushContacts(body0, body1, ts, dt);
     const flying = this.glideT > 0;
     const inv = this.invulnerable;
     const driven = inp.dir !== 0 || (inp.drag !== null && inp.drag !== undefined) || (inp.target !== null && inp.target !== undefined);
@@ -286,8 +305,104 @@ export class Sim {
     this.pickups = this.pickups.filter((p) => !p.taken && p.z > this.s - 40);
     if (this.director) this.director.update({ seed: this.seed, t: this.t, t0: this.t0, s: this.s, q: this.q, speedKmh: this.speedKmh, timeScale: ts, obstacles: this.obstacles }, dt);
     this.style.update({ t: this.t, s: this.s, q: this.q, speed: vm, ts, obstacles: this.obstacles, slowActive: this.slowT > 0, magnetActive: this.magnetT > 0, invulnerable: this.invulnerable, driven }, dt);
+    this.rushTick(dt, driven, vm, ts);
     this.flush();
     this.gen.update(this);
+  }
+
+  /** Phantom-Durchfahrt im Rush: jedes Fahrzeug erzeugt genau einmal einen Kontakt-Impuls (keine Punkte, kein Schaden, keine Rush-Energie). */
+  private rushContacts(body0: ReturnType<typeof playerFootprint>, body1: ReturnType<typeof playerFootprint>, ts: number, dt: number): void {
+    for (const o of this.obstacles) {
+      if (o.hit || this.rushPassed.has(o.id)) continue;
+      const before = obstacleFootprint(this.road, o);
+      const after = o.vz === 0 && !o.lc ? before : obstacleFootprint(this.road, o, o.z + o.vz * ts * dt, o.lc ? lcX(o, dt) : o.x);
+      const f = contactTime(body0, body1, before, after);
+      if (f !== null) { this.rushPassed.add(o.id); this.events.push({ type: 'rushPass', x: o.x, z: Math.max(o.z, this.s - 1) }); }
+    }
+  }
+
+  /** Löst ein Fahrzeug optisch auf (gleiche Mechanik wie der Spurblitz): aus Kollision und Verkehr entfernt, ohne Punkte und ohne Near Miss. */
+  private dissolve(o: Obstacle): void {
+    o.hit = true; o.cleared = true; o.knockT = 0; o.knockVx = 0;
+    this.events.push({ type: 'cleared', x: o.x, z: o.z, kind: o.kind });
+  }
+
+  /** Neon Rush 2.0: Gates, Slash, Schockwelle und sicheres Ende. Läuft nach der Bewegung des Schritts. */
+  private rushTick(dt: number, driven: boolean, vm: number, ts: number): void {
+    const R = B.style.rush, st = this.style;
+    if (driven) this.drivenT = this.t;
+    if (st.rushActive && !this.prevRush) { this.gates = []; this.gateSpawned = 0; this.rushPassed.clear(); this.slashT = -Infinity; }
+    if (st.rushActive) {
+      // Tore: erstes nach gateFirst s, dann alle gateEvery s, auf einer anderen Spur als der Wagen (aktiver Spurwechsel nötig, kein Sofort-Treffer)
+      while (this.gateSpawned < R.gateCount && st.rushElapsed >= R.gateFirst + this.gateSpawned * R.gateEvery) {
+        const k = this.gateSpawned++;
+        const cur = laneOf(this.q);
+        const opts = [0, 1, 2].filter((i) => i !== cur);
+        const lane = opts[(k + this.seed) % opts.length];
+        const g: Gate = { id: this.gateId++, n: k, x: laneX(lane), z: this.s + vm * R.gateLead, taken: false, missed: false, age: 0 };
+        this.gates.push(g);
+        this.events.push({ type: 'gateSpawn', x: g.x, z: g.z });
+      }
+      for (const g of this.gates) {
+        g.age += dt;
+        if (g.taken || g.missed || this.s < g.z) continue;
+        if (Math.abs(this.q - g.x) <= R.gateHalfWidth) {
+          g.taken = true;
+          const r = st.gateTaken();
+          this.events.push({ type: 'gate', n: r.n, pts: r.pts, x: g.x, z: g.z });
+          this.shockwave();
+        } else { g.missed = true; this.events.push({ type: 'gateMiss', x: g.x, z: g.z }); }
+      }
+      this.gates = this.gates.filter((g) => g.z > this.s - 20);
+      // Neon Slash: höchstens ein Schweif je gültigem, aktiv ausgelöstem Spurwechsel (Hysterese gegen Flackern an der Spurgrenze)
+      let nl = this.laneIdx;
+      for (let i = 0; i < 3; i++) if (i !== this.laneIdx && Math.abs(this.q - laneX(i)) < 1.0) nl = i;
+      if (nl !== this.laneIdx) {
+        const dir = Math.sign(laneX(nl) - laneX(this.laneIdx));
+        const from = laneX(this.laneIdx);
+        this.laneIdx = nl;
+        if (this.t - this.drivenT <= 0.2 && this.t - this.slashT >= R.slashCooldown) {
+          this.slashT = this.t; st.slashCount++;
+          this.events.push({ type: 'slash', dir, x: this.q, z: this.s });
+          const lo = Math.min(from, laneX(nl)) - 1.8, hi = Math.max(from, laneX(nl)) + 1.8;
+          for (const o of this.obstacles) if (!o.hit && o.x >= lo && o.x <= hi && o.z <= this.s + R.slashZoneAhead && o.z + KINDS[o.kind].len >= this.s - R.slashZoneBehind) this.dissolve(o);
+        }
+      }
+    } else {
+      this.laneIdx = laneOf(this.q);
+    }
+    // Ende (Zeit): Übergangsschutz und Räumen der Spur voraus; Tore verschwinden
+    if (this.prevRush && !st.rushActive) {
+      this.gates = [];
+      if (st.rushCooldown > 0) {
+        this.graceT = Math.max(this.graceT, R.safeExit);
+        let n = 0;
+        const half = B.player.width / 2 + 0.5;
+        for (const o of this.obstacles) {
+          if (o.hit) continue;
+          const def = KINDS[o.kind];
+          if (Math.abs(o.x - this.q) > def.w / 2 + half) continue;
+          const rel = Math.max(1, vm - o.vz * ts);
+          const ahead = o.z - this.s;
+          if (o.z + def.len >= this.s - B.player.len && ahead / rel <= R.exitClearTtc) { this.dissolve(o); n++; }
+        }
+        this.events.push({ type: 'rushExit', cleared: n });
+      }
+    }
+    this.prevRush = st.rushActive;
+  }
+
+  /** Neon Shockwave: löst Fahrzeuge im Umkreis optisch auf (keine Punkte, kein Near Miss). */
+  private shockwave(): void {
+    const R = B.style.rush;
+    this.events.push({ type: 'shockwave', x: this.q, z: this.s });
+    for (const o of this.obstacles) {
+      if (o.hit) continue;
+      const def = KINDS[o.kind];
+      if (o.z > this.s + R.waveAhead || o.z + def.len < this.s - 3) continue;
+      const dz = Math.max(0, o.z - this.s, this.s - (o.z + def.len));
+      if (Math.hypot(Math.max(0, Math.abs(o.x - this.q) - def.w / 2), dz) <= R.waveRadius) this.dissolve(o);
+    }
   }
 
   /** Ereignisse des Stil-Systems und der Verkehrsregie in die Ereigniswarteschlange übernehmen. */

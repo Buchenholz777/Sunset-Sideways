@@ -1,7 +1,7 @@
 import { load, save } from '../storage/storage';
 import { BALANCE } from '../config/balance';
 
-export type Sfx = 'start' | 'shield' | 'slow' | 'clear' | 'magnet' | 'glide' | 'land' | 'boost' | 'guide' | 'shieldHit' | 'crash' | 'record' | 'effectEnd' | 'nearMiss' | 'rushStart' | 'rushEnd' | 'rushTick' | 'laneWarn' | 'zap';
+export type Sfx = 'start' | 'shield' | 'slow' | 'clear' | 'magnet' | 'glide' | 'land' | 'boost' | 'guide' | 'shieldHit' | 'crash' | 'record' | 'effectEnd' | 'nearMiss' | 'rushStart' | 'rushEnd' | 'rushTick' | 'laneWarn' | 'zap' | 'slash' | 'gate' | 'wave' | 'rushPass';
 
 type Ctx = AudioContext;
 
@@ -112,6 +112,7 @@ export class Sound {
     this.engine.ng.gain.setTargetAtTime(0, t, 0.08);
     this.squeal?.g.gain.setTargetAtTime(0, t, 0.05);
     this.setFlight(false);
+    this.setRush(false);
   }
 
   /** Tempo- und lastabhängige Motorparameter. */
@@ -443,6 +444,32 @@ export class Sound {
     }
   }
 
+  // ---------- Neon Rush: leises elektrisches Summen während des Rushs ----------
+  private rushHum: { g: GainNode; o: OscillatorNode[] } | null = null;
+  /** Schaltet das Rush-Summen ein/aus (Sägezahn-Quint mit langsamem Tremolo über den Motor-Bus; folgt den Soundeinstellungen). */
+  setRush(on: boolean): void {
+    const c = this.ready();
+    if (!c || !this.engBus) return;
+    const t = c.currentTime;
+    if (on && !this.rushHum) {
+      const g = c.createGain(); g.gain.value = 0;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 2;
+      const o1 = c.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = 110;
+      const o2 = c.createOscillator(); o2.type = 'sawtooth'; o2.frequency.value = 165; o2.detune.value = 8;
+      const lfo = c.createOscillator(); lfo.frequency.value = 7.5;
+      const ld = c.createGain(); ld.gain.value = 0.012;
+      lfo.connect(ld).connect(g.gain);
+      o1.connect(lp); o2.connect(lp); lp.connect(g).connect(this.engBus);
+      o1.start(); o2.start(); lfo.start();
+      g.gain.setTargetAtTime(0.03, t, 0.12);
+      this.rushHum = { g, o: [o1, o2, lfo] };
+    } else if (!on && this.rushHum) {
+      const h = this.rushHum; this.rushHum = null;
+      h.g.gain.cancelScheduledValues(t); h.g.gain.setTargetAtTime(0, t, 0.08);
+      for (const o of h.o) { try { o.stop(t + 0.5); } catch { /* bereits gestoppt */ } }
+    }
+  }
+
   // ---------- Effekte ----------
   private note(freq: number, t: number, dur: number, type: OscillatorType, vol: number, dest: AudioNode, endFreq?: number): void {
     const c = this.ctx!;
@@ -474,7 +501,7 @@ export class Sound {
   sfx(name: Sfx, level = 1): void {
     const c = this.ready();
     if (!c || this.muted) return;
-    if (name !== 'effectEnd' && name !== 'laneWarn' && name !== 'rushTick') this.duck(name === 'crash' ? 0.6 : name === 'nearMiss' ? 0.12 : 0.3);
+    if (name !== 'effectEnd' && name !== 'laneWarn' && name !== 'rushTick' && name !== 'slash' && name !== 'rushPass') this.duck(name === 'crash' ? 0.6 : name === 'nearMiss' ? 0.12 : 0.3);
     const t = c.currentTime;
     const m = this.sfxBus!;
     switch (name) {
@@ -503,7 +530,15 @@ export class Sound {
         this.noise(t, 0.35, 0.22, 800, 7000); this.note(220, t, 0.4, 'sawtooth', 0.12, m, 880);
         [523, 659, 784, 1047].forEach((fr, i) => this.note(fr, t + 0.08 + i * 0.05, 0.3, 'square', 0.07, m));
         break;
-      case 'rushEnd': this.note(784, t, 0.22, 'triangle', 0.1, m, 330); this.note(392, t + 0.08, 0.24, 'sine', 0.08, m, 196); break;
+      case 'rushEnd': this.note(988, t, 0.3, 'triangle', 0.09, m, 262); this.note(494, t + 0.06, 0.3, 'sine', 0.08, m, 131); this.noise(t, 0.25, 0.1, 5000, 400); break;
+      // Neon Slash: kurzer elektrischer Zischer mit fallendem Sägezahn (leise, damit er sich bei Wechselfolgen nicht auftürmt)
+      case 'slash': this.noise(t, 0.14, 0.12, 7000, 1800); this.note(2100, t, 0.16, 'sawtooth', 0.05, m, 420); this.note(3100, t + 0.01, 0.07, 'square', 0.025, m, 1100); break;
+      // Neon Gate: steigendes Zwei-Ton-Glöckchen, Tonhöhe folgt der Rush-Chain (Stufe 1–3)
+      case 'gate': { const f = [659, 784, 988][Math.max(0, Math.min(2, level - 1))]; this.note(f, t, 0.22, 'triangle', 0.11, m); this.note(f * 2, t + 0.05, 0.3, 'sine', 0.08, m); this.note(f * 3, t + 0.1, 0.2, 'sine', 0.035, m); break; }
+      // Neon Shockwave: tiefer Schlag mit aufspringendem Rauschen
+      case 'wave': this.note(170, t, 0.35, 'sine', 0.2, m, 42); this.noise(t, 0.32, 0.18, 6000, 500); this.note(880, t + 0.04, 0.2, 'triangle', 0.05, m, 1760); break;
+      // Phantom-Durchfahrt: weicher Luftzug
+      case 'rushPass': this.noise(t, 0.09, 0.06, 4200, 1500); this.note(520, t, 0.08, 'sine', 0.04, m, 260); break;
       case 'rushTick': this.note(1760, t, 0.05, 'sine', 0.035, m); break;
       case 'laneWarn': this.note(1500, t, 0.035, 'square', 0.035, m); this.note(1100, t + 0.11, 0.035, 'square', 0.03, m); break;
       case 'zap':

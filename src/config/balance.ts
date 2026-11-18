@@ -30,10 +30,25 @@ export const BALANCE = {
   style: {
     nearMiss: { points: 100, ttcMax: 1.5, courseMargin: 0.35, maxGap: 2.4, minShift: 1.0 },
     combo: { window: 4, windowMagnet: 6, maxMult: 5 },
-    rush: { chargePerMiss: 20, chargeSlow: 10, duration: 5, cooldown: 6, pointsMult: 2 },
+    /**
+     * Neon Rush 2.0: Aufladung (normaler Near Miss +14 %, besonders knapper +18 %, Zeitblase lädt nur anteilig), 6 s Dauer, 8 s Abklingzeit, Tempo ×1,15,
+     * Unverwundbarkeit nur während des Rushs (danach safeExit s Übergangsschutz und Räumen der Spur voraus). Neon Slash: höchstens ein Schweif je slashCooldown s.
+     * Neon Gates: bis zu gateCount Tore (erstes nach gateFirst s, danach alle gateEvery s, gateLead s Fahrt voraus), Bonus je eingesammeltem Tor aus gateBonuses.
+     * Schockwelle: räumt Verkehr im Umkreis (waveRadius m um den Wagen, waveAhead m nach vorn). Alle Zeiten in aktiver Spielzeit.
+     */
+    rush: {
+      chargePerMiss: 14, chargePerfect: 18, perfectGap: 0.8, chargeSlowK: 0.5, maxCharge: 100,
+      duration: 6, cooldown: 8, speedMult: 1.15, speedTau: 0.18, pointsMult: 1, safeExit: 0.5, exitClearTtc: 1.1,
+      gateCount: 3, gateBonuses: [150, 300, 450] as readonly number[], gateFirst: 1.0, gateEvery: 1.4, gateLead: 1.5, gateHalfWidth: 2.0,
+      slashCooldown: 0.7, slashZoneAhead: 9, slashZoneBehind: 2, waveRadius: 14, waveAhead: 16,
+    },
     /** Zeitblase: Near-Miss-Punkte (einmal, in der zentralen Punkteberechnung). */
     slowPointsMult: 0.5,
   },
+  /** Blinker der Verkehrsteilnehmer: Größe als Anteil der Fahrzeugbreite, Glow-Stärke, Blinkfrequenz (Hz) und Mindest-Vorwarnzeit (s; die Dauer selbst steht in dynamic.lc.warn). */
+  blinker: { scale: 0.075, glowIntensity: 0.55, frequency: 1.75, warningDuration: 1.1, minPx: 2.2, color: '#FFB547' },
+  /** Weltrangliste: Anzeigelänge, Version der Punkteregeln (bei erheblicher Änderung erhöhen: neue Saison), Zeiträume und Einreichungslimits. */
+  leaderboard: { maxDisplayEntries: 100, scoreRulesVersion: 1, rankingPeriods: ['all', '7d'] as readonly string[], submissionLimits: { perMinute: 6, perDay: 200, maxScore: 5_000_000, maxDistM: 3_000_000 } },
   road: { lanes: 3, laneWidth: 3.6, halfWidth: 5.4 },
   /** Trefferfläche: vorn und hinten je hitInsetZ kürzer als der Wagen (die sichtbare Nase liegt ca. 1 m hinter der Kollisionskante); hitYawK/hitYawMax begrenzen ihre Drehung beim Ausweichen. */
   player: { width: 1.9, len: 4.2, hitInsetX: 0.07, hitInsetZ: 1.0, maxX: 4.45, hitYawK: 0.3, hitYawMax: 0.1 },

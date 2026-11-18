@@ -1,14 +1,14 @@
 import { BALANCE as B } from '../config/balance';
 import { footprintCorners, obstacleFootprint, pickupFootprint, playerFootprint, type Footprint } from '../sim/contacts';
 import type { Road } from '../sim/road';
-import { KINDS, type Obstacle, type Pickup, type PickupType } from '../sim/world';
+import { KINDS, type Gate, type Obstacle, type Pickup, type PickupType } from '../sim/world';
 
 import { CAM_BACK, DRAW, chaseSlope, depthEff, makeLayout, type Layout } from './projection';
 import { applyLight, decoType, decoX, drawDeco, LANDMARK_FAR, LANDMARK_SCALE, LANDMARK_TYPES, landmarksAhead, drawMoon, drawMountains, drawPlane, drawPortal, drawSkyline, drawSky, drawSun, hash, lightT, mixHex, PORTAL_Z, stageAt } from './scenery';
 import { CHUNK, drawPed, pedsInChunk } from './people';
 import { computeRows } from './rows';
 import { LOT, lotItems, type LotEnv } from './lots';
-import { PAL, drawObstacle, drawPickup, drawShieldArc, gfx, rect, type Blinker } from './sprites';
+import { PAL, blinkerIntensity, blinkerLight, drawBlinkerLight, drawObstacle, drawPickup, drawShieldArc, gfx, rect, type Blinker, type BlinkerLight } from './sprites';
 import { drawCar } from './car3d';
 
 /** Alles, was zum Zeichnen eines Bildes nötig ist (Vorschau oder Lauf). */
@@ -18,6 +18,8 @@ export interface View {
   obstacles: readonly Obstacle[]; pickups: readonly Pickup[];
   /** Neon Rush aktiv (nur Darstellung: Leuchten, betonte Tempolinien – keine Änderung der Physik). */
   rush?: boolean;
+  /** Neon Gates des laufenden Rushs. */
+  gates?: readonly Gate[];
   crash: { id: number } | null; running: boolean;
   /** Aktive Szenenzeit (s) für Mond und Flugzeuge, Seed des Laufs für den Flugplan. */
   sceneT: number; seed: number;
@@ -85,12 +87,43 @@ export class Renderer {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d', { alpha: false })!;
+    const fx = canvas.parentElement?.querySelector<HTMLCanvasElement>('#stage-fx') ?? null;
+    if (fx) { this.fxCanvas = fx; this.fxCtx = fx.getContext('2d'); }
     const mq = matchMedia('(prefers-reduced-motion: reduce)');
     this.reducedMotion = mq.matches;
     mq.addEventListener?.('change', (e) => { this.reducedMotion = e.matches; });
   }
 
+  /** Hochaufgelöste Ebene für Lichtelemente (Blinker): eigene Zeichenfläche in physikalischen Pixeln über der Spielfläche. */
+  private fxCanvas: HTMLCanvasElement | null = null;
+  private fxCtx: CanvasRenderingContext2D | null = null;
+  private lightQ: { light: BlinkerLight; a: number; occ: number; sy: number }[] = [];
+  private fxDirty = false; private cssW = 0;
+  /** Mindestbreite des Blinkers in Bildpunkten der Spielfläche (technisches Minimum: B.blinker.minPx CSS-Pixel). */
+  private blinkerMinW(): number { return B.blinker.minPx * (this.L.w / Math.max(1, this.cssW || this.L.w)); }
+
+  /** Zeichnet die gesammelten Blinker auf die hochaufgelöste Ebene (Bildpunkte der Spielfläche → physikalische Pixel). */
+  private flushLights(): void {
+    const fc = this.fxCtx, cv = this.fxCanvas;
+    if (!fc || !cv) { this.lightQ.length = 0; return; }
+    if (!this.lightQ.length && !this.fxDirty) return;
+    fc.setTransform(1, 0, 0, 1, 0, 0);
+    fc.clearRect(0, 0, cv.width, cv.height);
+    this.fxDirty = this.lightQ.length > 0;
+    if (!this.fxDirty) return;
+    const L = this.L;
+    fc.setTransform(cv.width / L.w, 0, 0, cv.height / L.h, 0, 0);
+    for (const q of this.lightQ) {
+      if (q.sy < q.occ || q.light.cx < -20 || q.light.cx > L.w + 20) continue;      // hinter einer Hügelkuppe oder außerhalb des Bildes
+      drawBlinkerLight(fc, q.light, blinkerIntensity(this.clock, B.blinker.frequency, this.reducedMotion), B.blinker.glowIntensity, B.blinker.color, Math.min(1, q.a));
+    }
+    this.lightQ.length = 0;
+  }
+
   resize(cssW: number, cssH: number): void {
+    this.cssW = cssW;
+    const dpr = Math.min(3, Math.max(1, (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1)));
+    if (this.fxCanvas) { const w = Math.round(cssW * dpr), h = Math.round(cssH * dpr); if (this.fxCanvas.width !== w || this.fxCanvas.height !== h) { this.fxCanvas.width = w; this.fxCanvas.height = h; this.fxDirty = true; } }
     const L = makeLayout(cssW, cssH);
     if (this.canvas.width !== L.w || this.canvas.height !== L.h) { this.canvas.width = L.w; this.canvas.height = L.h; }
     this.L = L;
@@ -202,7 +235,7 @@ export class Renderer {
     const ctx = this.ctx;
     this.road = v.road;
     if (v.running) this.clock += dt;
-    if (v.s < this.prevS - 1) { this.brake = 0; this.prevSpeed = 0; this.firstSeen.clear(); this.snap = true; this.visYaw = 0; this.stealth = 0; this.particles.length = 0; this.flashes.length = 0; this.iconFlash = 0; this.arcFlash = 0; this.flash = 0; this.shieldEnd = 0; this.boostEnd = 0; this.prevShield = false; this.prevBoost = false; this.shieldUsed = false; this.rushK = 0; this.nmPulse = 0; }
+    if (v.s < this.prevS - 1) { this.brake = 0; this.prevSpeed = 0; this.firstSeen.clear(); this.snap = true; this.visYaw = 0; this.stealth = 0; this.particles.length = 0; this.flashes.length = 0; this.iconFlash = 0; this.arcFlash = 0; this.flash = 0; this.shieldEnd = 0; this.boostEnd = 0; this.prevShield = false; this.prevBoost = false; this.shieldUsed = false; this.rushK = 0; this.nmPulse = 0; this.rushReset(); }
     this.prevS = v.s;
     // Bremslicht nur bei tatsächlicher Verzögerung (z. B. Tempo fällt nach Turbo oder Zeitlupe)
     if (v.running && this.prevSpeed > 0 && v.speedKmh < this.prevSpeed - 0.02) this.brake = 1;
@@ -226,6 +259,7 @@ export class Renderer {
     this.carBz = v.s - B.player.len / 2;
     this.camXw = this.carBx - this.camHead * (this.carBz - zc);
     ctx.save();
+    if (this.kick > 0.01) { ctx.translate(0, Math.round(this.kick * 2)); this.kick = Math.max(0, this.kick - dt * 5); }
     if (this.shake > 0) {
       ctx.translate(Math.round((Math.random() - 0.5) * 4 * this.shake), Math.round((Math.random() - 0.5) * 3 * this.shake));
       this.shake = Math.max(0, this.shake - dt * 3);
@@ -271,6 +305,7 @@ export class Renderer {
       ctx.globalAlpha = 1;
       this.flash = Math.max(0, this.flash - dt * 4);
     }
+    this.flushLights();
     this.adapt(performance.now() - t0, v.running);
   }
 
@@ -514,10 +549,10 @@ export class Renderer {
           ctx.globalAlpha = a;
           const lift = o.hit ? Math.sin(Math.min(1, o.knockT * 3) * Math.PI) * 1.2 : 0;
           const lc = o.lc;
-          const blink: Blinker | undefined = lc && !o.hit && (lc.stage === 'warn' || lc.stage === 'move')
-            ? { side: lc.toX > lc.fromX ? 1 : -1, on: lc.stage === 'move' || this.reducedMotion || Math.floor(this.clock * 4) % 2 === 0 }
-            : undefined;
-          drawObstacle(ctx, o.kind, p.sx, p.sy - lift * p.k, p.k, this.clock, o.id, blink);
+          const blink: Blinker | undefined = lc && !o.hit && (lc.stage === 'warn' || lc.stage === 'move') ? { side: lc.toX > lc.fromX ? 1 : -1 } : undefined;
+          drawObstacle(ctx, o.kind, p.sx, p.sy - lift * p.k, p.k, this.clock, o.id);
+          // Blinker: wird nach dem Bild als scharfes Vektorelement auf der hochaufgelösten Ebene gezeichnet (die Spielfläche selbst ist grob gerastert)
+          if (blink) this.lightQ.push({ light: blinkerLight(o.kind, p.sx, p.sy - lift * p.k, p.k, blink.side, B.blinker.scale, this.blinkerMinW()), a, occ: this.occlusionY(d), sy: p.sy });
           ctx.globalAlpha = 1;
           if (v.crash?.id === o.id) this.culprit(p.sx, p.sy, p.k, o);
         },
@@ -617,6 +652,7 @@ export class Renderer {
         ctx.globalAlpha = 1;
       } });
     }
+    this.rushItems(v, zc, items);
     items.sort((a, b) => b.d - a.d);
     for (const it of items) {
       // Hügelkuppen verdecken alles dahinter: Objekte werden an der Geländekante der näheren Tiefen abgeschnitten
@@ -750,7 +786,8 @@ export class Renderer {
       g.addColorStop(0, `rgba(255,79,216,${(0.34 * this.rushK * pulse).toFixed(3)})`); g.addColorStop(0.55, `rgba(95,224,255,${(0.13 * this.rushK * pulse).toFixed(3)})`); g.addColorStop(1, 'rgba(255,79,216,0)');
       ctx.fillStyle = g; ctx.fillRect(sx - k * 3.2, cy - k * 2.2, k * 6.4, k * 4.4);
     }
-    drawCar(ctx, (x, y, z) => { const q = carPt(x, y, z); return [Math.round(q[0]), Math.round(q[1])]; }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth, zs: L.portrait ? 0.78 : undefined, spin, scan });
+    drawCar(ctx, (x, y, z) => { const q = carPt(x, y, z); return [Math.round(q[0]), Math.round(q[1])]; }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth, zs: L.portrait ? 0.78 : undefined, spin, scan, neon: this.rushK });
+    this.rushPlayerFx(v, zc, sx, k, liftPx);
     // Effektende erkennen (Zustandswechsel), unabhängig von Toasts
     if (v.running) {
       if (this.prevShield && !v.shield && !this.shieldUsed) this.shieldEnd = 1;
@@ -831,6 +868,7 @@ export class Renderer {
   // ---------- Partikel, Tempo-Effekte ----------
   private fxLayer(v: View, dt: number): void {
     const { ctx, L } = this;
+    this.rushScreenFx(v, dt);
     if (this.stealth > 0.05 && v.running) {
       // Phantom-Turbo: rote Lichtschlieren hinter den Rückleuchten
       const k0 = L.fx / CAM_BACK, y0 = L.gy - (0.55 * 0.8 + v.lift) * k0;
@@ -885,11 +923,11 @@ export class Renderer {
     if (v.running && !this.reducedMotion && this.quality < 2) {
       // Tempolinien: Zahl, Länge und Deckkraft wachsen von 200 bis 600 km/h stetig (360 / 500 / 600 sind klar unterscheidbar)
       // Neon Rush betont das Tempo nur optisch (mehr und hellere Linien); die tatsächliche Geschwindigkeit bleibt unverändert
-      const vn = Math.max(0, Math.min(1, (v.speedKmh - 200) / 400 + 0.35 * this.rushK));
+      const vn = Math.max(0, Math.min(1, (v.speedKmh - 200) / 400 + 0.6 * this.rushK));
       const n = 8 + Math.round(30 * vn);                 // etwa die Hälfte fällt auf die Fahrbahn und entfällt
       const sp = v.speedKmh / 260;
       ctx.globalAlpha = 0.18 + 0.3 * vn;
-      const lineCol = this.rushK > 0.3 ? '#ff9af0' : '#9aa0ff';
+      const lineCol = '#9aa0ff';
       for (let i = 0; i < n; i++) {
         const ph = (this.clock * (1.2 + sp * 1.6) + hash(i * 3)) % 1;
         const side = hash(i) > 0.5 ? 1 : -1;
@@ -898,7 +936,7 @@ export class Renderer {
         // nie über der Fahrbahn: der Blick bleibt ruhig auf Spur und Hindernissen, das Tempo zeigt sich an Rand und Gehweg
         const dRow = this.rowD[Math.min(L.h - 1, Math.max(0, Math.round(yy)))];
         if (dRow > 0) { const kk = L.fx / depthEff(dRow, L), rcx = L.cx + this.lat(this.lastZc + dRow, this.lastZc) * kk; if (Math.abs(xx - rcx) < (B.road.halfWidth + 0.5) * kk) continue; }
-        rect(ctx, xx, yy, 1, (2 + ph * 10 * (0.5 + sp)) * gfx.u, lineCol);
+        rect(ctx, xx, yy, 1, (2 + ph * 10 * (0.5 + sp) * (1 + 0.5 * this.rushK)) * gfx.u, this.rushK > 0.3 ? (i & 1 ? '#7fe9ff' : '#ff9af0') : lineCol);
       }
       ctx.globalAlpha = 1;
     }
@@ -912,5 +950,203 @@ export class Renderer {
       rect(ctx, p.x, p.y, 2 * gfx.u, 2 * gfx.u, p.c);
     }
     ctx.globalAlpha = 1;
+  }
+
+  // ---------- Neon Rush 2.0: Tore, Slash, Schockwelle, Wagen-Effekte ----------
+  private slashFx: { age: number; dir: number; x0: number }[] = [];
+  private waveFx: { age: number }[] = [];
+  private gateFx: { x: number; z: number; age: number }[] = [];
+  private passK = 0; private startK = 0; private endK = 0; private kick = 0; private lastPassT = -1;
+
+  private rushReset(): void {
+    this.slashFx.length = 0; this.waveFx.length = 0; this.gateFx.length = 0; this.passK = 0; this.startK = 0; this.endK = 0; this.kick = 0;
+  }
+
+  /** Partikel aus dem Pool (gedeckelt; auf schwächeren Profilen weniger). */
+  private spark(x: number, y: number, n: number, cols: string[], speed = 50, up = -30): void {
+    if (this.reducedMotion) return;
+    const cap = this.quality > 0 ? MAX_PARTICLES * 0.5 : MAX_PARTICLES;
+    const m = this.quality > 0 ? Math.ceil(n / 2) : n;
+    for (let i = 0; i < m && this.particles.length < cap; i++) {
+      const a = Math.random() * Math.PI * 2, sp = (0.35 + Math.random() * 0.65) * speed;
+      this.particles.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp + up, life: 0, max: 0.25 + Math.random() * 0.3, c: cols[i % cols.length] });
+    }
+  }
+
+  /** Neon Rush beginnt: kurzer Aktivierungsimpuls (≤ 0,3 s) mit Ring und Kamerastoß. */
+  rushStarted(): void { this.startK = 1; this.endK = 0; if (!this.reducedMotion) this.kick = 1; this.spark(this.carSx || this.L.cx, this.L.gy - 0.8 * (this.L.fx / CAM_BACK), 26, ['#5fe0ff', '#ff4fd8', '#ffffff'], 90); }
+  /** Neon Rush endet: Konturen klingen kontrolliert aus. */
+  rushEnded(): void { this.endK = 1; this.startK = 0; }
+  /** Neon Slash: seitlicher Energieschweif von der alten zur neuen Position. */
+  slash(dir: number): void {
+    this.slashFx.push({ age: 0, dir, x0: this.carSx || this.L.cx });
+    if (this.slashFx.length > 3) this.slashFx.shift();
+    const k = this.L.fx / CAM_BACK, y = this.L.gy - 0.7 * k;
+    this.spark((this.carSx || this.L.cx) - dir * 0.8 * k, y, 10, ['#5fe0ff', '#ff4fd8', '#fff'], 60, -10);
+  }
+  /** Neon Shockwave am Wagen (Tor eingesammelt). */
+  shockwave(): void { this.waveFx.push({ age: 0 }); if (this.waveFx.length > 2) this.waveFx.shift(); }
+  /** Neon Gate eingesammelt: Ring am Tor und Funken. */
+  gateCollected(x: number, z: number): void {
+    this.gateFx.push({ x, z, age: 0 }); if (this.gateFx.length > 3) this.gateFx.shift();
+    const p = this.screenAt(x, z, 1.2);
+    if (p) this.spark(p.sx, p.sy, 14, ['#5fe0ff', '#ff4fd8', '#fff'], 70);
+  }
+  /** Phantom-Durchfahrt: kleiner Energieimpuls am Kontaktpunkt (höchstens alle 0,1 s). */
+  rushPass(x: number, z: number): void {
+    if (this.clock - this.lastPassT < 0.1) return;
+    this.lastPassT = this.clock; this.passK = 1;
+    const p = this.screenAt(x, z, 0.8);
+    if (p) this.spark(p.sx, p.sy, 8, ['#c8f6ff', '#5fe0ff', '#ff9af0'], 55);
+  }
+
+  /** Tore (schlanke Neon-Elemente: zwei Pfosten, dünner Balken, leuchtende Durchfahrtszone) und Licht-Dashes auf den Spurgrenzen. */
+  private rushItems(v: View, zc: number, items: Drawable[]): void {
+    const { ctx } = this;
+    for (const g of v.gates ?? []) {
+      if (g.taken) continue;
+      const d = g.z - zc;
+      if (d < 3 || d > DRAW) continue;
+      const p = this.proj(zc, g.x, g.z);
+      items.push({ d: d - 0.1, draw: () => {
+        const half = 1.7, hgt = 3.0, k = p.k;
+        const a = this.fade(d) * (g.missed ? 0.35 : 1);
+        const pulse = this.reducedMotion ? 0.85 : 0.78 + 0.22 * Math.sin(this.clock * 8 + g.n);
+        const f0 = this.proj(zc, g.x - half, g.z - 1.0), f1 = this.proj(zc, g.x + half, g.z - 1.0), f2 = this.proj(zc, g.x + half, g.z + 1.0), f3 = this.proj(zc, g.x - half, g.z + 1.0);
+        ctx.globalAlpha = a * (0.16 + 0.1 * pulse);
+        ctx.fillStyle = '#5fe0ff';
+        ctx.beginPath(); ctx.moveTo(f0.sx, f0.sy); ctx.lineTo(f1.sx, f1.sy); ctx.lineTo(f2.sx, f2.sy); ctx.lineTo(f3.sx, f3.sy); ctx.closePath(); ctx.fill();
+        // Leit-Chevrons auf dem Boden vor dem Tor (zeigen die Durchfahrtsrichtung)
+        for (let c = 1; c <= 3; c++) {
+          const zc0 = g.z - 3 * c, cw = half * 0.55;
+          const a0 = this.proj(zc, g.x - cw, zc0 - 1.1), a1 = this.proj(zc, g.x, zc0), a2 = this.proj(zc, g.x + cw, zc0 - 1.1);
+          ctx.globalAlpha = a * pulse * (0.7 - 0.18 * c); ctx.strokeStyle = c & 1 ? '#5fe0ff' : '#ff4fd8'; ctx.lineWidth = Math.max(1.2, 0.1 * k);
+          ctx.beginPath(); ctx.moveTo(a0.sx, a0.sy); ctx.lineTo(a1.sx, a1.sy); ctx.lineTo(a2.sx, a2.sy); ctx.stroke();
+        }
+        const wL = Math.max(1.8, 0.12 * k), wH = wL * 3;
+        for (const [px, col, glow] of [[-half, '#bff6ff', '#5fe0ff'], [half, '#ffd0f4', '#ff4fd8']] as const) {
+          const b = this.proj(zc, g.x + px, g.z);
+          ctx.globalAlpha = a * 0.3 * pulse; ctx.strokeStyle = glow; ctx.lineWidth = wH;
+          ctx.beginPath(); ctx.moveTo(b.sx, b.sy); ctx.lineTo(b.sx, b.sy - hgt * k); ctx.stroke();
+          ctx.globalAlpha = a * pulse; ctx.strokeStyle = col; ctx.lineWidth = wL;
+          ctx.beginPath(); ctx.moveTo(b.sx, b.sy); ctx.lineTo(b.sx, b.sy - hgt * k); ctx.stroke();
+        }
+        const tl = this.proj(zc, g.x - half, g.z), tr = this.proj(zc, g.x + half, g.z);
+        const gr = ctx.createLinearGradient(tl.sx, 0, tr.sx, 0); gr.addColorStop(0, '#5fe0ff'); gr.addColorStop(1, '#ff4fd8');
+        ctx.globalAlpha = a * 0.35 * pulse; ctx.strokeStyle = gr; ctx.lineWidth = wH;
+        ctx.beginPath(); ctx.moveTo(tl.sx, tl.sy - hgt * k); ctx.lineTo(tr.sx, tr.sy - hgt * k); ctx.stroke();
+        ctx.globalAlpha = a * pulse; ctx.lineWidth = wL;
+        ctx.beginPath(); ctx.moveTo(tl.sx, tl.sy - hgt * k); ctx.lineTo(tr.sx, tr.sy - hgt * k); ctx.stroke();
+        ctx.globalAlpha = 1;
+      } });
+    }
+    if (this.rushK > 0.05 && this.quality < 2 && !this.reducedMotion) {
+      // Licht-Dashes auf den beiden Spurgrenzen: laufen mit dem Tempo, wechseln Cyan und Magenta (dünn, über dem Asphalt, unter Fahrzeugen)
+      const step = 7, z0 = Math.floor(v.s / step) * step;
+      for (let i = 1; i < 14; i++) for (const sx of [-1, 1]) {
+        const z = z0 + i * step + ((this.clock * 40) % step);
+        const d = z - zc;
+        if (d < 6 || d > 160) continue;
+        const x = sx * B.road.laneWidth / 2;
+        const a = this.fade(d) * 0.55 * this.rushK;
+        const p = this.proj(zc, x, z), q = this.proj(zc, x, z + 2.4);
+        items.push({ d: d - 0.6, draw: () => {
+          ctx.globalAlpha = a; ctx.strokeStyle = (i + (sx > 0 ? 1 : 0)) & 1 ? '#5fe0ff' : '#ff4fd8'; ctx.lineWidth = Math.max(1, 0.1 * p.k);
+          ctx.beginPath(); ctx.moveTo(p.sx, p.sy); ctx.lineTo(q.sx, q.sy); ctx.stroke(); ctx.globalAlpha = 1;
+        } });
+      }
+    }
+  }
+
+  /** Effekte am Wagen: Aktivierungsring, Slash-Schweife, Schockwelle, Tor-Ringe, Phantom-Ring, Ende. */
+  private rushPlayerFx(_v: View, zc: number, sx: number, k: number, liftPx: number): void {
+    const { ctx, L } = this;
+    const dt = this.dtLast, cy = L.gy - 0.7 * k - liftPx;
+    if (this.startK > 0) {
+      const t = 1 - this.startK, r = (1.2 + 2.4 * t) * k;
+      ctx.save(); ctx.globalAlpha = 0.9 * this.startK; ctx.strokeStyle = '#e8fbff'; ctx.lineWidth = Math.max(1.5, 0.12 * k);
+      ctx.beginPath(); ctx.ellipse(sx, cy, r, r * 0.7, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.5 * this.startK; ctx.strokeStyle = '#ff4fd8'; ctx.lineWidth = Math.max(1, 0.2 * k);
+      ctx.beginPath(); ctx.ellipse(sx, cy, r * 0.85, r * 0.6, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      this.startK = Math.max(0, this.startK - dt / 0.3);
+    }
+    if (this.endK > 0) {
+      const t = 1 - this.endK, r = (2.6 - 1.4 * t) * k;
+      ctx.save(); ctx.globalAlpha = 0.6 * this.endK; ctx.strokeStyle = '#ff9af0'; ctx.lineWidth = Math.max(1, 0.1 * k);
+      ctx.beginPath(); ctx.ellipse(sx, cy, r, r * 0.7, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      this.endK = Math.max(0, this.endK - dt / 0.25);
+    }
+    if (this.passK > 0) {
+      ctx.save(); ctx.globalAlpha = 0.55 * this.passK; ctx.strokeStyle = '#c8f6ff'; ctx.lineWidth = Math.max(1, 0.08 * k);
+      const r = (1.5 + 0.5 * (1 - this.passK)) * k;
+      ctx.beginPath(); ctx.ellipse(sx, cy, r, r * 0.65, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      this.passK = Math.max(0, this.passK - dt / 0.25);
+    }
+    for (let i = this.slashFx.length - 1; i >= 0; i--) {
+      const s = this.slashFx[i]; s.age += dt;
+      const t = s.age / 0.42;
+      if (t >= 1) { this.slashFx.splice(i, 1); continue; }
+      const x0 = s.x0 + (sx - s.x0) * Math.min(1, t * 0.5), h = (0.55 - 0.4 * t) * k, y = cy - 0.1 * k, mx = (x0 + sx) / 2;
+      const gr = ctx.createLinearGradient(x0, 0, sx, 0); gr.addColorStop(0, 'rgba(95,224,255,0)'); gr.addColorStop(0.7, s.dir > 0 ? '#5fe0ff' : '#ff4fd8'); gr.addColorStop(1, '#ffffff');
+      ctx.save(); ctx.globalAlpha = 0.9 * (1 - t);
+      ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(x0, y); ctx.quadraticCurveTo(mx, y - h * 2, sx, y - 0.05 * k); ctx.quadraticCurveTo(mx, y + h * 0.5, x0, y); ctx.fill();
+      ctx.globalAlpha = 0.6 * (1 - t); ctx.strokeStyle = s.dir > 0 ? '#ff9af0' : '#9af0ff'; ctx.lineWidth = Math.max(1, 0.06 * k);
+      ctx.beginPath(); ctx.moveTo(x0, y + 0.25 * k); ctx.quadraticCurveTo(mx, y - h * 1.2, sx, y + 0.1 * k); ctx.stroke();
+      ctx.restore();
+    }
+    for (let i = this.waveFx.length - 1; i >= 0; i--) {
+      const w = this.waveFx[i]; w.age += dt;
+      const t = w.age / 0.4;
+      if (t >= 1) { this.waveFx.splice(i, 1); continue; }
+      const e = 1 - (1 - t) * (1 - t), r = 1.5 + 12.5 * e;
+      const back = this.carBz - zc - 1.5;
+      const ring = (rr: number): [number, number][] => Array.from({ length: 28 }, (_, j) => {
+        const a = (j / 28) * Math.PI * 2, dz = Math.max(-back, Math.sin(a) * rr), dx = Math.cos(a) * rr;
+        const p = this.projectWorld(zc, this.carBx + dx + this.camHead * dz, this.carBz + dz, 0);
+        return [p.sx, p.sy];
+      });
+      const path = (pts: [number, number][]) => { ctx.beginPath(); pts.forEach(([x, y], j) => { if (j) ctx.lineTo(x, y); else ctx.moveTo(x, y); }); ctx.closePath(); };
+      const p1 = ring(r);
+      ctx.save();
+      path(p1); ctx.globalAlpha = 0.1 * (1 - t); ctx.fillStyle = '#5fe0ff'; ctx.fill();
+      ctx.globalAlpha = 0.4 * (1 - t); ctx.strokeStyle = '#5fe0ff'; ctx.lineWidth = Math.max(2, 0.26 * k); path(p1); ctx.stroke();
+      ctx.globalAlpha = 0.95 * (1 - t); ctx.strokeStyle = '#e8fbff'; ctx.lineWidth = Math.max(1, 0.07 * k); path(p1); ctx.stroke();
+      if (t > 0.12) { ctx.globalAlpha = 0.6 * (1 - t); ctx.strokeStyle = '#ff4fd8'; ctx.lineWidth = Math.max(1, 0.09 * k); path(ring(r * 0.78)); ctx.stroke(); }
+      ctx.restore();
+    }
+    for (let i = this.gateFx.length - 1; i >= 0; i--) {
+      const g = this.gateFx[i]; g.age += dt;
+      const t = g.age / 0.45;
+      if (t >= 1) { this.gateFx.splice(i, 1); continue; }
+      const p = this.screenAt(g.x, g.z, 0);
+      if (!p) continue;
+      const kk = this.L.fx / Math.max(8, depthEff(Math.max(1, g.z - zc), this.L));
+      ctx.save(); ctx.globalAlpha = 0.8 * (1 - t); ctx.strokeStyle = '#e8fbff'; ctx.lineWidth = Math.max(1.2, 0.1 * kk);
+      ctx.beginPath(); ctx.ellipse(p.sx, p.sy - 0.5 * kk, (1.6 + 2.2 * t) * kk, (1.0 + 1.4 * t) * kk * 0.7, 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+    }
+  }
+
+  /** Bildschirmeffekte des Rushs: Lichtspuren hinter dem Wagen und Energiepartikel (Tempolinien siehe fxLayer). */
+  private rushScreenFx(v: View, dt: number): void {
+    if (this.rushK < 0.05 || !v.running) return;
+    const { ctx, L } = this;
+    const k0 = L.fx / CAM_BACK, y0 = L.gy - (0.5 + v.lift) * k0;
+    for (const [off, c0] of [[-0.5, '95,224,255'], [0.5, '255,79,216']] as const) {
+      const x0 = this.carSx + off * k0, len = Math.min(L.h - y0, (this.reducedMotion ? 2.2 : 3.6 + 0.6 * Math.sin(this.clock * 12)) * k0 * this.rushK);
+      const g = ctx.createLinearGradient(0, y0, 0, y0 + len);
+      g.addColorStop(0, `rgba(${c0},0.75)`); g.addColorStop(1, `rgba(${c0},0)`);
+      ctx.globalAlpha = this.rushK; ctx.fillStyle = g;
+      ctx.fillRect(Math.round(x0 - Math.max(1, 0.07 * k0)), y0, Math.max(2, 0.14 * k0), len);
+    }
+    ctx.globalAlpha = 1;
+    if (!this.reducedMotion) {
+      this.sparkAcc += dt * 34 * this.rushK * (this.quality > 0 ? 0.5 : 1);
+      const cap = this.quality > 0 ? MAX_PARTICLES * 0.5 : MAX_PARTICLES * 0.85;
+      while (this.sparkAcc >= 1 && this.particles.length < cap) {
+        this.sparkAcc -= 1;
+        const side = Math.random() > 0.5 ? 1 : -1;
+        this.particles.push({ x: this.carSx + side * (0.3 + Math.random() * 0.7) * k0, y: y0 + Math.random() * 0.4 * k0, vx: side * (5 + Math.random() * 20), vy: 25 + Math.random() * 70, life: 0, max: 0.25 + Math.random() * 0.25, c: side > 0 ? '#ff4fd8' : '#5fe0ff' });
+      }
+    }
   }
 }

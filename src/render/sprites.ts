@@ -23,33 +23,58 @@ const PAINT: Record<string, { body: string; dark: string; light: string }[]> = {
   truck: [{ body: '#d8d2c0', dark: '#8f8a78', light: '#ffffff' }, { body: '#3a6fb0', dark: '#1d3f6e', light: '#8fb6ee' }, { body: '#d9792a', dark: '#8a4510', light: '#ffc08a' }],
 };
 
-/** Angekündigter Spurwechsel: Seite (−1 links, +1 rechts) und Blinkphase. */
-export interface Blinker { side: -1 | 1; on: boolean }
+/** Angekündigter Spurwechsel: Seite (−1 links, +1 rechts). */
+export interface Blinker { side: -1 | 1 }
+
+/** Heckansicht eines Verkehrsteilnehmers. Der Blinker wird getrennt als schlankes Leuchtelement gezeichnet (siehe blinkerLight). */
+export function drawObstacle(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: number, k: number, clock: number, id = 0): void {
+  drawBody(ctx, kind, sx, sy, k, clock, id);
+}
+
+/** Lage der Rückleuchten je Fahrzeugtyp (Abstand vom Rand, Oberkante, Höhe in m), gleich wie in drawBody. */
+const LAMP: Record<string, [number, number, number]> = { truck: [0.04, 0.9, 0.34], taxi: [0.07, 0.86, 0.2], cabrio: [0.07, 0.78, 0.17], sedan: [0.07, 0.88, 0.17] };
+
+/** Lage und Größe des Blinkers (Bildpunkte der Zeichenfläche): sitzt am äußeren Heckleuchtenrand auf der Wechselseite. */
+export interface BlinkerLight { cx: number; cy: number; w: number; h: number; side: -1 | 1 }
 
 /**
- * Heckansicht mit optionalem Blinker (Typ B: Spurwechsler). Der Blinker besteht aus einer orangen Heckleuchte auf der Wechselseite mit Lichthof
- * und einem kleinen Pfeil über dem Dach – auch aus der Ferne erkennbar (Mindestgrößen in Bildpunkten).
+ * Schlankes Leuchtelement am Heck: Breite = `scale` der Fahrzeugbreite (mit Mindestbreite `minW` in Bildpunkten, damit es auf kleinen Displays und in der Ferne sichtbar bleibt),
+ * Höhe etwa die Hälfte; Größe und Lage ändern sich beim Blinken nicht.
  */
-export function drawObstacle(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: number, k: number, clock: number, id = 0, blink?: Blinker): void {
-  drawBody(ctx, kind, sx, sy, k, clock, id);
-  if (!blink) return;
-  const W = KINDS[kind].w, kk = Math.max(k, (4.5 * gfx.u) / W);
-  const roof = kind === 'truck' ? 3.7 : kind === 'cabrio' ? 1.4 : 1.95;
-  const lw = Math.max(0.45, (5 * gfx.u) / kk), lh = Math.max(0.26, (3.6 * gfx.u) / kk);
-  const x0 = blink.side > 0 ? W - 0.06 - lw : 0.06;
-  const L = (xx: number, top: number, w: number, h: number, c: string) => rect(ctx, sx + (xx - W / 2) * kk, sy - top * kk, w * kk, h * kk, c);
-  const a0 = ctx.globalAlpha;
-  if (blink.on) {
-    ctx.globalAlpha = a0 * 0.45; L(x0 - lw * 0.5, (kind === 'truck' ? 1.0 : 0.95) + lh * 0.6, lw * 2, lh * 2.2, '#ff8a1f');
-    ctx.globalAlpha = a0; L(x0, kind === 'truck' ? 1.0 : 0.95, lw, lh, '#ffb347'); L(x0 + lw * 0.2, (kind === 'truck' ? 1.0 : 0.95) - lh * 0.15, lw * 0.6, lh * 0.5, '#fff0c0');
-  } else { ctx.globalAlpha = a0; L(x0, kind === 'truck' ? 1.0 : 0.95, lw, lh, '#6a3a12'); }
-  // Pfeil über dem Dach zeigt die Wechselrichtung
-  const ah = Math.max(0.55, (9 * gfx.u) / kk), cx = sx + blink.side * (W / 2 + 0.15) * kk, cy = sy - (roof + 0.55) * kk;
-  ctx.fillStyle = blink.on ? '#ffb347' : '#6a3a12';
-  ctx.beginPath();
-  ctx.moveTo(cx + blink.side * ah * kk * 0.7, cy); ctx.lineTo(cx - blink.side * ah * kk * 0.2, cy - ah * kk * 0.55); ctx.lineTo(cx - blink.side * ah * kk * 0.2, cy + ah * kk * 0.55);
-  ctx.closePath(); ctx.fill();
-  ctx.globalAlpha = a0;
+export function blinkerLight(kind: ObjKind, sx: number, sy: number, k: number, side: -1 | 1, scale: number, minW: number): BlinkerLight {
+  const W = KINDS[kind].w;
+  const [off, top, lh] = LAMP[kind] ?? LAMP.sedan;                           // Rückleuchte: Abstand vom Rand, Oberkante und Höhe (m)
+  const w = Math.max(minW, scale * W * k), h = Math.max(minW * 0.55, Math.min(lh * k * 0.8, w * 0.55));
+  return { cx: sx + side * ((W / 2 - off) * k - w / 2), cy: sy - (top - lh / 2) * k, w, h, side };
+}
+
+/** Weiches Blinken: gerundeter Verlauf zwischen 0,12 und 1 (Frequenz in Hz). Bei reduzierter Bewegung dauerhaft gedämpft sichtbar. */
+export function blinkerIntensity(clock: number, hz: number, reduced: boolean): number {
+  if (reduced) return 0.85;
+  const x = Math.max(0, Math.min(1, 0.5 + 0.78 * Math.sin(2 * Math.PI * hz * clock)));
+  return 0.12 + 0.88 * x * x * (3 - 2 * x);
+}
+
+/** Zeichnet das Leuchtelement vektorbasiert (auch auf hochaufgelösten Flächen scharf): warmes Bernsteinorange, klare Kernfläche, eng begrenzter Glow. */
+export function drawBlinkerLight(ctx: CanvasRenderingContext2D, b: BlinkerLight, intensity: number, glow: number, color: string, alpha: number): void {
+  const { cx, cy, w, h, side } = b;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // eng begrenzter Glow (rund, kleiner als zwei Leuchtbreiten)
+  const gr = Math.max(w, h) * 1.9;
+  const g = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.3, cx, cy, gr);
+  g.addColorStop(0, `rgba(255,181,71,${(glow * intensity).toFixed(3)})`); g.addColorStop(1, 'rgba(255,181,71,0)');
+  ctx.fillStyle = g; ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2);
+  // dezenter Lichtauslauf zur Wechselseite (Richtungshinweis, flach und kurz)
+  const fx0 = cx + side * w * 0.4, fx1 = cx + side * w * 1.9;
+  const fg = ctx.createLinearGradient(fx0, 0, fx1, 0); fg.addColorStop(0, `rgba(255,181,71,${(0.55 * intensity).toFixed(3)})`); fg.addColorStop(1, 'rgba(255,181,71,0)');
+  ctx.fillStyle = fg; ctx.fillRect(Math.min(fx0, fx1), cy - h * 0.16, Math.abs(fx1 - fx0), h * 0.32);
+  // Linse: gedämpft im Aus-Zustand, helle Kernfläche im An-Zustand
+  const r = Math.min(h * 0.5, w * 0.4);
+  const rr = (x: number, y: number, ww: number, hh: number, rad: number) => { ctx.beginPath(); ctx.moveTo(x + rad, y); ctx.arcTo(x + ww, y, x + ww, y + hh, rad); ctx.arcTo(x + ww, y + hh, x, y + hh, rad); ctx.arcTo(x, y + hh, x, y, rad); ctx.arcTo(x, y, x + ww, y, rad); ctx.closePath(); };
+  ctx.globalAlpha = alpha * (0.4 + 0.6 * intensity); ctx.fillStyle = color; rr(cx - w / 2, cy - h / 2, w, h, r); ctx.fill();
+  ctx.globalAlpha = alpha * intensity * 0.9; ctx.fillStyle = '#FFE9B8'; rr(cx - w * 0.3, cy - h * 0.22, w * 0.6, h * 0.44, r * 0.6); ctx.fill();
+  ctx.restore();
 }
 
 function drawBody(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: number, k: number, clock: number, id: number): void {

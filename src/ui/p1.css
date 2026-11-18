@@ -15,6 +15,8 @@
 #hud-rush .rl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; grid-column: 1; }
 #hud-rush .rt { font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; grid-column: 2; grid-row: 1; }
 #hud-rush .bar { grid-column: 1 / span 2; grid-row: 2; }
+#hud-rush .rc { display: none; grid-column: 1 / span 2; grid-row: 3; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+#hud-rush.on .rc { display: block; }
 #hud-rush.cd { opacity: .62; }
 #hud-rush.on { color: #fff; border-color: var(--magenta); background: linear-gradient(90deg, #ff3fa4cc, #2ee6d6cc); box-shadow: 0 0 10px #ff3fa4aa; text-shadow: 0 1px 0 #0008; }
 #hud-rush.on .bar { background: #00000044; }

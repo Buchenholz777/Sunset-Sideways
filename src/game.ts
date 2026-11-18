@@ -115,15 +115,16 @@ export class Game {
   private excluded = false;
 
   // zuletzt in das DOM geschriebene Werte (kein DOM-Update pro Frame ohne Änderung)
-  private last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '', score: '', combo: '', comboBar: '', rush: '', rushBar: '', rushTxt: '' };
+  private last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '', score: '', combo: '', comboBar: '', rush: '', rushBar: '', rushTxt: '', chain: '' };
   /** Stil-Rekord (höchste Stilpunktzahl eines Endless-Laufs), getrennt von der Bestweite. */
   private styleBest = load().styleBest;
   private missTimer: ReturnType<typeof setTimeout> | undefined;
   private lastRushSec = -1;
+  private lastPassSfx = 0;
 
   private el = {
     hud: $('hud'), dist: $('hud-distance'), best: $('hud-best'), bestWrap: $('hud-best-wrap'), speed: $('hud-speed'),
-    score: $('hud-style-score'), combo: $('hud-combo'), comboX: $('hud-combo-x'), comboBar: $('hud-combo-bar'), rush: $('hud-rush'), rushLbl: $('hud-rush-lbl'), rushBar: $('hud-rush-bar'), rushTxt: $('hud-rush-txt'), miss: $('fx-miss'),
+    score: $('hud-style-score'), combo: $('hud-combo'), comboX: $('hud-combo-x'), comboBar: $('hud-combo-bar'), rush: $('hud-rush'), chain: $('hud-rush-chain'), rushLbl: $('hud-rush-lbl'), rushBar: $('hud-rush-bar'), rushTxt: $('hud-rush-txt'), miss: $('fx-miss'),
     shield: $('fx-shield'), slow: $('fx-slow'), magnet: $('fx-magnet'), blitz: $('fx-blitz'), glide: $('fx-glide'), boost: $('fx-boost'), guide: $('fx-guide'), pause: $<HTMLButtonElement>('btn-pause'), snd: $<HTMLButtonElement>('btn-sound'), hint: $('hint'), sprintBar: $('sprint-bar'), sprintBtn: $('btn-sprint'), challengeBox: $('challenge'), shareBtn: $('btn-share'), endlessBtn: $('btn-endless'), resSprintBtn: $('btn-res-sprint'), shareBox: $('share-box'), shareUrl: $<HTMLInputElement>('share-url'), shareMsg: $('share-msg'), resTitle: $('res-title'), resBestLabel: $('res-best-label'), toast: $('fx-toast'), pauseReason: $('pause-reason'),
     start: $('screen-start'), paused: $('screen-pause'), result: $('screen-result'),
     again: $<HTMLButtonElement>('btn-again'),
@@ -189,7 +190,7 @@ export class Game {
           pickupEvents: this.qaPickupEvents, glideT: this.sim.glideT, height: this.sim.height, blitzT: this.sim.blitzT, blitzLeft: this.sim.blitzLeft, shieldT: this.sim.shieldT, slowT: this.sim.slowT, magnetT: this.sim.magnetT, phase: this.state.phase, hill: this.sim.road.height(this.sim.s), boostT: this.sim.boostT, guideT: this.sim.guideT, guideQ: this.sim.guideQ,
           obstacles: this.sim.obstacles.filter((o) => !o.hit && o.z > this.sim!.s - 6).slice(0, 8).map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z, vz: o.vz, lc: o.lc?.stage ?? null })),
           pickups: this.sim.pickups.map((p) => ({ type: p.type, x: p.x, z: p.z })),
-          style: { score: this.sim.style.styleScore, near: this.sim.style.nearMissCount, combo: this.sim.style.comboCount, mult: this.sim.style.multiplier, maxCombo: this.sim.style.maxCombo, charge: this.sim.style.rushCharge, rush: this.sim.style.rushActive, rushT: this.sim.style.rushRemaining, cooldown: this.sim.style.rushCooldown, rushCount: this.sim.style.rushCount, grace: this.sim.graceT },
+          style: { score: this.sim.style.styleScore, near: this.sim.style.nearMissCount, combo: this.sim.style.comboCount, mult: this.sim.style.multiplier, maxCombo: this.sim.style.maxCombo, charge: this.sim.style.rushCharge, rush: this.sim.style.rushActive, rushT: this.sim.style.rushRemaining, chain: this.sim.style.rushChain, gates: this.sim.gates.length, gatePts: this.sim.style.gatePoints, slashes: this.sim.style.slashCount, rushF: this.sim.rushF, cooldown: this.sim.style.rushCooldown, rushCount: this.sim.style.rushCount, grace: this.sim.graceT },
         }),
       };
     }
@@ -346,7 +347,7 @@ export class Game {
     this.firstObsId = null; this.landing = false; this.runPickups = 0;
     this.runStartedAt = performance.now(); this.runCtl = false; this.runDodged = false; this.runFlew = false;
     this.el.hint.hidden = true; this.el.toast.hidden = true; this.el.pauseReason.hidden = true;
-    this.last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '', score: '', combo: '', comboBar: '', rush: '', rushBar: '', rushTxt: '' };
+    this.last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '', score: '', combo: '', comboBar: '', rush: '', rushBar: '', rushTxt: '', chain: '' };
     this.lastRushSec = -1;
     this.el.miss.hidden = true; this.el.combo.hidden = true; this.el.rush.classList.remove('on', 'cd', 'start'); this.el.hud.classList.remove('rush');
     for (const chip of [this.el.shield, this.el.slow, this.el.magnet, this.el.blitz, this.el.glide, this.el.boost, this.el.guide]) chip.hidden = true;   // keine Effekt-Anzeigen aus der vorigen Fahrt
@@ -440,8 +441,12 @@ export class Game {
           this.showMiss(`Near Miss! ${ev.mult > 1 ? `x${ev.mult} ` : ''}+${ev.pts}`, ev.mult > 1 ? 'combo' : '');
           if (ev.combo >= 2) { this.el.combo.classList.remove('pop'); void this.el.combo.offsetWidth; this.el.combo.classList.add('pop'); }
         }
-        else if (ev.type === 'rushStart') { this.sound.sfx('rushStart'); this.showMiss('Neon Rush!', 'rush', 1000); this.el.rush.classList.remove('start'); void this.el.rush.offsetWidth; this.el.rush.classList.add('start'); }
-        else if (ev.type === 'rushEnd') { this.sound.sfx('rushEnd'); this.showMiss(ev.reason === 'hit' ? 'Rush verloren' : 'Rush vorbei', 'lost', 900); }
+        else if (ev.type === 'rushStart') { this.sound.sfx('rushStart'); this.renderer.rushStarted(); this.showMiss('Neon Rush!', 'rush', 1000); this.el.rush.classList.remove('start'); void this.el.rush.offsetWidth; this.el.rush.classList.add('start'); }
+        else if (ev.type === 'rushEnd') { this.sound.sfx('rushEnd'); this.renderer.rushEnded(); this.showMiss(ev.reason === 'hit' ? 'Rush verloren' : 'Rush vorbei', 'lost', 900); }
+        else if (ev.type === 'slash') { this.renderer.slash(ev.dir); this.sound.sfx('slash'); }
+        else if (ev.type === 'gate') { this.renderer.gateCollected(ev.x, ev.z); this.sound.sfx('gate', ev.n); this.showMiss(ev.n === 1 ? `Neon Gate +${ev.pts}` : `Rush Chain x${ev.n} +${ev.pts}`, 'rush', 1100); }
+        else if (ev.type === 'shockwave') { this.renderer.shockwave(); this.sound.sfx('wave'); }
+        else if (ev.type === 'rushPass') { this.renderer.rushPass(ev.x, ev.z); const nowMs = performance.now(); if (nowMs - this.lastPassSfx > 160) { this.lastPassSfx = nowMs; this.sound.sfx('rushPass'); } }
         else if (ev.type === 'comboLost') { if (ev.reason === 'time') this.showMiss('Combo vorbei', 'lost', 900); }
         else if (ev.type === 'laneWarn') this.sound.sfx('laneWarn');
         else if (ev.type === 'queued') this.toast(`Vorgemerkt: ${PICKUP_LABEL[ev.effect as PickupKey] ?? ev.effect}`, 1100);
@@ -676,7 +681,7 @@ export class Game {
       const running = this.state.phase === 'running' || this.qaHook;
       v = {
         s: sim.s, x: sim.q, X: sim.X, bodyYaw: sim.bodyYaw, phi: sim.phi, rel: sim.relAngle, slow: sim.slowT > 0, magnet: sim.magnetT > 0, blitz: sim.blitzT > 0, boost: sim.boostT > 0, guide: sim.guideQ, lift: sim.height, glideLeft: sim.glideT, slowAge: sim.slowT > 0 ? B.effects.slow - sim.slowT : -1, road: sim.road, speedKmh: sim.speedKmh, shield: sim.shieldT > 0,
-        shieldFrac: sim.shieldT / B.effects.shield, rush: sim.style.rushActive, obstacles: sim.obstacles, pickups: sim.pickups,
+        shieldFrac: sim.shieldT / B.effects.shield, rush: sim.style.rushActive, gates: sim.gates, obstacles: sim.obstacles, pickups: sim.pickups,
         crash: sim.crash ? { id: sim.crash.id } : null, running, sceneT: this.qaSceneT ?? sim.t - sim.t0, seed: sim.seed, finishZ: this.mode === 'sprint' ? SPRINT_FINISH_M : undefined,
       };
       if (running) { this.sound.setLight(lightT(sim.s)); this.sound.update(sim.speedKmh, false, 0); }
@@ -734,6 +739,10 @@ export class Game {
     const sec = act ? Math.max(0, st.rushRemaining) : 0;
     const txt = act ? `${sec.toFixed(1).replace('.', ',')} s` : st.rushCharge >= 100 && st.rushCooldown > 0 ? `in ${Math.ceil(st.rushCooldown)} s` : `${Math.round(st.rushCharge)} %`;
     if (txt !== L.rushTxt) { L.rushTxt = txt; E.rushTxt.textContent = txt; }
+    // Rush Chain: eigene Zeile (nur während des Rushs), eingesammelte Tore als Punkte; getrennt vom normalen Combo-HUD
+    const chainTxt = act ? `Rush Chain ${st.rushChain > 0 ? 'x' + st.rushChain : '–'} ${'●'.repeat(st.rushChain)}${'○'.repeat(Math.max(0, B.style.rush.gateCount - st.rushChain))}` : '';
+    if (chainTxt !== L.chain) { L.chain = chainTxt; E.chain.textContent = chainTxt; }
+    this.sound.setRush(act);
     // dezente Rush-Rückmeldung im Sekundentakt (nur Ton; ohne Ton bleiben Anzeige und Leuchten)
     if (act) { const whole = Math.ceil(sec); if (whole !== this.lastRushSec) { if (this.lastRushSec >= 0 && whole > 0) this.sound.sfx('rushTick'); this.lastRushSec = whole; } } else this.lastRushSec = -1;
   }

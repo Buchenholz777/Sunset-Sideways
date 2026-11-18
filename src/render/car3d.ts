@@ -10,7 +10,7 @@ import { mixHex } from './scenery';
  * Koordinaten: x seitlich (+ rechts), y oben, z nach vorn; Fahrzeug 1,9 × 4,2 m, Mittelpunkt im Ursprung.
  * Sichtbare Breite (±0,95 m über den Reifen) und Trefferfläche (balance.player) sind aufeinander abgestimmt.
  */
-export interface CarFx { turbo: boolean; grip: boolean; brake: number; steer: number; running: boolean; yaw: number; /** Flughöhe in Modelleinheiten */ lift?: number; /** Phantom-Turbo 0…1: Karosserie wird schwarz, nur die Rückleuchten leuchten */ stealth?: number; /** Drehwinkel (rad) um die Längsachse (Rolle beim Abheben): aus der Heckansicht eine Drehung in der Bildebene */ spin?: number; /** Darstellung der Länge 0…1 (1 = wahre Länge, deckt sich mit der Kollisionsbox) */ zs?: number; /** Lauflicht-Position −1…1 (Phantom-Turbo) */ scan?: number }
+export interface CarFx { turbo: boolean; grip: boolean; brake: number; steer: number; running: boolean; yaw: number; /** Flughöhe in Modelleinheiten */ lift?: number; /** Phantom-Turbo 0…1: Karosserie wird schwarz, nur die Rückleuchten leuchten */ stealth?: number; /** Drehwinkel (rad) um die Längsachse (Rolle beim Abheben): aus der Heckansicht eine Drehung in der Bildebene */ spin?: number; /** Darstellung der Länge 0…1 (1 = wahre Länge, deckt sich mit der Kollisionsbox) */ zs?: number; /** Lauflicht-Position −1…1 (Phantom-Turbo) */ scan?: number; /** Neon Rush 0…1: leuchtende Cyan-/Magenta-Konturen, Aufhellung und Lichtteppich */ neon?: number }
 
 type V3 = [number, number, number];
 interface Poly { pts: V3[]; col: string; al?: number }
@@ -164,7 +164,8 @@ export function drawCar(ctx: CanvasRenderingContext2D, project: (x: number, y: n
   const lift = fx.lift ?? 0;
   const st = Math.max(0, Math.min(1, fx.stealth ?? 0));
   const LIGHTS = new Set(['#ff2a2a', '#ff6a5a', '#ffd0c0']);
-  const tone = (col: string): string => (st > 0 && !LIGHTS.has(col) && col.length === 7 ? mixHex(col, '#05050c', 0.9 * st) : col);
+  const nk = Math.max(0, Math.min(1, fx.neon ?? 0));
+  const tone = (col: string): string => (st > 0 && !LIGHTS.has(col) && col.length === 7 ? mixHex(col, '#05050c', 0.9 * st) : nk > 0 && !LIGHTS.has(col) && col.length === 7 ? mixHex(col, '#9a7cff', 0.2 * nk) : col);
   const zs = fx.zs ?? ZS;
   const zc = (z: number) => ZR + (z - ZR) * zs;
   const proj = (p: V3) => project(p[0], p[1] + lift, zc(p[2]));
@@ -193,6 +194,11 @@ export function drawCar(ctx: CanvasRenderingContext2D, project: (x: number, y: n
   for (const sg of [-1, 1]) { ctx.fillStyle = '#ff2a2a'; path([[sg * 0.16, 0, ZR - 0.02], [sg * 0.84, 0, ZR - 0.02], [sg * 0.8, 0, ZR - 0.12], [sg * 0.2, 0, ZR - 0.12]], gp); ctx.fill(); }
   ctx.globalAlpha = 1;
 
+  if (nk > 0.02) {
+    // Neon Rush: breiter Lichtteppich in Cyan und Magenta unter dem Wagen (Reflexe auf der Fahrbahn)
+    ctx.fillStyle = `rgba(95,224,255,${(0.16 * nk * a).toFixed(3)})`; path([[-1.5, 0, ZR - 0.6], [0.05, 0, ZR - 0.6], [0.05, 0, 1.6], [-1.3, 0, 1.6]], gp); ctx.fill();
+    ctx.fillStyle = `rgba(255,79,216,${(0.16 * nk * a).toFixed(3)})`; path([[-0.05, 0, ZR - 0.6], [1.5, 0, ZR - 0.6], [1.3, 0, 1.6], [-0.05, 0, 1.6]], gp); ctx.fill();
+  }
   if (fx.spin) { const [cx, cy] = project(0, 0.7 + lift, zc(0)); ctx.save(); ctx.translate(cx, cy); ctx.rotate(fx.spin); ctx.translate(-cx, -cy); }
   const faces = build(fx).filter((f) => f.kind === 'rear' || f.kind === 'top' || (f.kind === 'right' && s > (f.col === COL.glass ? 0.07 : 0.02)) || (f.kind === 'left' && s < -(f.col === COL.glass ? 0.07 : 0.02)));
   const depth = (f: Face) => f.pts.reduce((acc, p) => acc + (-p[0] * s + p[2] * c), 0) / f.pts.length + (f.bias ?? 0);
@@ -202,8 +208,15 @@ export function drawCar(ctx: CanvasRenderingContext2D, project: (x: number, y: n
     path(f.pts); ctx.fill();
     for (const e of f.extra) { ctx.globalAlpha = e.al ?? 1; ctx.fillStyle = tone(e.col); path(e.pts); ctx.fill(); }
     ctx.globalAlpha = 1;
-    ctx.strokeStyle = 'rgba(5,0,20,0.42)'; ctx.lineWidth = 1;
-    path(f.pts); ctx.stroke();
+    if (nk > 0.02) {
+      // leuchtende Konturen: Dach und Oberseiten cyan, Heck und Flanken magenta (klare Silhouette, keine Unschärfe)
+      ctx.globalAlpha = 0.28 * nk; ctx.strokeStyle = f.kind === 'top' ? '#5fe0ff' : '#ff4fd8'; ctx.lineWidth = 2.4; path(f.pts); ctx.stroke();
+      ctx.globalAlpha = 0.95 * nk; ctx.strokeStyle = f.kind === 'top' ? '#c8f6ff' : '#ff9af0'; ctx.lineWidth = 1; path(f.pts); ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.strokeStyle = 'rgba(5,0,20,0.42)'; ctx.lineWidth = 1;
+      path(f.pts); ctx.stroke();
+    }
   }
   // Lichtkanten: warmes Sunset-Licht, später violett-blaue Lichtkanten
   const warm = gfx.sun > 0.45;
