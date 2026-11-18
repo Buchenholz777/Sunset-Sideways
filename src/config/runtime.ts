@@ -109,7 +109,7 @@ export const FIELDS: Field[] = [
   { path: 'scenery.nightKm', label: 'Nacht ab', unit: 'km', min: 2, max: 40, step: 0.5, group: 'scenery', important: true, effect: 'Ab hier ist es Nacht; die Strip-Kulisse blendet ein.' },
   { path: 'scenery.moonHighKm', label: 'Mond hoch am Himmel ab', unit: 'km', min: 3, max: 50, step: 0.5, group: 'scenery', effect: 'Bis hier steigt der Mond auf seine höchste Position.' },
   { path: 'scenery.neon', label: 'Neon-Intensität der Strip-Kulisse', unit: '%', min: 0, max: 1, step: 0.05, scale: 100, group: 'scenery', effect: 'Sichtbarkeit der Neon-Kulisse ab der Nacht.' },
-  { path: 'audio.music', label: 'Synthwave-Musik (Standard)', unit: '%', min: 0, max: 1.5, step: 0.05, scale: 100, group: 'audio', effect: 'Standardlautstärke der Musik; persönliche Stummschaltung hat Vorrang.' },
+  { path: 'audio.music', label: 'Musik (Standard)', unit: '%', min: 0, max: 1.5, step: 0.05, scale: 100, group: 'audio', effect: 'Standardlautstärke der Musik; persönliche Stummschaltung hat Vorrang.' },
   { path: 'audio.engine', label: 'Motor (Standard)', unit: '%', min: 0, max: 1.5, step: 0.05, scale: 100, group: 'audio', effect: 'Standardlautstärke des Motors.' },
   { path: 'audio.sfx', label: 'Effekte (Standard)', unit: '%', min: 0.4, max: 1.5, step: 0.05, scale: 100, group: 'audio', effect: 'Standardpegel von Kollisions- und Power-up-Signalen (nie unter 40 %, damit sie hörbar bleiben).' },
   { path: 'event.glideBoost', label: 'Flugwoche: zusätzlicher Fliegen-Anteil', unit: '×', min: 0, max: 2, step: 0.1, group: 'event', effect: 'Wird zum Fliegen-Anteil addiert, solange das Ereignis läuft.' },
