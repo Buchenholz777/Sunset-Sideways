@@ -134,36 +134,48 @@ export class Sound {
     }
   }
 
-  // ---------- Musik: eigene 80er-Arcade-Ballade in D-Dur (86 BPM, 16 Takte: Intro, Strophe, zwei Refrains) ----------
-  // Komposition eigens für das Spiel; Klangbild eines 80er-Automaten: FM-artige Glocken, Slap-Bass, Brass-Lead, Orgel im Refrain.
-  /** Je Progression: Basstöne und Vierklänge (MIDI) je Takt sowie die Lead-Melodie [Schritt, MIDI, Länge in 16teln]. */
-  private static PROGS = [
-    { // Intro und Strophe: D – h – G – A
-      roots: [38, 47, 43, 45],
-      chords: [[57, 62, 66, 69], [59, 62, 66, 71], [59, 62, 67, 71], [57, 61, 64, 69]],
-      lead: [
-        [[0, 66, 4], [4, 69, 2], [6, 71, 2], [8, 69, 6], [14, 66, 2]], [[0, 64, 4], [4, 62, 4], [8, 66, 8]],
-        [[0, 67, 4], [4, 66, 2], [6, 64, 2], [8, 62, 4], [12, 64, 4]], [[0, 64, 12], [12, 61, 2], [14, 64, 2]],
-      ] as [number, number, number][][],
-    },
-    { // Refrain 1: G – A – fis – h
-      roots: [43, 45, 42, 47],
-      chords: [[59, 62, 67, 71], [57, 61, 64, 69], [57, 61, 66, 69], [59, 62, 66, 71]],
-      lead: [
-        [[0, 74, 6], [6, 71, 2], [8, 74, 4], [12, 76, 4]], [[0, 78, 8], [8, 76, 4], [12, 73, 4]],
-        [[0, 73, 6], [6, 69, 2], [8, 73, 4], [12, 76, 4]], [[0, 74, 12], [12, 71, 4]],
-      ] as [number, number, number][][],
-    },
-    { // Refrain 2 mit Auflösung: G – A – D – Dsus4
-      roots: [43, 45, 38, 38],
-      chords: [[59, 62, 67, 71], [57, 61, 64, 69], [57, 62, 66, 69], [57, 62, 67, 69]],
-      lead: [
-        [[0, 74, 4], [4, 76, 4], [8, 78, 6], [14, 79, 2]], [[0, 81, 8], [8, 78, 4], [12, 76, 4]],
-        [[0, 78, 6], [6, 76, 2], [8, 74, 8]], [[0, 74, 16]],
-      ] as [number, number, number][][],
-    },
+  // ---------- Musik: eigenes 80er-Arcade-Rennthema „Sunset Drive" in A-Dur (138 BPM, 32 Takte ≈ 56 s) ----------
+  // Eigene Komposition. Aufbau: Intro-Riff (Bläser-Stabs) · Strophe ×2 · Pre-Chorus mit Snare-Aufbau · Hook-Refrain ×2 ·
+  // Break (Riff + Glocken) · Schluss-Refrain. Klang: Oktav-Achtelbass, Viertel-Bassdrum, Gated-Snare, 16tel-Hats,
+  // Fusion-Lead (Säge + Rechteck), Bläser-Stabs, Glocken-Arpeggio, Crash auf jedem Abschnittsbeginn.
+  /** Akkorde: Bass-Grundton und Vierklang (MIDI). */
+  private static CH: Record<string, { root: number; notes: number[] }> = {
+    A: { root: 45, notes: [57, 61, 64, 69] }, G: { root: 43, notes: [55, 59, 62, 67] }, D: { root: 38, notes: [57, 62, 66, 69] },
+    E: { root: 40, notes: [56, 59, 64, 68] }, Fm: { root: 42, notes: [57, 61, 66, 69] }, Cm: { root: 37, notes: [56, 61, 64, 68] },
+  };
+  /** Melodien je Takt: [Schritt, MIDI, Länge in 16teln]. „hook" ist das Wiedererkennungsmotiv (kurz–kurz–lang, zweimal, dann Antwort). */
+  private static LEADS: Record<string, [number, number, number][][]> = {
+    verse: [
+      [[0, 69, 2], [3, 69, 1], [4, 71, 2], [6, 73, 4], [12, 76, 4]], [[0, 74, 2], [3, 74, 1], [4, 71, 2], [6, 67, 6], [14, 69, 2]],
+      [[0, 69, 2], [3, 69, 1], [4, 71, 2], [6, 74, 4], [12, 76, 2], [14, 78, 2]], [[0, 76, 6], [6, 73, 2], [8, 69, 8]],
+    ],
+    pre: [
+      [[0, 74, 6], [6, 76, 2], [8, 78, 8]], [[0, 76, 6], [6, 78, 2], [8, 80, 8]],
+      [[0, 81, 6], [6, 80, 2], [8, 76, 8]], [[0, 80, 4], [4, 78, 4], [8, 76, 2], [10, 78, 2], [12, 80, 4]],
+    ],
+    hook: [
+      [[0, 73, 2], [2, 76, 2], [4, 78, 4], [10, 76, 2], [12, 78, 4]], [[0, 81, 3], [3, 78, 3], [6, 76, 2], [8, 74, 8]],
+      [[0, 73, 2], [2, 76, 2], [4, 78, 4], [10, 76, 2], [12, 81, 4]], [[0, 80, 6], [6, 78, 2], [8, 76, 8]],
+    ],
+    hookEnd: [
+      [[0, 73, 2], [2, 76, 2], [4, 78, 4], [10, 76, 2], [12, 78, 4]], [[0, 81, 3], [3, 78, 3], [6, 76, 2], [8, 74, 8]],
+      [[0, 73, 2], [2, 76, 2], [4, 78, 4], [10, 76, 2], [12, 81, 4]], [[0, 80, 4], [4, 81, 4], [8, 83, 8]],
+    ],
+  };
+  /** Acht Abschnitte zu je vier Takten. drums: full | build | half; stab: Bläser-Riff; arp: Glocken; big: Refrain-Fülle. */
+  private static FORM: { ch: string[]; lead?: string; drums: 'full' | 'build' | 'half'; stab?: boolean; arp?: boolean; big?: boolean }[] = [
+    { ch: ['A', 'G', 'D', 'A'], drums: 'full', stab: true },                       // Intro-Riff
+    { ch: ['A', 'G', 'D', 'A'], lead: 'verse', drums: 'full' },                    // Strophe
+    { ch: ['A', 'G', 'D', 'A'], lead: 'verse', drums: 'full', arp: true },         // Strophe 2
+    { ch: ['D', 'E', 'Cm', 'E'], lead: 'pre', drums: 'build', arp: true },         // Pre-Chorus
+    { ch: ['Fm', 'D', 'A', 'E'], lead: 'hook', drums: 'full', arp: true, big: true },    // Refrain
+    { ch: ['Fm', 'D', 'A', 'E'], lead: 'hookEnd', drums: 'full', arp: true, big: true }, // Refrain 2
+    { ch: ['A', 'G', 'D', 'A'], drums: 'half', stab: true, arp: true },            // Break
+    { ch: ['Fm', 'D', 'A', 'E'], lead: 'hookEnd', drums: 'full', arp: true, big: true }, // Schluss-Refrain
   ];
-  private static BPM = 86;
+  /** Rhythmus des Bläser-Riffs (Schritt, Länge in 16teln): synkopiert, gleiche Figur in jedem Takt. */
+  private static STAB: [number, number][] = [[0, 2], [3, 2], [6, 3], [10, 2], [12, 3]];
+  private static BPM = 138;
   private light = 0;
   private speedK = 0;
   private padBus: GainNode | null = null;
@@ -254,17 +266,24 @@ export class Sound {
   private bell(midi: number, t: number, vol: number, send = 0.4): void {
     const c = this.ctx!;
     const g = c.createGain();
-    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8);
     const o1 = c.createOscillator(); o1.type = 'sine'; o1.frequency.value = this.midiHz(midi);
     const o2 = c.createOscillator(); o2.type = 'sine'; o2.frequency.value = this.midiHz(midi + 24);
     const g2 = c.createGain(); g2.gain.setValueAtTime(0.5, t); g2.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
     o1.connect(g); o2.connect(g2).connect(g); g.connect(this.musicGain!);
     if (this.delayIn) { const sg = c.createGain(); sg.gain.value = send; g.connect(sg).connect(this.delayIn); }
-    o1.start(t); o2.start(t); o1.stop(t + 1.5); o2.stop(t + 1.5);
+    o1.start(t); o2.start(t); o1.stop(t + 0.85); o2.stop(t + 0.85);
   }
 
-  private drum(kind: 'kick' | 'clap' | 'hat' | 'open' | 'tom', t: number, pitch = 1): void {
+  private drum(kind: 'kick' | 'clap' | 'hat' | 'open' | 'tom' | 'crash', t: number, pitch = 1): void {
     const c = this.ctx!, mg = this.musicGain!;
+    if (kind === 'crash') {
+      const s = c.createBufferSource(); s.buffer = this.noiseBuf;
+      const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 4200;
+      const g = c.createGain(); g.gain.setValueAtTime(0.06, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.3);
+      s.connect(f).connect(g).connect(mg); s.start(t); s.stop(t + 1.35);
+      return;
+    }
     if (kind === 'tom') {
       const o = c.createOscillator(); o.type = 'sine';
       o.frequency.setValueAtTime(190 * pitch, t); o.frequency.exponentialRampToValueAtTime(80 * pitch, t + 0.35);
@@ -309,57 +328,64 @@ export class Sound {
     if (!c || !this.musicOn || !this.musicGain || !this.padBus) return;
     const sd = 60 / Sound.BPM / 4; // 16tel
     while (this.nextT < c.currentTime + 0.25) {
-      const i = this.step % 256, bar = i >> 4, st = i & 15, t = this.nextT;
+      const i = this.step % 512, bar = i >> 4, st = i & 15, t = this.nextT;
       const lt = this.light, vk = this.speedK;
-      const section = bar >> 2;                         // 0 Intro, 1 Strophe, 2 Refrain 1, 3 Refrain 2
-      const prog = Sound.PROGS[section < 2 ? 0 : section - 1];
-      const bi = bar & 3;
-      const chord = prog.chords[bi], root = prog.roots[bi];
-      const chorus = section >= 2;
-      // Schlagzeug (Halftime-Ballade): Bassdrum auf 1 und 3+, große Snare auf 2 und 4, Achtel-Hats; im Intro nur ein Tom-Lauf in den Einsatz
-      if (section === 0) {
-        if (bar === 3 && st >= 8 && st % 2 === 0) this.drum('tom', t, 1.3 - (st - 8) * 0.07);
+      const sec = Sound.FORM[bar >> 2], bi = bar & 3;
+      const ch = Sound.CH[sec.ch[bi]], chord = ch.notes, root = ch.root;
+      const big = !!sec.big;
+      // Schlagzeug: Viertel-Bassdrum, Snare auf 2 und 4, 16tel-Hats; Crash auf jedem Abschnittsbeginn;
+      // Pre-Chorus baut mit Achtel- und 16tel-Snare auf; Break nur halbes Tempo; Tom-Lauf vor Strophe und Break
+      if (st === 0 && bi === 0) this.drum('crash', t);
+      if (sec.drums === 'half') {
+        if (st === 0) this.drum('kick', t);
+        if (st === 8) this.drum('clap', t);
+        if (st % 4 === 2) this.drum('hat', t);
       } else {
-        if (st === 0 || st === 10) this.drum('kick', t);
-        if (st === 4 || st === 12) this.drum('clap', t);
-        if (st % 2 === 0) this.drum('hat', t);
-        if ((chorus || vk > 0.35) && st % 2 === 1) this.drum('hat', t);
-        if (chorus && st === 14) this.drum('open', t);
-        if (bar === 7 && st >= 12) this.drum('tom', t, 1.2 - (st - 12) * 0.1);
+        if (st % 4 === 0) this.drum('kick', t);
+        if (sec.drums === 'build' && bi === 3) { if (st >= 8 || st % 2 === 0) this.drum('clap', t); }
+        else if (sec.drums === 'build' && bi === 2) { if (st % 2 === 0 && st >= 8 || st === 4) this.drum('clap', t); }
+        else if (st === 4 || st === 12) this.drum('clap', t);
+        if (st % 2 === 0 || big || vk > 0.3) this.drum('hat', t);
+        if (st === 14 && (big || vk > 0.45)) this.drum('open', t);
+        if ((bar === 3 || bar === 23) && st >= 12) this.drum('tom', t, 1.25 - (st - 12) * 0.12);
       }
-      // Slap-Bass (kurzer, heller Anschlag) mit Sinus-Fundament: Grundton auf 1, Oktav-Pop auf 2+, Grundton auf 3+, Quinte als Auftakt
-      if (section > 0 && (st === 0 || st === 6 || st === 10 || st === 14)) {
-        const n = st === 6 ? root + 12 : st === 14 ? root + 7 : root;
-        this.mnote(n, t, sd * (st === 0 ? 5 : 1.4), 'sawtooth', 0.11, 520 + 300 * lt + 220 * vk, { dest: this.padBus, attack: 0.004 });
-        this.mnote(root >= 40 ? n - 12 : n, t, sd * (st === 0 ? 5 : 2), 'sine', 0.12, 300, { dest: this.padBus });
-      } else if (section === 0 && st === 0) this.mnote(root, t, sd * 15, 'sine', 0.1, 300, { dest: this.padBus, attack: 0.3 });
-      // breites Pad (zwei verstimmte Sägezähne je Akkordton); im Refrain zusätzlich Orgel (Sinus + Dreieck eine Oktave höher)
+      // treibender Oktav-Achtelbass (Grundton – Oktave), im Break nur lange Grundtöne; Sinus-Fundament auf den Vierteln
+      if (sec.drums === 'half') {
+        if (st === 0 || st === 8) this.mnote(root, t, sd * 7, 'sawtooth', 0.1, 420 + 200 * lt, { dest: this.padBus, attack: 0.01 });
+      } else if (st % 2 === 0) {
+        const n = st % 4 === 2 ? root + 12 : root;
+        this.mnote(n, t, sd * 1.6, 'sawtooth', 0.1, 560 + 300 * lt + 260 * vk, { dest: this.padBus, attack: 0.004 });
+        if (st % 4 === 0 && root >= 40) this.mnote(root - 12, t, sd * 3, 'sine', 0.11, 300, { dest: this.padBus });
+      }
+      // Pad (zwei verstimmte Sägezähne je Akkordton); im Refrain heller, nachts mit Oktav-Glanz
       if (st === 0) for (const n of chord) {
-        const cut = (chorus ? 950 : 650) + 500 * lt + 250 * vk;
-        this.mnote(n, t, sd * 16, 'sawtooth', 0.019, cut, { detune: -9, dest: this.padBus, attack: 0.5 });
-        this.mnote(n, t, sd * 16, 'sawtooth', 0.019, cut, { detune: 9, dest: this.padBus, attack: 0.5 });
-        if (chorus) {
-          this.mnote(n, t, sd * 16, 'sine', 0.022, 2000, { dest: this.padBus, attack: 0.08, vib: 6 });
-          this.mnote(n + 12, t, sd * 16, 'triangle', 0.012, 2600, { dest: this.padBus, attack: 0.08, vib: 6 });
+        const cut = (big ? 1100 : 700) + 500 * lt + 250 * vk;
+        this.mnote(n, t, sd * 16, 'sawtooth', big ? 0.017 : 0.014, cut, { detune: -9, dest: this.padBus, attack: 0.25 });
+        this.mnote(n, t, sd * 16, 'sawtooth', big ? 0.017 : 0.014, cut, { detune: 9, dest: this.padBus, attack: 0.25 });
+        if (lt > 0.45) this.mnote(n + 12, t, sd * 16, 'triangle', 0.012 * Math.min(1, (lt - 0.45) / 0.4), 1800, { dest: this.padBus, attack: 0.5, send: 0.3 });
+      }
+      // Bläser-Riff: synkopierte Akkord-Stabs (Intro und Break) – das zweite Erkennungszeichen neben dem Refrain-Hook
+      if (sec.stab) for (const [s0, len] of Sound.STAB) {
+        if (s0 !== st) continue;
+        for (const n of chord) {
+          this.mnote(n + 12, t, sd * len * 0.8, 'sawtooth', 0.022, 2600 + 900 * lt, { detune: 6, attack: 0.008, send: 0.25 });
+          this.mnote(n + 12, t, sd * len * 0.8, 'square', 0.012, 2000, { detune: -6, attack: 0.008 });
         }
-        if (lt > 0.45) this.mnote(n + 12, t, sd * 16, 'triangle', 0.014 * Math.min(1, (lt - 0.45) / 0.4), 1800, { dest: this.padBus, attack: 0.6, send: 0.3 });
       }
-      // Glocken-Arpeggio (FM-Anmutung, Echo): trägt das Intro, in Strophe und Refrain leiser darunter
-      if (st % 2 === 0) {
-        const pat = [0, 2, 1, 3, 2, 1, 3, 2][(st >> 1) & 7];
-        const v = (section === 0 ? 0.05 : chorus ? 0.022 : 0.03) + 0.012 * lt + 0.006 * vk;
-        this.bell(chord[pat] + 12, t, v, section === 0 ? 0.5 : 0.35);
+      // Glocken-Arpeggio in 16teln (FM-Anmutung, Echo), leise unter der Melodie
+      if (sec.arp && st % 2 === 0) {
+        const pat = [0, 1, 2, 3, 2, 1, 2, 3][(st >> 1) & 7];
+        this.bell(chord[pat] + 12, t, (sec.lead ? 0.016 : 0.03) + 0.01 * lt + 0.006 * vk, 0.3);
       }
-      // Brass-Lead (Sägezahn + Rechteck, weicher Einsatz, Vibrato, Echo); im Refrain eine Oktave tiefer gedoppelt
-      if (section >= 1) {
-        for (const [s0, midi, len] of prog.lead[bi]) {
-          if (s0 === st) {
-            const dur = sd * len * 0.95;
-            const cut = (chorus ? 2600 : 1700) + 1200 * lt;
-            this.mnote(midi, t, dur, 'sawtooth', chorus ? 0.05 : 0.042, cut, { detune: 5, vib: 16, send: 0.4, attack: 0.04 });
-            this.mnote(midi, t, dur, 'square', chorus ? 0.03 : 0.024, cut * 0.8, { detune: -5, vib: 12, send: 0.3, attack: 0.04 });
-            if (chorus) this.mnote(midi - 12, t, dur, 'sawtooth', 0.028, 1400, { vib: 10, send: 0.2, attack: 0.05 });
-          }
+      // Fusion-Lead (Sägezahn + Rechteck, schneller Einsatz, Vibrato, Echo); im Refrain eine Oktave tiefer gedoppelt
+      if (sec.lead) {
+        for (const [s0, midi, len] of Sound.LEADS[sec.lead][bi]) {
+          if (s0 !== st) continue;
+          const dur = sd * len * 0.92;
+          const cut = (big ? 3000 : 2200) + 1200 * lt;
+          this.mnote(midi, t, dur, 'sawtooth', big ? 0.05 : 0.045, cut, { detune: 6, vib: len >= 4 ? 18 : 0, send: 0.35, attack: 0.012 });
+          this.mnote(midi, t, dur, 'square', big ? 0.03 : 0.026, cut * 0.8, { detune: -6, vib: len >= 4 ? 12 : 0, send: 0.25, attack: 0.012 });
+          if (big) this.mnote(midi - 12, t, dur, 'sawtooth', 0.026, 1500, { vib: len >= 4 ? 10 : 0, send: 0.15, attack: 0.015 });
         }
       }
       this.nextT += sd;
