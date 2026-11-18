@@ -24,7 +24,13 @@ describe('Speicher', () => {
   it('validiert fehlerhafte Werte', () => {
     expect(parseSaved('{kaputt').best).toBe(0);
     expect(parseSaved(JSON.stringify({ v: 1, best: -5 })).best).toBe(0);
-    expect(parseSaved(JSON.stringify({ v: 1, best: 812.7, muted: true }))).toEqual({ best: 812, muted: true, dodged: false, sprintBest: 0, sprintDone: 0 });
+    expect(parseSaved(JSON.stringify({ v: 1, best: 812.7, muted: true }))).toEqual({ best: 812, muted: true, dodged: false, sprintBest: 0, sprintDone: 0, styleBest: 0 });
+    // P1 (Rückwärtskompatibilität): alter Speicherstand ohne Stil-Rekord – die Bestweite bleibt unangetastet und wird nie als Stil-Rekord gelesen
+    const old = parseSaved(JSON.stringify({ v: 1, best: 25000, muted: false, dodged: true, sprintBest: 3000, sprintDone: 1 }));
+    expect(old).toEqual({ best: 25000, muted: false, dodged: true, sprintBest: 3000, sprintDone: 1, styleBest: 0 });
+    expect(parseSaved(JSON.stringify({ v: 1, best: 9, styleBest: 4321.9 })).styleBest).toBe(4321);
+    expect(parseSaved(JSON.stringify({ v: 1, styleBest: -5 })).styleBest).toBe(0);
+    expect(parseSaved(JSON.stringify({ v: 1, styleBest: 'viel' })).styleBest).toBe(0);
     expect(parseSaved(JSON.stringify({ v: 1, best: 3, sprintBest: 4200.9, sprintDone: 2 }))).toMatchObject({ best: 3, sprintBest: 4200, sprintDone: 2 });
     expect(parseSaved(JSON.stringify({ v: 1, sprintBest: -4, sprintDone: 'x' }))).toMatchObject({ sprintBest: 0, sprintDone: 0 });
     expect(parseSaved(JSON.stringify({ v: 1, best: 3, dodged: true })).dodged).toBe(true);

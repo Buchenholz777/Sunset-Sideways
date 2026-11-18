@@ -8,7 +8,7 @@ import { applyLight, decoType, decoX, drawDeco, LANDMARK_FAR, LANDMARK_SCALE, LA
 import { CHUNK, drawPed, pedsInChunk } from './people';
 import { computeRows } from './rows';
 import { LOT, lotItems, type LotEnv } from './lots';
-import { PAL, drawObstacle, drawPickup, drawShieldArc, gfx, rect } from './sprites';
+import { PAL, drawObstacle, drawPickup, drawShieldArc, gfx, rect, type Blinker } from './sprites';
 import { drawCar } from './car3d';
 
 /** Alles, was zum Zeichnen eines Bildes nötig ist (Vorschau oder Lauf). */
@@ -16,6 +16,8 @@ export interface View {
   s: number; x: number; /** Weltposition quer */ X: number; bodyYaw: number; phi: number; /** Winkel Nase–Straße */ rel: number; speedKmh: number;
   shield: boolean; shieldFrac: number; slow: boolean; magnet: boolean; blitz: boolean; boost: boolean; /** Pfadfinder: Spurmitte oder null */ guide: number | null; /** Flughöhe (m) und Restzeit des Gleitflugs (s) */ lift: number; glideLeft: number; /** Sekunden seit dem Einsammeln der Zeitblase, sonst −1 */ slowAge: number;
   obstacles: readonly Obstacle[]; pickups: readonly Pickup[];
+  /** Neon Rush aktiv (nur Darstellung: Leuchten, betonte Tempolinien – keine Änderung der Physik). */
+  rush?: boolean;
   crash: { id: number } | null; running: boolean;
   /** Aktive Szenenzeit (s) für Mond und Flugzeuge, Seed des Laufs für den Flugplan. */
   sceneT: number; seed: number;
@@ -64,6 +66,11 @@ export class Renderer {
   /** Spurblitz: Lichtimpuls entlang einer Spur ab z. */
   laneFlash(x: number, z: number): void { this.flashes.push({ x, z, age: 0 }); }
   private sparkAcc = 0;
+  /** Neon Rush: weich ein-/ausgeblendete Stärke 0…1; Near-Miss-Lichtimpuls am Bildrand (Seite und Rest). */
+  private rushK = 0;
+  private nmPulse = 0; private nmSide = 1;
+  /** Dezenter Lichtimpuls an der Seite, an der ein Near Miss passiert ist (nicht bei reduzierter Bewegung). */
+  nearMissPulse(side: number): void { if (!this.reducedMotion) { this.nmPulse = 1; this.nmSide = side >= 0 ? 1 : -1; } }
   private arcFlash = 0; private iconFlash = 0; private iconType: PickupType = 'slow';
   private firstSeen = new Map<number, number>();
   private particles: Particle[] = [];
@@ -195,7 +202,7 @@ export class Renderer {
     const ctx = this.ctx;
     this.road = v.road;
     if (v.running) this.clock += dt;
-    if (v.s < this.prevS - 1) { this.brake = 0; this.prevSpeed = 0; this.firstSeen.clear(); this.snap = true; this.visYaw = 0; this.stealth = 0; this.particles.length = 0; this.flashes.length = 0; this.iconFlash = 0; this.arcFlash = 0; this.flash = 0; this.shieldEnd = 0; this.boostEnd = 0; this.prevShield = false; this.prevBoost = false; this.shieldUsed = false; }
+    if (v.s < this.prevS - 1) { this.brake = 0; this.prevSpeed = 0; this.firstSeen.clear(); this.snap = true; this.visYaw = 0; this.stealth = 0; this.particles.length = 0; this.flashes.length = 0; this.iconFlash = 0; this.arcFlash = 0; this.flash = 0; this.shieldEnd = 0; this.boostEnd = 0; this.prevShield = false; this.prevBoost = false; this.shieldUsed = false; this.rushK = 0; this.nmPulse = 0; }
     this.prevS = v.s;
     // Bremslicht nur bei tatsächlicher Verzögerung (z. B. Tempo fällt nach Turbo oder Zeitlupe)
     if (v.running && this.prevSpeed > 0 && v.speedKmh < this.prevSpeed - 0.02) this.brake = 1;
@@ -249,6 +256,15 @@ export class Renderer {
     this.player(v, zc);
     this.fxLayer(v, dt);
     ctx.restore();
+    if (this.nmPulse > 0) {
+      // Near Miss: weicher Lichtstreifen am Rand der Seite, an der das Fahrzeug vorbeiging (≈ 0,3 s, nur Darstellung)
+      const w = L.w * 0.22, x0 = this.nmSide > 0 ? L.w - w : 0;
+      const g = ctx.createLinearGradient(this.nmSide > 0 ? L.w : 0, 0, this.nmSide > 0 ? L.w - w : w, 0);
+      const c = this.rushK > 0.3 ? '255,79,216' : '95,224,255';
+      g.addColorStop(0, `rgba(${c},${(0.38 * this.nmPulse).toFixed(3)})`); g.addColorStop(1, `rgba(${c},0)`);
+      ctx.fillStyle = g; ctx.fillRect(x0, L.hy * 0.8, w, L.h - L.hy * 0.8);
+      this.nmPulse = Math.max(0, this.nmPulse - dt * 3.3);
+    }
     if (this.flash > 0) {
       ctx.globalAlpha = Math.min(0.7, this.flash);
       rect(ctx, 0, 0, L.w, L.h, '#fff');
@@ -497,7 +513,11 @@ export class Renderer {
           if (o.hit) a *= Math.max(0, 1 - o.knockT / 0.9);
           ctx.globalAlpha = a;
           const lift = o.hit ? Math.sin(Math.min(1, o.knockT * 3) * Math.PI) * 1.2 : 0;
-          drawObstacle(ctx, o.kind, p.sx, p.sy - lift * p.k, p.k, this.clock, o.id);
+          const lc = o.lc;
+          const blink: Blinker | undefined = lc && !o.hit && (lc.stage === 'warn' || lc.stage === 'move')
+            ? { side: lc.toX > lc.fromX ? 1 : -1, on: lc.stage === 'move' || this.reducedMotion || Math.floor(this.clock * 4) % 2 === 0 }
+            : undefined;
+          drawObstacle(ctx, o.kind, p.sx, p.sy - lift * p.k, p.k, this.clock, o.id, blink);
           ctx.globalAlpha = 1;
           if (v.crash?.id === o.id) this.culprit(p.sx, p.sy, p.k, o);
         },
@@ -584,7 +604,7 @@ export class Renderer {
       if (v.running) fl.age += 1 / 60;
       if (fl.age > 0.5) { this.flashes.splice(i, 1); continue; }
       const d = fl.z - zc;
-      const reach = Math.min(B.powers.blitzRange, fl.age * 450);
+      const reach = Math.min(B.powers.magnetRange, fl.age * 450);
       items.push({ d: Math.max(2.5, d) + 0.5, draw: () => {
         const half = B.road.laneWidth / 2 - 0.2;
         ctx.beginPath();
@@ -701,6 +721,7 @@ export class Renderer {
     const { ctx, L } = this;
     const k = L.fx / CAM_BACK;
     this.stealth += ((v.boost ? 1 : 0) - this.stealth) * (1 - Math.exp(-this.dtLast / 0.3));
+    this.rushK += ((v.rush ? 1 : 0) - this.rushK) * (1 - Math.exp(-this.dtLast / 0.12));
     const sx = this.projectWorld(zc, this.carBx, this.carBz).sx;
     this.carSx = sx;
     const steer = Math.max(-1, Math.min(1, v.rel * 6));
@@ -722,6 +743,13 @@ export class Renderer {
     const spinT = v.glideLeft > 0 && elG < 0.9 && !this.reducedMotion ? Math.max(0, elG) / 0.9 : 0;
     const spin = spinT > 0 ? Math.PI * 2 * (spinT < 0.5 ? 4 * spinT ** 3 : 1 - (-2 * spinT + 2) ** 3 / 2) : 0;
     const scan = this.reducedMotion ? 0 : Math.sin(this.clock * 5.2);
+    if (this.rushK > 0.02) {
+      // Neon Rush: magentafarbener Lichthof mit cyanfarbenem Kern hinter dem Wagen (auffällig, aber transparent genug für Straße und Hindernisse)
+      const cy = L.gy - 0.85 * k - liftPx, pulse = this.reducedMotion ? 0.8 : 0.8 + 0.2 * Math.sin(this.clock * 9);
+      const g = ctx.createRadialGradient(sx, cy, k * 0.4, sx, cy, k * 3.1);
+      g.addColorStop(0, `rgba(255,79,216,${(0.34 * this.rushK * pulse).toFixed(3)})`); g.addColorStop(0.55, `rgba(95,224,255,${(0.13 * this.rushK * pulse).toFixed(3)})`); g.addColorStop(1, 'rgba(255,79,216,0)');
+      ctx.fillStyle = g; ctx.fillRect(sx - k * 3.2, cy - k * 2.2, k * 6.4, k * 4.4);
+    }
     drawCar(ctx, (x, y, z) => { const q = carPt(x, y, z); return [Math.round(q[0]), Math.round(q[1])]; }, k, { turbo: false, grip: false, brake: this.brake, steer, running: v.running, yaw, lift: v.lift / 0.8, stealth: this.stealth, zs: L.portrait ? 0.78 : undefined, spin, scan });
     // Effektende erkennen (Zustandswechsel), unabhängig von Toasts
     if (v.running) {
@@ -856,10 +884,12 @@ export class Renderer {
     }
     if (v.running && !this.reducedMotion && this.quality < 2) {
       // Tempolinien: Zahl, Länge und Deckkraft wachsen von 200 bis 600 km/h stetig (360 / 500 / 600 sind klar unterscheidbar)
-      const vn = Math.max(0, Math.min(1, (v.speedKmh - 200) / 400));
+      // Neon Rush betont das Tempo nur optisch (mehr und hellere Linien); die tatsächliche Geschwindigkeit bleibt unverändert
+      const vn = Math.max(0, Math.min(1, (v.speedKmh - 200) / 400 + 0.35 * this.rushK));
       const n = 8 + Math.round(30 * vn);                 // etwa die Hälfte fällt auf die Fahrbahn und entfällt
       const sp = v.speedKmh / 260;
       ctx.globalAlpha = 0.18 + 0.3 * vn;
+      const lineCol = this.rushK > 0.3 ? '#ff9af0' : '#9aa0ff';
       for (let i = 0; i < n; i++) {
         const ph = (this.clock * (1.2 + sp * 1.6) + hash(i * 3)) % 1;
         const side = hash(i) > 0.5 ? 1 : -1;
@@ -868,7 +898,7 @@ export class Renderer {
         // nie über der Fahrbahn: der Blick bleibt ruhig auf Spur und Hindernissen, das Tempo zeigt sich an Rand und Gehweg
         const dRow = this.rowD[Math.min(L.h - 1, Math.max(0, Math.round(yy)))];
         if (dRow > 0) { const kk = L.fx / depthEff(dRow, L), rcx = L.cx + this.lat(this.lastZc + dRow, this.lastZc) * kk; if (Math.abs(xx - rcx) < (B.road.halfWidth + 0.5) * kk) continue; }
-        rect(ctx, xx, yy, 1, (2 + ph * 10 * (0.5 + sp)) * gfx.u, '#9aa0ff');
+        rect(ctx, xx, yy, 1, (2 + ph * 10 * (0.5 + sp)) * gfx.u, lineCol);
       }
       ctx.globalAlpha = 1;
     }

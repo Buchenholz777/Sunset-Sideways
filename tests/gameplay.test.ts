@@ -49,26 +49,23 @@ describe('Anlauf', () => {
       expect(t).toBeLessThan(3.4);
     }
   });
-  it('erstes Power-up ist immer Fliegen: sichtbar nach dem ersten Ausweichmanöver, bei ≈ 550–900 m, nach ≈ 8–12 s erreichbar', () => {
-    const arrivals: number[] = [], dists: number[] = [];
+  it('erstes Power-up (P1.3): erreichbar frühestens nach 12 s, spätestens nach ≈ 24 s; danach etwa alle 18–25 s', () => {
+    const arrivals: number[] = [], gaps: number[] = [];
     for (let seed = 1; seed <= 40; seed++) {
       const s = new Sim(seed);
-      const firstObstacleZ = Math.min(...s.obstacles.map((o) => o.z));
-      let first: { t: number; z: number; type: string } | null = null;
-      for (let i = 0; i < 120 * 14 && !s.crashed && first === null; i++) {
+      const seen = new Set<number>(); const times: number[] = [];
+      for (let i = 0; i < 120 * 70 && !s.crashed; i++) {
         s.step(DT, { dir: 0, target: botTarget(s, null) ?? s.q });
-        const pk = s.pickups.find((p) => !p.taken);
-        if (pk) first = { t: s.t + (pk.z - s.s) / (s.speedKmh / 3.6), z: pk.z, type: pk.type };
+        for (const p of s.pickups) if (!seen.has(p.id) && p.type !== 'shield' + 'x') { seen.add(p.id); times.push(s.t + (p.z - s.s) / (s.speedKmh / 3.6)); }
       }
-      expect(first).not.toBeNull();
-      expect(first!.type).toBe('glide');
-      expect(first!.z).toBeGreaterThan(firstObstacleZ);
-      arrivals.push(first!.t); dists.push(first!.z);
+      expect(times.length, `seed ${seed}`).toBeGreaterThan(0);
+      arrivals.push(times[0]);
+      for (let i = 1; i < times.length; i++) if (times[i] - times[i - 1] > 8) gaps.push(times[i] - times[i - 1]);   // Magnet + Folge-Pickup zählen als ein Angebot
     }
-    expect(Math.min(...dists)).toBeGreaterThanOrEqual(550);
-    expect(Math.max(...dists)).toBeLessThanOrEqual(900);
-    expect(Math.min(...arrivals)).toBeGreaterThanOrEqual(7);
-    expect(Math.max(...arrivals)).toBeLessThanOrEqual(12.5);
+    expect(Math.min(...arrivals)).toBeGreaterThanOrEqual(11.5);
+    expect(Math.max(...arrivals)).toBeLessThanOrEqual(25);
+    expect(Math.min(...gaps)).toBeGreaterThanOrEqual(16);
+    expect(Math.max(...gaps)).toBeLessThanOrEqual(34);
   });
 });
 
@@ -104,21 +101,21 @@ describe('Hindernisfolgen sind ohne Power-up fair lösbar', () => {
 describe('Power-ups im Spiel', () => {
   it('Pickups erscheinen als Mix aller vier Typen und sind anfahrbar (Testfahrer sammelt ≥ 85 %)', () => {
     let offered = 0, collected = 0, deaths = 0; const all = new Set<PickupType>();
-    for (let seed = 1; seed <= 24; seed++) {
-      const r = drive(seed, 90, { collect: true });
+    for (let seed = 1; seed <= 40; seed++) {
+      const r = drive(seed, 150, { collect: true });
       offered += r.offered; collected += r.collected; if (r.sim.crashed) deaths++;
       r.types.forEach((t) => all.add(t));
     }
     expect(all.size).toBe(PICKUP_TYPES.length);
-    expect(offered).toBeGreaterThan(24 * 4);
+    expect(offered).toBeGreaterThan(40 * 4);
     expect(collected / offered).toBeGreaterThan(0.85);
     expect(deaths).toBe(0);
   });
-  it('Spurblitz trifft beim Einsammeln mindestens ein Hindernis (Platzierung vor einem Ziel in Reichweite)', () => {
+  it('Spurblitz ist gespeichert und trifft beim Einsammeln oder kurz danach mindestens ein Hindernis seiner Spur (Platzierung vor einem Ziel)', () => {
     let taken = 0, hit = 0;
-    for (let seed = 1; seed <= 24; seed++) { const r = drive(seed, 90, { collect: true }); taken += r.clearTaken; hit += r.clearedHit > 0 ? r.clearTaken : 0; }
-    expect(taken).toBeGreaterThan(10);
-    expect(hit / taken).toBeGreaterThan(0.8);
+    for (let seed = 1; seed <= 60; seed++) { const r = drive(seed, 150, { collect: true }); taken += r.clearTaken; hit += r.clearedHit > 0 ? r.clearTaken : 0; }
+    expect(taken).toBeGreaterThan(6);
+    expect(hit / taken).toBeGreaterThan(0.75);
   });
 });
 
@@ -174,21 +171,42 @@ describe('Wirkung der Power-ups', () => {
     expect(s.crashed).toBe(false);
     expect(s.obstacles.length === 0 || s.obstacles[0].hit).toBe(true);
   });
-  it('Schild läuft nach 10 s ab', () => {
+  it('Schild läuft nach 15 s ab; erneutes Einsammeln stapelt nicht (Dauer wird auf 15 s zurückgesetzt)', () => {
     const s = base(); s.shieldT = B.effects.shield;
-    for (let i = 0; i < 120 * 9.9; i++) { s.step(DT, { dir: 0 }); s.obstacles = []; }
+    expect(B.effects.shield).toBe(15);
+    for (let i = 0; i < 120 * 14.9; i++) { s.step(DT, { dir: 0 }); s.obstacles = []; }
     expect(s.shieldT).toBeGreaterThan(0);
     for (let i = 0; i < 120 * 0.3; i++) { s.step(DT, { dir: 0 }); s.obstacles = []; }
     expect(s.shieldT).toBe(0);
+    const t = base(); t.shieldT = 9;
+    t.pickups = [{ id: 5, type: 'shield', x: 0, z: t.s + 4, taken: false }];
+    for (let i = 0; i < 12; i++) t.step(DT, { dir: 0, target: 0 });
+    expect(t.shieldT).toBeLessThanOrEqual(B.effects.shield);
+    expect(t.shieldT).toBeGreaterThan(B.effects.shield - 0.3);
+  });
+  it('Schildtreffer: Schutzphase ≈ 0,5 s ohne zweite Kollision, danach gilt der nächste Treffer; Combo und Rush enden', () => {
+    const s = base(); s.shieldT = B.effects.shield;
+    s.style.comboCount = 3; s.style.lastNearMissT = s.t; s.style.rushCharge = 60;
+    s.obstacles = [mkObs('baken', 0, s.s + 30), mkObs('baken', 0, s.s + 33)];       // zweites Hindernis unmittelbar nach dem ersten
+    let hits = 0, graceSeen = false;
+    for (let i = 0; i < 120 * 0.9 && !s.crashed; i++) { s.pickups = []; s.step(DT, { dir: 0, target: 0 }); hits += s.events.filter((e) => e.type === 'shieldHit').length; if (s.graceT > 0) graceSeen = true; s.events.length = 0; }
+    expect(hits).toBe(1);
+    expect(graceSeen).toBe(true);
+    expect(s.crashed).toBe(false);
+    expect(s.style.comboCount).toBe(0);
+    expect(s.style.rushCharge).toBe(0);
+    s.obstacles = [mkObs('baken', 0, s.s + 60)];
+    for (let i = 0; i < 120 * 2 && !s.crashed; i++) { s.pickups = []; s.step(DT, { dir: 0, target: 0 }); }
+    expect(s.crashed).toBe(true);                                     // Schild verbraucht: der nächste Treffer zählt
   });
   it('Hindernis ohne Schild beendet den Lauf', () => {
     const s = base(); s.obstacles = [mkObs('barrier', 0, s.s + 40)];
     for (let i = 0; i < 120 * 3 && !s.crashed; i++) { s.pickups = []; s.step(DT, { dir: 0 }); }
     expect(s.crashed).toBe(true);
   });
-  it('Spurblitz: räumt bis zu zwei Hindernisse der nächsten 90 m in der Pickup-Spur, nicht weiter und nicht in anderen Spuren', () => {
+  it('Spurblitz: räumt die Hindernisse der aktuellen Spur innerhalb von 2 s Kollisionszeit, nicht weiter und nicht in anderen Spuren', () => {
     const s = base();
-    s.obstacles = [mkObs('baken', 0, s.s + 120), mkObs('barrier', 0, s.s + 40), mkObs('baken', 0, s.s + 70), mkObs('baken', 3.6, s.s + 30), mkObs('baken', 0, s.s + 300)];
+    s.obstacles = [mkObs('baken', 0, s.s + 160), mkObs('barrier', 0, s.s + 40), mkObs('baken', 0, s.s + 70), mkObs('baken', 3.6, s.s + 30), mkObs('baken', 0, s.s + 300)];
     s.pickups = [{ id: 5, type: 'clear', x: 0, z: s.s + 10, taken: false }];
     for (let i = 0; i < 40; i++) s.step(DT, { dir: 0, target: 0 });
     expect(s.events.some((e) => e.type === 'blitz')).toBe(true);
@@ -196,6 +214,15 @@ describe('Wirkung der Power-ups', () => {
     const alive = s.obstacles.filter((o) => !o.hit);
     expect(alive.map((o) => `${o.kind}:${o.x}:${Math.round(o.z - s.s) > 60 ? 'far' : 'near'}`).sort()).toEqual(['baken:0:far', 'baken:0:far', 'baken:3.6:near']);
     expect(s.crashed).toBe(false);
+    expect(s.blitzT).toBe(0);                                          // wirkt einmalig
+  });
+  it('Spurblitz: geräumte Hindernisse erzeugen keinen Near Miss und keine Kollision', () => {
+    const s = base();
+    s.obstacles = [mkObs('barrier', 0, s.s + 40)];
+    s.pickups = [{ id: 5, type: 'clear', x: 0, z: s.s + 10, taken: false }];
+    for (let i = 0; i < 120 * 2; i++) { s.step(DT, { dir: 0, target: 0 }); if (i > 30) s.pickups = []; }
+    expect(s.crashed).toBe(false);
+    expect(s.style.nearMissCount).toBe(0);
   });
   it('Spurblitz ohne Ziel ist harmlos', () => {
     const s = base();
@@ -204,7 +231,7 @@ describe('Wirkung der Power-ups', () => {
     expect(s.events.some((e) => e.type === 'pickup')).toBe(true);
     expect(s.events.some((e) => e.type === 'cleared')).toBe(false);
   });
-  it('Magnetfeld: zieht innerhalb von 12 s genau einmal einen Pickup aus der Nachbarspur heran und löst ihn genau einmal aus', () => {
+  it('Magnetfeld: zieht erreichbare Pickups der Nachbarspur (Radius 1,1 Spurbreiten) heran, einen zur Zeit; läuft danach weiter', () => {
     const s = base();
     s.pickups = [{ id: 5, type: 'magnet', x: 0, z: s.s + 10, taken: false }];
     for (let i = 0; i < 40; i++) s.step(DT, { dir: 0, target: 0 });
@@ -213,11 +240,29 @@ describe('Wirkung der Power-ups', () => {
     s.events.length = 0;
     for (let i = 0; i < 120 * 2; i++) s.step(DT, { dir: 0, target: 0 });
     expect(s.q).toBe(0);                                              // der Wagen wurde nicht gelenkt
-    expect(s.events.filter((e) => e.type === 'magnetPull')).toHaveLength(1);
-    expect(s.events.filter((e) => e.type === 'pickup')).toHaveLength(1);
+    expect(s.events.filter((e) => e.type === 'magnetPull').length).toBeGreaterThanOrEqual(2);
+    expect(s.events.filter((e) => e.type === 'pickup')).toHaveLength(2);
     expect(s.shieldT).toBeGreaterThan(0);
-    expect(s.slowT).toBe(0);                                          // zweiter Nachbar-Pickup bleibt liegen
-    expect(s.magnetT).toBe(0);                                        // Magnet nach dem Einsatz verbraucht
+    expect(s.slowT).toBeGreaterThan(0);
+    expect(s.magnetT).toBeGreaterThan(0);                              // der Magnet wirkt die volle Dauer (7 s)
+  });
+  it('Magnetfeld: Pickups hinter einem Hindernis oder außerhalb des Radius werden nicht angezogen', () => {
+    const s = base();
+    s.magnetT = B.effects.magnet;
+    s.pickups = [{ id: 6, type: 'shield', x: 3.6, z: s.s + 70, taken: false }, { id: 7, type: 'slow', x: -7.2, z: s.s + 90, taken: false }];
+    s.obstacles = [mkObs('barrier', 3.6, s.s + 68)];                    // Hindernis im Weg des Pickups
+    for (let i = 0; i < 60; i++) { s.step(DT, { dir: 0, target: 0 }); }
+    expect(s.events.filter((e) => e.type === 'magnetPull')).toHaveLength(0);
+  });
+  it('Magnetfeld verlängert das Combo-Zeitfenster von 4 auf 6 s, erzeugt aber selbst keinen Near Miss', () => {
+    const s = base();
+    s.style.comboCount = 2; s.style.lastNearMissT = s.t;
+    for (let i = 0; i < 120 * 5; i++) { s.step(DT, { dir: 0, target: 0 }); if (i === 0) s.magnetT = 9; }
+    expect(s.style.comboCount).toBe(2);                                // 5 s > 4 s, aber mit Magnet noch im 6-s-Fenster
+    expect(s.style.nearMissCount).toBe(0);
+    s.magnetT = 0;
+    s.step(DT, { dir: 0, target: 0 });
+    expect(s.style.comboCount).toBe(0);                                // Magnet abgelaufen: normale Regel (4 s)
   });
   it('ohne Magnet wird ein Pickup in der Nachbarspur nicht eingesammelt', () => {
     const s = base();
@@ -225,15 +270,16 @@ describe('Wirkung der Power-ups', () => {
     for (let i = 0; i < 120 * 2; i++) s.step(DT, { dir: 0, target: 0 });
     expect(s.shieldT).toBe(0);
   });
-  it('Magnetfeld läuft nach 15 s ungenutzt ab; Zeitblase 7 s', () => {
+  it('Magnetfeld läuft nach 7 s ab; Zeitblase 3,5 s', () => {
     const s = base();
     s.pickups = [{ id: 5, type: 'magnet', x: 0, z: s.s + 10, taken: false }, { id: 6, type: 'slow', x: 0, z: s.s + 12, taken: false }];
     for (let i = 0; i < 60; i++) s.step(DT, { dir: 0, target: 0 });
     expect(s.magnetT).toBeLessThanOrEqual(B.effects.magnet);
-    expect(s.slowT).toBeGreaterThan(6.4);
-    expect(s.slowT).toBeLessThanOrEqual(7);
-    for (let i = 0; i < 120 * 15; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); }
+    expect(s.slowT).toBeGreaterThan(2.8);
+    expect(s.slowT).toBeLessThanOrEqual(3.5);
+    for (let i = 0; i < 120 * 7; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); }
     expect(s.magnetT).toBe(0);
+    expect(s.slowT).toBe(0);
   });
 });
 
@@ -258,16 +304,16 @@ describe('Platzierung: Umweg für den Effekt und einfache Linie bleiben fahrbar'
 describe('Gleitflug', () => {
   const base = () => { const s = new Sim(12, { startS: 20, startT: 8 }); (s.gen as unknown as { update: () => void }).update = () => {}; s.obstacles = []; s.pickups = []; return s; };
   const collect = (s: Sim, type: PickupType) => { s.pickups = [{ id: 5, type, x: 0, z: s.s + 4, taken: false }]; for (let i = 0; i < 12; i++) s.step(DT, { dir: 0, target: 0 }); };
-  it('Ablauf: ≈ 0,5 s Abheben, Reiseflug, 1 s Sinken, insgesamt 8 s; Start und Landung je einmal', () => {
+  it('Ablauf: ≈ 0,5 s Abheben, Reiseflug, 1 s Sinken, insgesamt 3 s; Start und Landung je einmal', () => {
     const s = base(); collect(s, 'glide');
     expect(s.glideT).toBeGreaterThan(B.effects.glide - 0.2);
     const starts = s.events.filter((e) => e.type === 'glideStart').length;
     let hMid = 0, hAt05 = 0, hDown = 1e9, ends = 0;
-    for (let i = 0; i < 120 * 9; i++) {
+    for (let i = 0; i < 120 * 5; i++) {
       s.obstacles = []; s.step(DT, { dir: 0, target: 0 });
       const el = B.effects.glide - s.glideT;
       if (Math.abs(el - 0.55) < DT && s.glideT > 0) hAt05 = s.height;
-      if (Math.abs(el - 3) < DT) hMid = s.height;
+      if (Math.abs(el - 1.3) < DT) hMid = s.height;
       if (s.glideT > 0 && s.glideT < 0.5) hDown = Math.min(hDown, s.height);
       ends += s.events.filter((e) => e.type === 'glideEnd').length; s.events.length = 0;
     }
@@ -280,10 +326,27 @@ describe('Gleitflug', () => {
   it('Flughöhe reicht über den höchsten Lkw (3,6 m) und Absperrungen', () => { expect(B.glide.height).toBeGreaterThan(3.6 + 0.5); });
   it('Überflug: Lkw und Absperrung können den Wagen vom Abheben bis zum Aufsetzen nicht treffen', () => {
     const s = base(); collect(s, 'glide');
-    s.obstacles = [mkObs('truck', 0, s.s + 40, 10), mkObs('barrier', 0, s.s + 140), mkObs('taxi', 0, s.s + 200, 15)];
-    for (let i = 0; i < 120 * 4 && !s.crashed; i++) { s.step(DT, { dir: 0, target: 0 }); s.pickups = []; }
+    s.obstacles = [mkObs('truck', 0, s.s + 40, 10), mkObs('barrier', 0, s.s + 90), mkObs('taxi', 0, s.s + 130, 15)];
+    for (let i = 0; i < 120 * 2.4 && !s.crashed; i++) { s.step(DT, { dir: 0, target: 0 }); s.pickups = []; }
     expect(s.crashed).toBe(false);
     expect(s.airborne).toBe(true);
+    expect(s.style.nearMissCount).toBe(0);                              // im Flug keine Near-Miss-Wertung
+    expect(s.style.rushCharge).toBe(0);                                 // und keine Rush-Energie
+  });
+  it('Landung (P1.3): Ist der Landebereich belegt, schwebt der Wagen bis zu 1 s länger und setzt dann ohne Treffer auf', () => {
+    const s = base(); collect(s, 'glide');
+    // langsamer Lkw, der das Landegebiet (Ende des Fluges) über längere Zeit belegt
+    s.obstacles = [mkObs('truck', 0, s.s + 55, 10)];
+    let landedAt = -1, crashed = false, total = 0;
+    for (let i = 0; i < 120 * 6; i++) {
+      s.step(DT, { dir: 0, target: 0 }); s.pickups = []; total = i / 120;
+      if (s.crashed) { crashed = true; break; }
+      if (s.events.some((e) => e.type === 'glideEnd')) { landedAt = s.t; break; }
+      s.events.length = 0;
+    }
+    expect(crashed).toBe(false);
+    expect(landedAt).toBeGreaterThan(0);
+    expect(total).toBeLessThanOrEqual(B.effects.glide + B.powers.glideHoldMax + 0.2);   // höchstens eine Sekunde Verlängerung
   });
   it('Luftlenkung funktioniert weiter', () => {
     const s = base(); collect(s, 'glide');
@@ -309,12 +372,12 @@ describe('Gleitflug', () => {
       if (withSlow) { s.slowT = B.effects.slow; s.slowF = B.speed.slowFactor; }
       s.glideT = 0.03;
       s.obstacles = [mkObs('truck', 0, s.s - 6, 10)];                  // überlappt den Wagen beim Aufsetzen
-      let landed = false;
-      for (let i = 0; i < 120 * 3 && !s.crashed; i++) {
+      let landed = false, placed = false;
+      for (let i = 0; i < 120 * 5 && !s.crashed; i++) {
         s.step(DT, { dir: 0, target: 0 });
         if (s.events.some((e) => e.type === 'glideEnd')) landed = true;
         s.events.length = 0;
-        if (landed && i === 20) s.obstacles.push(mkObs('baken', 0, s.s + 30));   // neues Objekt danach
+        if (landed && !placed && s.obstacles.every((o) => o.z + 12 < s.s + 4 || o.z > s.s + 20) && s.glideT === 0) { placed = true; s.obstacles.push(mkObs('baken', 0, s.s + 30)); }   // neues Objekt nach dem Aufsetzen
       }
       expect(landed).toBe(true);
       expect(s.crashed).toBe(true);
@@ -330,7 +393,7 @@ describe('Gleitflug', () => {
   it('Schild beim Abheben bleibt aktiv (aktive Spielzeit) und fängt nach der Landung einen Treffer ab', () => {
     const s = base(); s.shieldT = B.effects.shield;
     collect(s, 'glide');
-    for (let i = 0; i < 120 * 8.2; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); s.pickups = []; }
+    for (let i = 0; i < 120 * 3.4; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); s.pickups = []; }
     expect(s.airborne).toBe(false);
     expect(s.shieldT).toBeGreaterThan(0);
     s.obstacles = [mkObs('barrier', 0, s.s + 20)];
@@ -354,47 +417,61 @@ describe('Gleitflug', () => {
 });
 
 describe('Spurblitz-Zeitfenster', () => {
-  it('räumt innerhalb von 6 s insgesamt höchstens zwei Hindernisse seiner Spur, sobald sie in Reichweite kommen', () => {
+  it('gespeicherte Aktivierung: wirkt einmal, sobald in der aktuellen Spur ein Hindernis in Reichweite kommt (weitere bleiben)', () => {
     const s = new Sim(12, { startS: 20, startT: 8 }); (s.gen as unknown as { update: () => void }).update = () => {};
     s.pickups = [{ id: 5, type: 'clear', x: 0, z: s.s + 4, taken: false }];
-    s.obstacles = [mkObs('baken', 0, s.s + 160), mkObs('baken', 0, s.s + 230), mkObs('baken', 0, s.s + 300), mkObs('baken', 3.6, s.s + 120)];
-    let cleared = 0;
-    for (let i = 0; i < 120 * 6 && !s.crashed; i++) { s.step(DT, { dir: 0, target: 0 }); cleared += s.events.filter((e) => e.type === 'cleared').length; s.events.length = 0; }
-    expect(cleared).toBe(2);
+    s.obstacles = [mkObs('baken', 0, s.s + 260), mkObs('baken', 0, s.s + 300), mkObs('baken', 3.6, s.s + 120)];
+    let cleared = 0, firedT = -1;
+    for (let i = 0; i < 120 * 7 && !s.crashed; i++) { s.step(DT, { dir: 0, target: 0 }); const n = s.events.filter((e) => e.type === 'cleared').length; cleared += n; if (n && firedT < 0) firedT = s.t - 8; s.events.length = 0; }
+    expect(cleared).toBe(1);
+    expect(firedT).toBeGreaterThan(1.5);                                // erst, wenn das erste Hindernis in 2 s Reichweite kommt
     expect(s.blitzLeft).toBe(0);
-    expect(s.crashed).toBe(true);                                      // das dritte Hindernis bleibt
+    expect(s.crashed).toBe(true);                                      // das zweite Hindernis bleibt
   });
-  it('Fenster endet nach 6 s', () => {
+  it('Fenster endet nach 5 s ohne Ziel', () => {
     const s = new Sim(12, { startS: 20, startT: 8 }); (s.gen as unknown as { update: () => void }).update = () => {};
     s.pickups = [{ id: 5, type: 'clear', x: 0, z: s.s + 4, taken: false }];
     for (let i = 0; i < 12; i++) s.step(DT, { dir: 0, target: 0 });
     expect(s.blitzT).toBeGreaterThan(B.effects.blitz - 0.2);
-    for (let i = 0; i < 120 * 6.2; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); }
+    for (let i = 0; i < 120 * 5.2; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); }
     expect(s.blitzT).toBe(0);
   });
 });
 
 describe('Phantom-Turbo und Pfadfinder', () => {
   const base = () => { const s = new Sim(12, { startS: 3000, startT: 8 }); (s.gen as unknown as { update: () => void }).update = () => {}; s.obstacles = []; s.pickups = []; return s; };
-  it('Phantom-Turbo: Tempo wird weich um 20 % angehoben, hält 6 s und fällt weich zurück; der Tacho zeigt das effektive Tempo', () => {
+  it('Phantom-Turbo: Tempo wird weich um ≈ 35 % angehoben, hält 2,25 s und fällt weich zurück; der Tacho zeigt das effektive Tempo', () => {
     const s = base();
     s.pickups = [{ id: 5, type: 'boost', x: 0, z: s.s + 4, taken: false }];
     for (let i = 0; i < 12; i++) s.step(DT, { dir: 0, target: 0 });
     expect(s.boostT).toBeGreaterThan(B.effects.boost - 0.2);
     let prev = s.speedKmh, maxStep = 0;
-    for (let i = 0; i < 120 * 2; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); maxStep = Math.max(maxStep, Math.abs(s.speedKmh - prev)); prev = s.speedKmh; }
-    expect(s.speedKmh / speedAtDist(s.s)).toBeGreaterThan(1.19);
-    expect(maxStep).toBeLessThan(2.5);                                  // keine Sprünge
-    for (let i = 0; i < 120 * 5; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); }
+    for (let i = 0; i < 120 * 1.8; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); maxStep = Math.max(maxStep, Math.abs(s.speedKmh - prev)); prev = s.speedKmh; }
+    expect(s.speedKmh / speedAtDist(s.s)).toBeGreaterThan(1.3);
+    expect(maxStep).toBeLessThan(4.6);                                  // keine Sprünge
+    for (let i = 0; i < 120 * 4; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); }
     expect(s.boostT).toBe(0);
     expect(s.speedKmh / speedAtDist(s.s)).toBeLessThan(1.02);
+  });
+  it('Phantom-Turbo: Verkehr ist durchlässig (keine Kollision, keine Near-Miss-Wertung, keine Rush-Energie); danach Schutzphase ≈ 0,5 s und sichere Rückkehr', () => {
+    const s = base(); s.boostT = B.effects.boost; s.boostF = B.speed.boostFactor;
+    s.obstacles = [mkObs('barrier', 0, s.s + 30), mkObs('truck', 0, s.s + 80, 10)];
+    let graced = false;
+    for (let i = 0; i < 120 * 1.9 && !s.crashed; i++) { s.step(DT, { dir: 0, target: 0 }); s.pickups = []; if (s.boostT === 0 && s.graceT > 0) graced = true; }
+    expect(s.crashed).toBe(false);
+    expect(s.style.nearMissCount).toBe(0);
+    expect(s.style.rushCharge).toBe(0);
+    s.obstacles = [mkObs('truck', 0, s.s + 12, 10)];                    // Ende des Turbos mitten im Verkehr: Überlappung gilt bis zur Trennung als passiert
+    for (let i = 0; i < 120 * 2 && !s.crashed; i++) { s.step(DT, { dir: 0, target: 0 }); s.pickups = []; if (s.boostT === 0 && s.graceT > 0) graced = true; }
+    expect(s.crashed).toBe(false);
+    expect(graced).toBe(true);
   });
   it('Phantom-Turbo erhöht die Lenkgeschwindigkeit mit dem Tempo', () => {
     const a = base(), b = base(); b.boostT = 6; b.boostF = B.speed.boostFactor;
     for (let i = 0; i < 12; i++) { a.obstacles = []; b.obstacles = []; a.step(DT, { dir: 1 }); b.step(DT, { dir: 1 }); }
     expect(b.vq).toBeGreaterThan(a.vq);
   });
-  it('Pfadfinder zeigt die freie, erreichbare Spur und endet nach 10 s', () => {
+  it('Pfadfinder zeigt die freie, erreichbare Spur und endet nach 5 s', () => {
     const s = base(); s.guideT = B.effects.guide;
     s.obstacles = [mkObs('barrier', 0, s.s + 150), mkObs('baken', -3.6, s.s + 150)];
     s.step(DT, { dir: 0, target: 0 });
@@ -402,7 +479,7 @@ describe('Phantom-Turbo und Pfadfinder', () => {
     s.obstacles = [mkObs('barrier', 3.6, s.s + 150), mkObs('baken', 0, s.s + 150)];
     for (let i = 0; i < 8; i++) s.step(DT, { dir: 0, target: 0 });
     expect(s.guideQ).toBe(-3.6);
-    for (let i = 0; i < 120 * 10.2; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); }
+    for (let i = 0; i < 120 * 5.2; i++) { s.obstacles = []; s.step(DT, { dir: 0, target: 0 }); }
     expect(s.guideT).toBe(0);
     expect(s.guideQ).toBeNull();
   });
@@ -413,16 +490,21 @@ describe('Phantom-Turbo und Pfadfinder', () => {
   });
 });
 
-describe('Erstes Angebot: Fliegen-Tor über drei Spuren', () => {
-  it('in jedem Versuch drei gleiche Fliegen-Pickups in drei Spuren auf gleicher Höhe, ab 550 m', () => {
+describe('Erstes Angebot (P1.3): normales gewichtetes Power-up, kein Fliegen-Tor mehr', () => {
+  it('das erste Angebot ist ein einzelner Pickup (Magnet mit Folge-Pickup ausgenommen), erreichbar und ohne Tor über drei Spuren', () => {
     for (let seed = 1; seed <= 30; seed++) {
       const s = new Sim(seed);
       let found: Sim['pickups'] = [];
-      for (let i = 0; i < 120 * 14 && found.length === 0; i++) { s.step(DT, { dir: 0, target: botTarget(s, null) ?? s.q }); if (s.pickups.length) found = [...s.pickups]; }
-      expect(found.filter((p) => p.type === 'glide')).toHaveLength(3);
-      expect(new Set(found.map((p) => Math.round(p.x))).size).toBe(3);
-      expect(Math.max(...found.map((p) => Math.abs(p.z - found[0].z)))).toBeLessThan(1);
-      expect(found[0].z).toBeGreaterThanOrEqual(550);
+      for (let i = 0; i < 120 * 30 && found.length === 0 && !s.crashed; i++) { s.step(DT, { dir: 0, target: botTarget(s, null) ?? s.q }); if (s.pickups.length) found = [...s.pickups]; }
+      expect(found.length, `seed ${seed}`).toBeGreaterThan(0);
+      expect(found.length).toBeLessThanOrEqual(2);
+      expect(found.filter((p) => p.type === 'glide').length).toBeLessThanOrEqual(1);
     }
+  });
+  it('Auswahlgewichte: Schild 20 %, Zeitblase 18 %, Spurblitz 14 %, Magnet 12 %, Fliegen 9 %, Phantom 14 %, Pfadfinder 13 %', () => {
+    const sh = B.pickups.share, tot = Object.values(sh).reduce((a, b) => a + b, 0);
+    const pct = (k: string) => (sh[k] / tot) * 100;
+    expect(pct('shield')).toBeCloseTo(20, 0); expect(pct('slow')).toBeCloseTo(18, 0); expect(pct('clear')).toBeCloseTo(14, 0);
+    expect(pct('magnet')).toBeCloseTo(12, 0); expect(pct('glide')).toBeCloseTo(9, 0); expect(pct('boost')).toBeCloseTo(14, 0); expect(pct('guide')).toBeCloseTo(13, 0);
   });
 });

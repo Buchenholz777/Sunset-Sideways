@@ -20,7 +20,10 @@ export function planGuide(obstacles: readonly Obstacle[], q: number, s: number, 
     const tb = ta + (L + def.len) / c;
     if (tb < -0.05 || ta > 6.5) continue;
     const half = def.w / 2 + B.player.width / 2 + 0.25;
-    gates.push({ ta, tb, l: o.x - half, r: o.x + half });
+    // Fahrzeuge mit angekündigtem oder laufendem Spurwechsel sperren beide Spuren (die Empfehlung wird laufend aktualisiert)
+    const lc = o.lc, both = lc && (lc.stage === 'warn' || lc.stage === 'move' || (lc.stage === 'idle' && lc.scripted));
+    const lo = both ? Math.min(o.x, lc.toX) : o.x, hi = both ? Math.max(o.x, lc.toX) : o.x;
+    gates.push({ ta, tb, l: lo - half, r: hi + half });
   }
   const xs = [laneX(0), laneX(1), laneX(2)];
   const near = xs.reduce((bi, x, i) => (Math.abs(x - q) < Math.abs(xs[bi] - q) ? i : bi), 0);

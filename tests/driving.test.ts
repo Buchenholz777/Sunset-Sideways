@@ -209,7 +209,7 @@ describe('Fahrmechanik ohne Drift', () => {
 });
 
 describe('Zeitlupe', () => {
-  it('senkt Spieler- und Verkehrstempo auf ≈ 78 % für 7 s, danach gilt das erreichte Grundtempo', () => {
+  it('senkt Spieler- und Verkehrstempo auf ≈ 60 % für 3,5 s, danach gilt das erreichte Grundtempo', () => {
     const s = clean();
     s.slowT = B.effects.slow;
     s.obstacles = [{ id: 9, kind: 'sedan', x: 0, z: s.s + 900, vz: 12, hit: false, knockT: 0, knockVx: 0 }];
@@ -217,8 +217,8 @@ describe('Zeitlupe', () => {
     for (let i = 0; i < 120 * 1.5; i++) { s.pickups = []; s.step(DT, { dir: 0 }); }
     expect(s.speedKmh / speedAtDist(s.s)).toBeCloseTo(B.speed.slowFactor, 2);
     const dz = s.obstacles[0].z - z0;
-    expect(dz / (12 * 1.5)).toBeGreaterThan(0.75);
-    expect(dz / (12 * 1.5)).toBeLessThan(0.9);
+    expect(dz / (12 * 1.5)).toBeGreaterThan(0.58);
+    expect(dz / (12 * 1.5)).toBeLessThan(0.75);
     for (let i = 0; i < 120 * (B.effects.slow - 0.6); i++) { s.obstacles = []; s.pickups = []; s.step(DT, { dir: 0 }); }
     expect(s.slowT).toBe(0);
     expect(s.speedKmh / speedAtDist(s.s)).toBeGreaterThan(0.99);

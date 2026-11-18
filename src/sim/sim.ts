@@ -5,7 +5,9 @@ import { ScriptedGen, type RouteEntry } from '../sprint/rules';
 import { contactTime, obstacleFootprint, pickupFootprint, playerFootprint } from './contacts';
 import { planGuide } from './guide';
 import { Road } from './road';
-import { KINDS, laneOf, type ObjKind, type Obstacle, type Pickup, type PickupType } from './world';
+import { StyleState, type StyleEvent } from './style';
+import { TrafficDirector, lcX, type TrafficEvent } from './traffic';
+import { KINDS, laneOf, laneX, type ObjKind, type Obstacle, type Pickup, type PickupType } from './world';
 
 export interface SteerInput {
   /** Tastatur: −1 links, 0 neutral, 1 rechts. */
@@ -27,11 +29,18 @@ export type SimEvent =
   | { type: 'glideStart' }
   | { type: 'glideEnd' }
   | { type: 'crash'; kind: ObjKind }
-  | { type: 'effectEnd'; effect: PickupType };
+  | { type: 'effectEnd'; effect: PickupType }
+  | { type: 'queued'; effect: 'glide' | 'boost' }
+  | StyleEvent
+  | TrafficEvent;
 
 export interface CrashInfo { kind: ObjKind; id: number; x: number; z: number }
 
-export interface SimOptions { /** Feste Begegnungsfolge (Sunset Sprint) statt des laufenden Generators. */ script?: readonly RouteEntry[]; startT?: number; startS?: number; record?: boolean; /** nur Tests: keine Hindernistreffer */ ghost?: boolean }
+export interface SimOptions {
+  /** Feste Begegnungsfolge (Sunset Sprint) statt des laufenden Generators. */ script?: readonly RouteEntry[]; startT?: number; startS?: number; record?: boolean;
+  /** nur Tests: keine Hindernistreffer */ ghost?: boolean;
+  /** Nur Tests: keine selbstständigen Spurwechsel (Standard: an, außer im festen Sprint). */ noDynamic?: boolean;
+}
 
 interface Hit { f: number; pickup: Pickup | null; obstacle: Obstacle | null }
 
@@ -65,16 +74,22 @@ export class Sim {
   /** Pfadfinder: Spurmitte, auf die zugesteuert werden soll (null = aus). */
   guideQ: number | null = null;
   private guideN = 0;
-  /** Spurblitz: Restzeit des Fensters, verbleibende Räumungen und gebundene Spur. */
+  /** Spurblitz: gespeicherte Aktivierung (Restzeit); wirkt einmal, sobald in der aktuellen Spur ein Hindernis in Reichweite ist. `blitzLeft` > 0 = bereit. */
   blitzT = 0;
   blitzLeft = 0;
-  private blitzLane = 1;
   /** Gleitflug: Restzeit; Höhe siehe `height`. */
   glideT = 0;
+  /** Bereits verbrauchte Landeverlängerung (s). */
+  private glideHold = 0;
+  /** Vorgemerkter exklusiver Effekt (Fliegen oder Phantom-Turbo, höchstens einer; der neuere ersetzt den älteren). */
+  pendingFx: 'glide' | 'boost' | null = null;
+  /** Schutzphase (s) nach abgefangenem Treffer und nach dem Phantom-Turbo: keine Kontakte. */
+  graceT = 0;
+  /** Stil-System (Near Miss, Combo, Neon Rush) und Verkehrsregie (Spurwechsler). */
+  readonly style = new StyleState();
+  private readonly director: TrafficDirector | null;
   /** Objekte, die beim Aufsetzen überlappt wurden und bis zur Trennung als passiert gelten. */
   private passed = new Set<number>();
-  /** Der Magnet hat seinen einen Pickup schon angezogen. */
-  private magnetUsed = false;
   /** Zeitlupenfaktor 1 … 0,78 (weich ein-/ausgeblendet). */
   slowF = 1;
   /** Phantom-Turbo: Tempofaktor 1 … 1,2 (weich ein-/ausgeblendet). */
@@ -98,8 +113,12 @@ export class Sim {
     this.road = new Road(seed);
     this.speedKmh = speedAtDist(this.s);
     this.gen = opts.script ? new ScriptedGen(opts.script) : new Generator(seed, { record: opts.record, startS: opts.startS });
+    this.director = opts.script || opts.noDynamic ? null : new TrafficDirector();
     this.gen.update(this);
   }
+
+  /** Keine Kontakte mit Verkehr: Fliegen, Phantom-Turbo oder kurze Schutzphase. */
+  get invulnerable(): boolean { return this.glideT > 0 || this.boostT > 0 || this.graceT > 0; }
 
   /** Weltposition quer. */
   get X(): number { return this.road.center(this.s) + this.q; }
@@ -168,11 +187,14 @@ export class Sim {
     const pads = this.pullPickups(dt, qNew, vm);
 
     const flying = this.glideT > 0;
+    const inv = this.invulnerable;
+    const driven = inp.dir !== 0 || (inp.drag !== null && inp.drag !== undefined) || (inp.target !== null && inp.target !== undefined);
     for (const o of this.obstacles) {
-      if (flying || this.passed.has(o.id)) continue;
+      if (inv || this.passed.has(o.id)) continue;
       if (o.hit || o.z > sNew + 2 || o.z + o.vz * ts * dt + KINDS[o.kind].len < s0 - P.len - 2) continue;
+      const xAfter = o.lc ? lcX(o, dt) : o.x;
       const before = obstacleFootprint(this.road, o);
-      const after = o.vz === 0 ? before : obstacleFootprint(this.road, o, o.z + o.vz * ts * dt);
+      const after = o.vz === 0 && xAfter === o.x ? before : obstacleFootprint(this.road, o, o.z + o.vz * ts * dt, xAfter);
       const f = contactTime(body0, body1, before, after);
       if (f !== null) hits.push({ f, pickup: null, obstacle: o });
     }
@@ -191,13 +213,15 @@ export class Sim {
         const p = h.pickup;
         p.taken = true;
         const qAt = q0 + (qNew - q0) * h.f, sAt = s0 + ds * h.f;
-        if (p.type === 'clear') this.startBlitz(qAt, sAt);
-        else if (p.type === 'glide') { this.glideT = B.effects.glide; this.events.push({ type: 'glideStart' }); }
+        // Fliegen und Phantom-Turbo sind exklusive Bewegungs-/Kollisionszustände: läuft einer, wird der andere (höchstens einer) vorgemerkt und startet danach
+        if ((p.type === 'glide' || p.type === 'boost') && (this.glideT > 0 || this.boostT > 0) && !(p.type === 'glide' ? this.glideT > 0 : this.boostT > 0)) { this.pendingFx = p.type; this.events.push({ type: 'queued', effect: p.type }); }
+        else if (p.type === 'clear') this.startBlitz(qAt, sAt);
+        else if (p.type === 'glide') { this.glideT = B.effects.glide; this.glideHold = 0; this.events.push({ type: 'glideStart' }); }
         else {
-          const val = dur(p.type) + h.f * dt;            // Restzeit nach diesem Schritt = Dauer − (1 − f)·dt
-          if (p.type === 'shield') this.shieldT = val; else if (p.type === 'slow') this.slowT = val; else if (p.type === 'boost') this.boostT = val; else if (p.type === 'guide') this.guideT = val; else { this.magnetT = val; this.magnetUsed = false; }
+          // Erneutes Einsammeln setzt die Dauer zurück, verlängert sie nie über die Grundzeit (kein Stapeln); Restzeit nach diesem Schritt = Dauer − (1 − f)·dt
+          const val = dur(p.type) + h.f * dt;
+          if (p.type === 'shield') this.shieldT = val; else if (p.type === 'slow') this.slowT = val; else if (p.type === 'boost') this.boostT = val; else if (p.type === 'guide') this.guideT = val; else this.magnetT = val;
         }
-        if (p.pull) { this.magnetT = 0; this.events.push({ type: 'effectEnd', effect: 'magnet' }); }
         this.events.push({ type: 'pickup', pickup: p.type, id: p.id, z: p.z });
       } else if (h.obstacle) {
         const o = h.obstacle;
@@ -208,6 +232,8 @@ export class Sim {
           o.knockT = 0;
           o.knockVx = (o.x >= q0 ? 1 : -1) * 14;
           this.shieldT = 0;                                // ein Treffer, danach verbraucht
+          this.graceT = B.powers.graceShield;              // kurze Schutzphase: keine zweite Kollision unmittelbar danach
+          this.style.onHit();                              // Combo, Neon Rush und Rush-Energie enden
           this.events.push({ type: 'shieldHit', x: o.x, z: o.z });
           this.events.push({ type: 'effectEnd', effect: 'shield' });
         } else {
@@ -218,6 +244,8 @@ export class Sim {
           o.z += o.vz * ts * dt * h.f;
           this.crash = { kind: o.kind, id: o.id, x: o.x, z: o.z };
           this.vq = 0;
+          this.style.onHit();
+          this.flush();
           this.events.push({ type: 'crash', kind: o.kind });
           return;
         }
@@ -231,11 +259,22 @@ export class Sim {
     const tick = (name: 'shieldT' | 'slowT' | 'magnetT' | 'boostT' | 'guideT', eff: PickupType) => {
       if (this[name] > 0 && (this[name] -= dt) <= 0) { this[name] = 0; this.events.push({ type: 'effectEnd', effect: eff }); }
     };
+    const hadBoost = this.boostT > 0;
     tick('shieldT', 'shield'); tick('slowT', 'slow'); tick('magnetT', 'magnet'); tick('boostT', 'boost'); tick('guideT', 'guide');
+    if (hadBoost && this.boostT <= 0) this.graceT = Math.max(this.graceT, B.powers.graceBoost);   // Rückkehr zur normalen Kollision mit kurzer Schutzphase
+    if (this.graceT > 0 && (this.graceT -= dt) <= 0) { this.graceT = 0; this.markOverlaps(body1); }
     if (this.guideT > 0) { if ((this.guideN++ & 3) === 0) this.guideQ = planGuide(this.obstacles, this.q, this.s, this.speedKmh, this.slowF); } else this.guideQ = null;
-    if (this.blitzT > 0) { this.blitzT -= dt; if (this.blitzT <= 0 || this.blitzLeft <= 0) { this.blitzT = 0; this.blitzLeft = 0; } else this.blitzSweep(); }
-    if (this.glideT > 0 && (this.glideT -= dt) <= 0) this.land(body1);
+    if (this.blitzT > 0) { this.blitzT -= dt; if (this.blitzT <= 0) { this.blitzT = 0; this.blitzLeft = 0; this.events.push({ type: 'effectEnd', effect: 'clear' }); } else if (this.blitzLeft > 0) this.blitzSweep(); }
+    if (this.glideT > 0) {
+      // Landung: Ist der vorhergesagte Landebereich belegt, schwebt der Wagen bis zu `glideHoldMax` s länger (nie ein unvermeidbarer Crash beim Aufsetzen)
+      if (this.glideT <= B.glide.down && this.glideHold < B.powers.glideHoldMax && this.landingBlocked()) this.glideHold += dt;
+      else if ((this.glideT -= dt) <= 0) this.land(body1);
+    }
     if (this.passed.size) this.updatePassed(body1);
+    if (this.pendingFx && this.glideT <= 0 && this.boostT <= 0) {
+      const next = this.pendingFx; this.pendingFx = null;                  // der vorgemerkte exklusive Effekt startet erst nach dem laufenden
+      if (next === 'glide') { this.glideT = B.effects.glide; this.glideHold = 0; this.events.push({ type: 'glideStart' }); } else this.boostT = B.effects.boost;
+    }
 
     for (const o of this.obstacles) {
       o.z += o.vz * ts * dt;
@@ -243,18 +282,47 @@ export class Sim {
     }
     this.obstacles = this.obstacles.filter((o) => !(o.hit && o.knockT > 0.9) && o.z + KINDS[o.kind].len > this.s - 60);
     this.pickups = this.pickups.filter((p) => !p.taken && p.z > this.s - 40);
+    if (this.director) this.director.update({ seed: this.seed, t: this.t, t0: this.t0, s: this.s, q: this.q, speedKmh: this.speedKmh, timeScale: ts, obstacles: this.obstacles }, dt);
+    this.style.update({ t: this.t, s: this.s, q: this.q, speed: vm, ts, obstacles: this.obstacles, slowActive: this.slowT > 0, magnetActive: this.magnetT > 0, invulnerable: this.invulnerable, driven }, dt);
+    this.flush();
     this.gen.update(this);
   }
 
-  /** Aufsetzen: bereits überlappte Objekte gelten bis zur unmittelbaren Trennung als passiert. */
-  private land(body: ReturnType<typeof playerFootprint>): void {
-    this.glideT = 0;
-    this.events.push({ type: 'glideEnd' });
+  /** Ereignisse des Stil-Systems und der Verkehrsregie in die Ereigniswarteschlange übernehmen. */
+  private flush(): void {
+    if (this.style.events.length) { for (const e of this.style.events) this.events.push(e); this.style.events.length = 0; }
+    if (this.director && this.director.events.length) { for (const e of this.director.events) this.events.push(e); this.director.events.length = 0; }
+  }
+
+  /** Vorhergesagter Landebereich (Spur und Strecke bei Ende des Fluges) belegt? */
+  private landingBlocked(): boolean {
+    const T = Math.max(0, this.glideT), v = this.speedKmh / 3.6, sL = this.s + v * T;
+    const body = playerFootprint(this.road.center(sL) + this.q, sL, Math.atan(this.road.heading(sL)));
+    for (const o of this.obstacles) {
+      if (o.hit) continue;
+      const def = KINDS[o.kind], zL = o.z + o.vz * this.slowF * T;
+      if (zL > sL + 3 || zL + def.len < sL - B.player.len - 3) continue;
+      const fp = obstacleFootprint(this.road, o, zL, o.lc ? lcX(o, T) : o.x);
+      if (contactTime(body, body, fp, fp) !== null) return true;
+    }
+    return false;
+  }
+
+  /** Bereits überlappte Objekte gelten bis zur Trennung (+ 0,3 m) als passiert: kein unfairer Treffer beim Ende von Flug, Phantom-Turbo oder Schutzphase. */
+  private markOverlaps(body: ReturnType<typeof playerFootprint>): void {
     for (const o of this.obstacles) {
       if (o.hit) continue;
       const fp = obstacleFootprint(this.road, o);
       if (contactTime(body, body, fp, fp) !== null) this.passed.add(o.id);
     }
+  }
+
+  /** Aufsetzen: bereits überlappte Objekte gelten bis zur unmittelbaren Trennung als passiert. */
+  private land(body: ReturnType<typeof playerFootprint>): void {
+    this.glideT = 0;
+    this.glideHold = 0;
+    this.events.push({ type: 'glideEnd' });
+    this.markOverlaps(body);
   }
 
   private updatePassed(body: ReturnType<typeof playerFootprint>): void {
@@ -267,20 +335,33 @@ export class Sim {
     }
   }
 
+  /** Liegt ein Hindernis im Weg, den ein angezogener Pickup seitlich zurücklegen würde? (Nichts wird durch Hindernisse hindurch eingesammelt.) */
+  private pullBlocked(p: Pickup): boolean {
+    const lo = Math.min(p.x, this.q) - 1.2, hi = Math.max(p.x, this.q) + 1.2;
+    for (const o of this.obstacles) {
+      if (o.hit) continue;
+      const def = KINDS[o.kind];
+      if (o.z > p.z + 4 || o.z + def.len < p.z - 4) continue;
+      if (o.x + def.w / 2 > lo && o.x - def.w / 2 < hi) return true;
+    }
+    return false;
+  }
+
   /**
-   * Magnetfeld: zieht einmal einen anderen Pickup aus einer Nachbarspur heran (Querbewegung in Richtung Wagen,
-   * so dass er mittig getroffen wird). Liefert die Trefferfläche vor der Bewegung für den kontinuierlichen Kontakt.
+   * Magnetfeld: zieht einen erreichbaren Pickup aus der Nachbarspur (Radius `magnetLanes` Spurbreiten) heran, jeweils einen zur Zeit
+   * (Querbewegung in Richtung Wagen, so dass er mittig getroffen wird; nie durch Hindernisse). Liefert die Trefferfläche vor der Bewegung für den kontinuierlichen Kontakt.
    */
   private pullPickups(dt: number, qNew: number, vm: number): Map<Pickup, ReturnType<typeof pickupFootprint>> {
     const pads = new Map<Pickup, ReturnType<typeof pickupFootprint>>();
-    if (this.magnetT > 0 && !this.magnetUsed && this.glideT <= 0) {
+    if (this.magnetT > 0 && this.glideT <= 0 && !this.pickups.some((p) => p.pull && !p.taken)) {
       let best: Pickup | null = null;
+      const radius = B.powers.magnetLanes * B.road.laneWidth;
       for (const p of this.pickups) {
         const dx = Math.abs(p.x - this.q);
-        if (p.taken || p.type === 'magnet' || p.z < this.s + 8 || p.z > this.s + B.powers.magnetRange || dx < 1.6 || dx > 4.6) continue;
-        if (!best || p.z < best.z) best = p;
+        if (p.taken || p.type === 'magnet' || p.z < this.s + 8 || p.z > this.s + B.powers.magnetRange || dx < 1.6 || dx > radius) continue;
+        if ((!best || p.z < best.z) && !this.pullBlocked(p)) best = p;
       }
-      if (best) { best.pull = true; this.magnetUsed = true; this.events.push({ type: 'magnetPull', x: best.x, z: best.z }); }
+      if (best) { best.pull = true; this.events.push({ type: 'magnetPull', x: best.x, z: best.z }); }
     }
     for (const p of this.pickups) {
       if (!p.pull || p.taken || this.glideT > 0) continue;
@@ -292,28 +373,37 @@ export class Sim {
     return pads;
   }
 
-  /** Spurblitz: öffnet ein Zeitfenster; in dieser Spur werden bis zu zwei Hindernisse in Reichweite (90 m) geräumt. */
-  private startBlitz(q: number, s: number): void {
-    this.blitzLane = laneOf(q);
+  /**
+   * Spurblitz: gespeicherte Aktivierung (Fenster `effects.blitz` s). Wirkt genau einmal: Sobald in der aktuellen Spur ein Hindernis innerhalb von
+   * `blitzTtc` s Kollisionszeit liegt, werden die Hindernisse dieser Spur in diesem Bereich (höchstens `blitzMax`) geräumt. Geräumte Hindernisse
+   * zählen weder als Kollision noch als Near Miss (`hit`). Ohne Ziel verfällt der Effekt nach Ablauf des Fensters.
+   */
+  private startBlitz(_q: number, s: number): void {
     this.blitzT = B.effects.blitz;
     this.blitzLeft = B.powers.blitzMax;
-    this.events.push({ type: 'blitz', x: (this.blitzLane - 1) * B.road.laneWidth, z: s });
     this.blitzSweep(s);
   }
 
   private blitzSweep(sAt = this.s): void {
+    const lane = laneOf(this.q), v = this.speedKmh / 3.6;
     const targets = this.obstacles
-      .filter((o) => !o.hit && o.z + KINDS[o.kind].len > sAt && o.z < sAt + B.powers.blitzRange && laneOf(o.x) === this.blitzLane)
+      .filter((o) => {
+        if (o.hit || laneOf(o.x) !== lane || o.z + KINDS[o.kind].len <= sAt) return false;
+        const rel = v - o.vz * this.slowF;
+        return rel > 0.1 && Math.max(0, o.z - sAt) / rel <= B.powers.blitzTtc;
+      })
       .sort((a, b) => a.z - b.z)
-      .slice(0, this.blitzLeft);
+      .slice(0, B.powers.blitzMax);
+    if (targets.length === 0) return;
     for (const o of targets) {
       o.hit = true;
       o.cleared = true;
       o.knockT = 0;
       o.knockVx = 0;
-      this.blitzLeft--;
       this.events.push({ type: 'cleared', x: o.x, z: o.z, kind: o.kind });
     }
-    if (this.blitzLeft <= 0) { this.blitzT = 0; this.events.push({ type: 'effectEnd', effect: 'clear' }); }
+    this.events.push({ type: 'blitz', x: laneX(lane), z: sAt });
+    this.blitzT = 0; this.blitzLeft = 0;
+    this.events.push({ type: 'effectEnd', effect: 'clear' });
   }
 }

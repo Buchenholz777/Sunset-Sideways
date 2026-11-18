@@ -7,8 +7,13 @@ export interface Saved {
   /** Erstes Hindernis schon einmal erfolgreich umfahren (Hinweis entfällt). */ dodged: boolean;
   /** Sunset Sprint: weiteste Sprintstrecke (m, Ziel = Zielstrecke) und Anzahl erreichter Ziele; eigener Schlüssel, nie mit der Endless-Bestweite vermischt. */
   sprintBest: number; sprintDone: number;
+  /**
+   * Stil-Rekord (P1): höchste Stilpunktzahl eines Laufs (Near Miss, Combo, Neon Rush). Eigenes Feld, getrennt von der Bestweite (`best`, Meter): alte
+   * Speicherstände ohne dieses Feld laden mit 0, die Bestweite wird nie als Stil-Rekord gelesen und umgekehrt.
+   */
+  styleBest: number;
 }
-const DEFAULTS: Saved = { best: 0, muted: false, dodged: false, sprintBest: 0, sprintDone: 0 };
+const DEFAULTS: Saved = { best: 0, muted: false, dodged: false, sprintBest: 0, sprintDone: 0, styleBest: 0 };
 
 let memory: Saved = { ...DEFAULTS };
 
@@ -20,7 +25,7 @@ export function parseSaved(raw: string | null): Saved {
     if (o.v !== 1) return { ...DEFAULTS };
     const best = typeof o.best === 'number' && Number.isFinite(o.best) && o.best >= 0 ? Math.floor(o.best) : 0;
     const nat = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
-    return { best, muted: o.muted === true, dodged: o.dodged === true, sprintBest: nat(o.sprintBest), sprintDone: nat(o.sprintDone) };
+    return { best, muted: o.muted === true, dodged: o.dodged === true, sprintBest: nat(o.sprintBest), sprintDone: nat(o.sprintDone), styleBest: nat(o.styleBest) };
   } catch {
     return { ...DEFAULTS };
   }

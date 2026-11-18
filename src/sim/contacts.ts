@@ -21,11 +21,11 @@ export function playerFootprint(x: number, frontZ: number, yaw: number): Footpri
   };
 }
 
-export function obstacleFootprint(road: Road, o: Obstacle, rearZ = o.z): Footprint {
+export function obstacleFootprint(road: Road, o: Obstacle, rearZ = o.z, x = o.x): Footprint {
   const kind = KINDS[o.kind];
   const yaw = Math.atan(road.heading(rearZ));
   return {
-    x: road.center(rearZ) + o.x + Math.sin(yaw) * kind.len / 2,
+    x: road.center(rearZ) + x + Math.sin(yaw) * kind.len / 2,
     z: rearZ + Math.cos(yaw) * kind.len / 2,
     yaw,
     halfWidth: kind.w / 2 - B.obstacle.hitInset,

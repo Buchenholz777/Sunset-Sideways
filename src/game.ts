@@ -115,10 +115,15 @@ export class Game {
   private excluded = false;
 
   // zuletzt in das DOM geschriebene Werte (kein DOM-Update pro Frame ohne Änderung)
-  private last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '' };
+  private last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '', score: '', combo: '', comboBar: '', rush: '', rushBar: '', rushTxt: '' };
+  /** Stil-Rekord (höchste Stilpunktzahl eines Endless-Laufs), getrennt von der Bestweite. */
+  private styleBest = load().styleBest;
+  private missTimer: ReturnType<typeof setTimeout> | undefined;
+  private lastRushSec = -1;
 
   private el = {
     hud: $('hud'), dist: $('hud-distance'), best: $('hud-best'), bestWrap: $('hud-best-wrap'), speed: $('hud-speed'),
+    score: $('hud-style-score'), combo: $('hud-combo'), comboX: $('hud-combo-x'), comboBar: $('hud-combo-bar'), rush: $('hud-rush'), rushLbl: $('hud-rush-lbl'), rushBar: $('hud-rush-bar'), rushTxt: $('hud-rush-txt'), miss: $('fx-miss'),
     shield: $('fx-shield'), slow: $('fx-slow'), magnet: $('fx-magnet'), blitz: $('fx-blitz'), glide: $('fx-glide'), boost: $('fx-boost'), guide: $('fx-guide'), pause: $<HTMLButtonElement>('btn-pause'), snd: $<HTMLButtonElement>('btn-sound'), hint: $('hint'), sprintBar: $('sprint-bar'), sprintBtn: $('btn-sprint'), challengeBox: $('challenge'), shareBtn: $('btn-share'), endlessBtn: $('btn-endless'), resSprintBtn: $('btn-res-sprint'), shareBox: $('share-box'), shareUrl: $<HTMLInputElement>('share-url'), shareMsg: $('share-msg'), resTitle: $('res-title'), resBestLabel: $('res-best-label'), toast: $('fx-toast'), pauseReason: $('pause-reason'),
     start: $('screen-start'), paused: $('screen-pause'), result: $('screen-result'),
     again: $<HTMLButtonElement>('btn-again'),
@@ -157,11 +162,24 @@ export class Game {
         setQ: (q: number) => { if (this.sim) this.sim.q = q; },
         /** Nur Tests: Generator anhalten und die Strecke leeren. */
         freeze: () => { if (this.sim) { (this.sim.gen as unknown as { update: () => void }).update = () => {}; this.sim.obstacles = []; this.sim.pickups = []; this.sim.blitzT = 0; this.sim.blitzLeft = 0; } },
-        place: (spec: { k: 'obstacle' | 'pickup'; kind?: string; type?: string; x: number; dz: number; vz?: number }) => {
+        place: (spec: { k: 'obstacle' | 'pickup'; kind?: string; type?: string; x: number; dz: number; vz?: number; /** geplanter Spurwechsel (Zielspur-Mitte) */ lcTo?: number }) => {
           const sim = this.sim; if (!sim) return;
           const id = sim.nextId++;
           if (spec.k === 'pickup') sim.pickups.push({ id, type: spec.type as never, x: spec.x, z: sim.s + spec.dz, taken: false });
-          else sim.obstacles.push({ id, kind: (spec.kind ?? 'barrier') as never, x: spec.x, z: sim.s + spec.dz, vz: spec.vz ?? 0, hit: false, knockT: 0, knockVx: 0 });
+          else sim.obstacles.push({ id, kind: (spec.kind ?? 'barrier') as never, x: spec.x, z: sim.s + spec.dz, vz: spec.vz ?? 0, hit: false, knockT: 0, knockVx: 0, lc: spec.lcTo === undefined ? undefined : { stage: 'idle', t: 0, fromX: spec.x, toX: spec.lcTo, scripted: true } });
+        },
+        /** Nur Tests: Stilzustand setzen (Combo, Rush-Ladung, aktiver Rush). */
+        styleSet: (o: { combo?: number; charge?: number; rush?: number; cooldown?: number; score?: number; near?: number; maxCombo?: number; rushCount?: number }) => {
+          const sim = this.sim; if (!sim) return;
+          const st = sim.style;
+          if (o.combo !== undefined) { st.comboCount = o.combo; st.lastNearMissT = sim.t; }
+          if (o.charge !== undefined) st.rushCharge = o.charge;
+          if (o.rush !== undefined) { st.rushActive = o.rush > 0; st.rushRemaining = o.rush; }
+          if (o.cooldown !== undefined) st.rushCooldown = o.cooldown;
+          if (o.score !== undefined) st.styleScore = o.score;
+          if (o.near !== undefined) st.nearMissCount = o.near;
+          if (o.maxCombo !== undefined) st.maxCombo = o.maxCombo;
+          if (o.rushCount !== undefined) st.rushCount = o.rushCount;
         },
         noPickups: (on: boolean) => { this.qaNoPickups = on; },
         /** Nur Tests: Zuordnung Bildzeile → Tiefe des letzten Bildes. */
@@ -169,8 +187,9 @@ export class Game {
         state: () => this.sim && ({
           t: this.sim.t, s: this.sim.s, x: this.sim.q, q: this.sim.q, vq: this.sim.vq, v: this.sim.speedKmh, crashed: this.sim.crashed, k: this.sim.road.curv(this.sim.s), X: this.sim.X, rel: this.sim.relAngle,
           pickupEvents: this.qaPickupEvents, glideT: this.sim.glideT, height: this.sim.height, blitzT: this.sim.blitzT, blitzLeft: this.sim.blitzLeft, shieldT: this.sim.shieldT, slowT: this.sim.slowT, magnetT: this.sim.magnetT, phase: this.state.phase, hill: this.sim.road.height(this.sim.s), boostT: this.sim.boostT, guideT: this.sim.guideT, guideQ: this.sim.guideQ,
-          obstacles: this.sim.obstacles.filter((o) => !o.hit && o.z > this.sim!.s - 6).slice(0, 8).map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z, vz: o.vz })),
+          obstacles: this.sim.obstacles.filter((o) => !o.hit && o.z > this.sim!.s - 6).slice(0, 8).map((o) => ({ id: o.id, kind: o.kind, x: o.x, z: o.z, vz: o.vz, lc: o.lc?.stage ?? null })),
           pickups: this.sim.pickups.map((p) => ({ type: p.type, x: p.x, z: p.z })),
+          style: { score: this.sim.style.styleScore, near: this.sim.style.nearMissCount, combo: this.sim.style.comboCount, mult: this.sim.style.multiplier, maxCombo: this.sim.style.maxCombo, charge: this.sim.style.rushCharge, rush: this.sim.style.rushActive, rushT: this.sim.style.rushRemaining, cooldown: this.sim.style.rushCooldown, rushCount: this.sim.style.rushCount, grace: this.sim.graceT },
         }),
       };
     }
@@ -327,7 +346,9 @@ export class Game {
     this.firstObsId = null; this.landing = false; this.runPickups = 0;
     this.runStartedAt = performance.now(); this.runCtl = false; this.runDodged = false; this.runFlew = false;
     this.el.hint.hidden = true; this.el.toast.hidden = true; this.el.pauseReason.hidden = true;
-    this.last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '' };
+    this.last = { dist: '', speed: '', shield: '', slow: '', magnet: '', blitz: '', glide: '', boost: '', guide: '', score: '', combo: '', comboBar: '', rush: '', rushBar: '', rushTxt: '' };
+    this.lastRushSec = -1;
+    this.el.miss.hidden = true; this.el.combo.hidden = true; this.el.rush.classList.remove('on', 'cd', 'start'); this.el.hud.classList.remove('rush');
     for (const chip of [this.el.shield, this.el.slow, this.el.magnet, this.el.blitz, this.el.glide, this.el.boost, this.el.guide]) chip.hidden = true;   // keine Effekt-Anzeigen aus der vorigen Fahrt
     this.el.start.hidden = this.el.paused.hidden = this.el.result.hidden = true;
     this.el.hud.hidden = false;
@@ -412,7 +433,18 @@ export class Game {
         if (ev.type === 'shieldHit') { this.renderer.burst('shieldHit'); this.renderer.shieldImpact(ev.x, ev.z); this.sound.sfx('shieldHit'); this.toast('Abgefangen!'); shieldHit = true; }
         else if (ev.type === 'pickup') { this.runPickups++; this.tele.send('taken', this.runId, this.pickupKey(ev.pickup, ev.id, ev.z), { type: ev.pickup, s: Math.floor(sim.s) }); this.qaPickupEvents++; this.renderer.burst(ev.pickup); this.sound.sfx(ev.pickup); if (ev.pickup !== 'glide') this.toast(PICKUP_LABEL[ev.pickup as PickupKey] ?? ev.pickup, 1000); }
         else if (ev.type === 'cleared') { this.renderer.burst('clear'); }
-        else if (ev.type === 'blitz') this.renderer.laneFlash(ev.x, ev.z);
+        else if (ev.type === 'blitz') { this.renderer.laneFlash(ev.x, ev.z); this.sound.sfx('zap'); }
+        else if (ev.type === 'nearMiss') {
+          this.sound.sfx('nearMiss', ev.combo);
+          this.renderer.nearMissPulse(ev.x >= sim.q ? 1 : -1);
+          this.showMiss(`Near Miss! ${ev.mult > 1 ? `x${ev.mult} ` : ''}+${ev.pts}`, ev.mult > 1 ? 'combo' : '');
+          if (ev.combo >= 2) { this.el.combo.classList.remove('pop'); void this.el.combo.offsetWidth; this.el.combo.classList.add('pop'); }
+        }
+        else if (ev.type === 'rushStart') { this.sound.sfx('rushStart'); this.showMiss('Neon Rush!', 'rush', 1000); this.el.rush.classList.remove('start'); void this.el.rush.offsetWidth; this.el.rush.classList.add('start'); }
+        else if (ev.type === 'rushEnd') { this.sound.sfx('rushEnd'); this.showMiss(ev.reason === 'hit' ? 'Rush verloren' : 'Rush vorbei', 'lost', 900); }
+        else if (ev.type === 'comboLost') { if (ev.reason === 'time') this.showMiss('Combo vorbei', 'lost', 900); }
+        else if (ev.type === 'laneWarn') this.sound.sfx('laneWarn');
+        else if (ev.type === 'queued') this.toast(`Vorgemerkt: ${PICKUP_LABEL[ev.effect as PickupKey] ?? ev.effect}`, 1100);
         else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast('Fliegen'); if (!this.runFlew) { this.runFlew = true; this.tele.send('fly', this.runId); } }
         else if (ev.type === 'glideEnd') { this.renderer.burst('land'); this.sound.sfx('land'); this.sound.setFlight(false); }
         else if (ev.type === 'magnetPull') this.sound.sfx('magnet');
@@ -473,6 +505,7 @@ export class Game {
     $('res-cause').textContent = 'Du hast die Neonnacht erreicht.';
     $('res-goal').textContent = 'Teile den Sprint und fordere einen Freund heraus.';
     this.resultFor('goal');
+    this.fillStyleResult(sim, true);
     this.el.again.disabled = true;
     this.el.pause.hidden = true;
     const token = ++this.crashToken;
@@ -514,6 +547,17 @@ export class Game {
     this.el.shareUrl.value = url; this.el.shareBox.hidden = false;
     try { await navigator.clipboard.writeText(url); this.el.shareMsg.textContent = 'Link kopiert. Du kannst ihn jetzt einfügen und verschicken.'; }
     catch { this.el.shareUrl.focus(); this.el.shareUrl.select(); this.el.shareMsg.textContent = 'Markiert: Link bitte selbst kopieren.'; }
+  }
+
+  /** Kurzer Stil-Hinweis (Near Miss, Combo, Neon Rush): klein, über der Fahrbahn, ≈ 0,8 s; ersetzt den vorigen Hinweis. */
+  private showMiss(text: string, kind: '' | 'combo' | 'rush' | 'lost', ms = 800): void {
+    const el = this.el.miss;
+    el.className = kind;
+    el.textContent = text;
+    el.hidden = false;
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';        // Animation neu starten
+    clearTimeout(this.missTimer);
+    this.missTimer = setTimeout(() => { el.hidden = true; }, ms);
   }
 
   private toast(text: string, ms = 1300): void {
@@ -602,6 +646,7 @@ export class Game {
     $('res-cause').textContent = crashCauseText(sim.crash?.kind);
     $('res-goal').textContent = sprint ? `Ziel: Noch ${Math.max(10, Math.round((SPRINT_FINISH_M - dist) / 10) * 10)} m bis zur Neonnacht.` : nextGoalText(dist, this.best, this.recordShown, this.runPickups);
     this.resultFor('crash');
+    this.fillStyleResult(sim, sprint);
     $('start-best').textContent = formatDistance(this.best);
     this.el.again.disabled = true;
     this.el.pause.hidden = true;
@@ -631,7 +676,7 @@ export class Game {
       const running = this.state.phase === 'running' || this.qaHook;
       v = {
         s: sim.s, x: sim.q, X: sim.X, bodyYaw: sim.bodyYaw, phi: sim.phi, rel: sim.relAngle, slow: sim.slowT > 0, magnet: sim.magnetT > 0, blitz: sim.blitzT > 0, boost: sim.boostT > 0, guide: sim.guideQ, lift: sim.height, glideLeft: sim.glideT, slowAge: sim.slowT > 0 ? B.effects.slow - sim.slowT : -1, road: sim.road, speedKmh: sim.speedKmh, shield: sim.shieldT > 0,
-        shieldFrac: sim.shieldT / B.effects.shield, obstacles: sim.obstacles, pickups: sim.pickups,
+        shieldFrac: sim.shieldT / B.effects.shield, rush: sim.style.rushActive, obstacles: sim.obstacles, pickups: sim.pickups,
         crash: sim.crash ? { id: sim.crash.id } : null, running, sceneT: this.qaSceneT ?? sim.t - sim.t0, seed: sim.seed, finishZ: this.mode === 'sprint' ? SPRINT_FINISH_M : undefined,
       };
       if (running) { this.sound.setLight(lightT(sim.s)); this.sound.update(sim.speedKmh, false, 0); }
@@ -659,6 +704,52 @@ export class Game {
     }
     this.fxChip(this.el.boost, sim.boostT, 'boost');
     this.fxChip(this.el.guide, sim.guideT, 'guide');
+    this.styleHud(sim);
+  }
+
+  /** Stil-HUD: DOM nur bei geänderten Werten schreiben (Punkte, Combo-Stufe und -Restzeit, Rush-Ladung bzw. -Restzeit). */
+  private styleHud(sim: Sim): void {
+    const st = sim.style, L = this.last, E = this.el;
+    const score = st.styleScore.toLocaleString('de-DE');
+    if (score !== L.score) { L.score = score; E.score.textContent = score; }
+    // Combo: Multiplikator und Restzeit des Fensters (aktive Spielzeit)
+    const win = st.comboWindow(sim.magnetT > 0), rem = st.comboRemaining(sim.t, sim.magnetT > 0);
+    const cx = st.comboCount > 0 ? `x${st.multiplier}` : '';
+    if (cx !== L.combo) { L.combo = cx; E.combo.hidden = cx === ''; E.comboX.textContent = cx || 'x1'; E.combo.title = st.comboCount > 5 ? `Kette: ${st.comboCount} Near Misses` : ''; }
+    const cb = (Math.round((rem / win) * 20) * 5).toString();
+    if (cb !== L.comboBar) { L.comboBar = cb; E.comboBar.style.width = cb + '%'; }
+    // Neon Rush: Ladeanzeige, aktive Restdauer, Abklingzeit
+    const act = st.rushActive;
+    const mode = act ? 'on' : st.rushCooldown > 0 ? 'cd' : 'idle';
+    if (mode !== L.rush) {
+      L.rush = mode;
+      E.rush.classList.toggle('on', act); E.rush.classList.toggle('cd', mode === 'cd');
+      E.hud.classList.toggle('rush', act);
+      E.rushLbl.textContent = 'Neon Rush';
+      if (!act) E.rush.classList.remove('start');
+    }
+    const frac = act ? st.rushRemaining / B.style.rush.duration : st.rushCharge / 100;
+    const rb = (Math.round(frac * 50) * 2).toString();
+    if (rb !== L.rushBar) { L.rushBar = rb; E.rushBar.style.width = rb + '%'; }
+    const sec = act ? Math.max(0, st.rushRemaining) : 0;
+    const txt = act ? `${sec.toFixed(1).replace('.', ',')} s` : st.rushCharge >= 100 && st.rushCooldown > 0 ? `in ${Math.ceil(st.rushCooldown)} s` : `${Math.round(st.rushCharge)} %`;
+    if (txt !== L.rushTxt) { L.rushTxt = txt; E.rushTxt.textContent = txt; }
+    // dezente Rush-Rückmeldung im Sekundentakt (nur Ton; ohne Ton bleiben Anzeige und Leuchten)
+    if (act) { const whole = Math.ceil(sec); if (whole !== this.lastRushSec) { if (this.lastRushSec >= 0 && whole > 0) this.sound.sfx('rushTick'); this.lastRushSec = whole; } } else this.lastRushSec = -1;
+  }
+
+  /** Kennzahlen des Laufs in die Ergebnisanzeige schreiben; Stil-Rekord nur im Endless und nur außerhalb von QA/Testfahrt. */
+  private fillStyleResult(sim: Sim, sprint: boolean): void {
+    const st = sim.style;
+    $('res-style').textContent = st.styleScore.toLocaleString('de-DE');
+    $('res-near').textContent = String(st.nearMissCount);
+    $('res-combo').textContent = st.maxCombo > 0 ? `x${Math.min(B.style.combo.maxMult, st.maxCombo)}${st.maxCombo > B.style.combo.maxMult ? ` (${st.maxCombo})` : ''}` : 'x0';
+    $('res-rush').textContent = String(st.rushCount);
+    const rec = !sprint && !this.excluded && st.styleScore > 0 && st.styleScore > this.styleBest;
+    if (rec) { this.styleBest = st.styleScore; save({ styleBest: st.styleScore }); }
+    $('res-style-record').hidden = !rec;
+    $('res-style-best').textContent = this.styleBest.toLocaleString('de-DE');
+    $('res-style-best-label').parentElement!.hidden = sprint;
   }
 
   private fxChip(li: HTMLElement, remaining: number, key: 'shield' | 'slow' | 'magnet' | 'blitz' | 'glide' | 'boost' | 'guide'): void {

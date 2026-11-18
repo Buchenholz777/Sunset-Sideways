@@ -32,7 +32,10 @@ describe('Konfiguration: Standardwerte und Validierung', () => {
   it('Standardwerte entsprechen exakt dem bisherigen Spielverhalten (BALANCE-Ausgangswerte)', () => {
     applyDefaults();
     expect(B.speed.knots.map((k) => [...k])).toEqual([[0, 210], [1000, 325], [2000, 370], [6000, 430], [12000, 480], [16000, 520], [20000, 550], [27000, 600]]);
-    expect(B.effects).toEqual({ shield: 10, slow: 7, magnet: 15, blitz: 6, glide: 8, boost: 6, guide: 10 });
+    // P1-Rebalancing: Schild 15 s, Zeitblase 3,5 s, Magnet 7 s, Spurblitz-Fenster 5 s, Fliegen 3 s, Phantom-Turbo 2,25 s, Pfadfinder 5 s
+    expect(B.effects).toEqual({ shield: 15, slow: 3.5, magnet: 7, blitz: 5, glide: 3, boost: 2.25, guide: 5 });
+    expect(B.speed.slowFactor).toBe(0.6);
+    expect(B.speed.boostFactor).toBe(1.35);
     expect(B.glide.firstFrom).toBe(550);
     expect(B.steer.sens).toEqual({ key: 1, touch: 1 });
     expect(B.scenery.keys).toEqual([0, 15000, 17000, 20000]);

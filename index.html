@@ -51,6 +51,11 @@
       <div class="hud-left">
         <div class="stat"><span class="lbl">Strecke</span><span id="hud-distance" class="val">0 m</span></div>
         <div class="stat" id="hud-best-wrap"><span class="lbl">Bestweite</span><span id="hud-best" class="val">0 m</span></div>
+        <div id="hud-style" role="group" aria-label="Stilwertung">
+          <div class="st-score"><span class="lbl">Stil</span><span id="hud-style-score" class="val">0</span></div>
+          <div id="hud-combo" hidden><span id="hud-combo-x" class="cx">x1</span><span class="cap">Combo</span><i class="bar"><b id="hud-combo-bar"></b></i></div>
+          <div id="hud-rush"><span id="hud-rush-lbl" class="rl">Neon Rush</span><i class="bar"><b id="hud-rush-bar"></b></i><span id="hud-rush-txt" class="rt">0 %</span></div>
+        </div>
         <ul id="hud-effects" aria-label="Aktive Effekte">
                     <li id="fx-shield" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 5.5h5v3.2L8 11 5.5 8.7z" fill="currentColor"/></svg><span class="fx-name">Impulsschild</span><span class="fx-time"></span></li>
                     <li id="fx-magnet" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2v6a5 5 0 0 0 10 0V2h-3v6a2 2 0 0 1-4 0V2z" fill="currentColor"/></svg><span class="fx-name">Magnet</span><span class="fx-time"></span></li>
@@ -75,6 +80,7 @@
 
     <div id="hint" role="status" aria-live="polite" hidden><span class="hint-arrow" aria-hidden="true">◀</span><span class="hint-text">Weiche aus</span><span class="hint-arrow" aria-hidden="true">▶</span></div>
     <div id="fx-toast" role="status" aria-live="polite" hidden></div>
+    <div id="fx-miss" aria-live="off" hidden></div>
 
     <section id="screen-brief" class="brief" hidden aria-live="polite"></section>
 
@@ -152,7 +158,15 @@
         <p id="res-record" class="record" hidden>Neuer Rekord!</p>
         <p id="res-cause" class="res-line"></p>
         <p id="res-goal" class="res-line goal"></p>
+        <ul id="res-stats" class="res-stats" aria-label="Stilwertung dieses Laufs">
+          <li><span id="res-style" class="n">0</span><span class="l">Stilpunkte</span></li>
+          <li><span id="res-near" class="n">0</span><span class="l">Near Misses</span></li>
+          <li><span id="res-combo" class="n">x0</span><span class="l">Beste Combo</span></li>
+          <li><span id="res-rush" class="n">0</span><span class="l">Neon Rush</span></li>
+        </ul>
+        <p id="res-style-record" class="record sm" hidden>Neuer Stil-Rekord!</p>
         <p class="best"><span id="res-best-label">Bestweite:</span> <strong id="res-best">0 m</strong></p>
+        <p class="best sm"><span id="res-style-best-label">Stil-Rekord:</span> <strong id="res-style-best">0</strong></p>
         <button id="btn-again" class="primary" type="button" data-action="again" disabled>Nochmal fahren</button>
         <div class="res-actions">
           <button id="btn-share" class="secondary" type="button" data-action="share" hidden>Freund herausfordern</button>

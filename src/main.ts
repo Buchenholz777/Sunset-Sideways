@@ -1,4 +1,5 @@
 import './ui/style.css';
+import './ui/p1.css';
 import { GAME_TITLE } from './config/meta';
 import { Game } from './game';
 import { initConsent } from './consent';

@@ -23,8 +23,36 @@ const PAINT: Record<string, { body: string; dark: string; light: string }[]> = {
   truck: [{ body: '#d8d2c0', dark: '#8f8a78', light: '#ffffff' }, { body: '#3a6fb0', dark: '#1d3f6e', light: '#8fb6ee' }, { body: '#d9792a', dark: '#8a4510', light: '#ffc08a' }],
 };
 
-/** Heckansicht. `k` = Pixel pro Meter; Mindestgröße nur für die Darstellung, nie für Hitboxen. */
-export function drawObstacle(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: number, k: number, clock: number, id = 0): void {
+/** Angekündigter Spurwechsel: Seite (−1 links, +1 rechts) und Blinkphase. */
+export interface Blinker { side: -1 | 1; on: boolean }
+
+/**
+ * Heckansicht mit optionalem Blinker (Typ B: Spurwechsler). Der Blinker besteht aus einer orangen Heckleuchte auf der Wechselseite mit Lichthof
+ * und einem kleinen Pfeil über dem Dach – auch aus der Ferne erkennbar (Mindestgrößen in Bildpunkten).
+ */
+export function drawObstacle(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: number, k: number, clock: number, id = 0, blink?: Blinker): void {
+  drawBody(ctx, kind, sx, sy, k, clock, id);
+  if (!blink) return;
+  const W = KINDS[kind].w, kk = Math.max(k, (4.5 * gfx.u) / W);
+  const roof = kind === 'truck' ? 3.7 : kind === 'cabrio' ? 1.4 : 1.95;
+  const lw = Math.max(0.45, (5 * gfx.u) / kk), lh = Math.max(0.26, (3.6 * gfx.u) / kk);
+  const x0 = blink.side > 0 ? W - 0.06 - lw : 0.06;
+  const L = (xx: number, top: number, w: number, h: number, c: string) => rect(ctx, sx + (xx - W / 2) * kk, sy - top * kk, w * kk, h * kk, c);
+  const a0 = ctx.globalAlpha;
+  if (blink.on) {
+    ctx.globalAlpha = a0 * 0.45; L(x0 - lw * 0.5, (kind === 'truck' ? 1.0 : 0.95) + lh * 0.6, lw * 2, lh * 2.2, '#ff8a1f');
+    ctx.globalAlpha = a0; L(x0, kind === 'truck' ? 1.0 : 0.95, lw, lh, '#ffb347'); L(x0 + lw * 0.2, (kind === 'truck' ? 1.0 : 0.95) - lh * 0.15, lw * 0.6, lh * 0.5, '#fff0c0');
+  } else { ctx.globalAlpha = a0; L(x0, kind === 'truck' ? 1.0 : 0.95, lw, lh, '#6a3a12'); }
+  // Pfeil über dem Dach zeigt die Wechselrichtung
+  const ah = Math.max(0.55, (9 * gfx.u) / kk), cx = sx + blink.side * (W / 2 + 0.15) * kk, cy = sy - (roof + 0.55) * kk;
+  ctx.fillStyle = blink.on ? '#ffb347' : '#6a3a12';
+  ctx.beginPath();
+  ctx.moveTo(cx + blink.side * ah * kk * 0.7, cy); ctx.lineTo(cx - blink.side * ah * kk * 0.2, cy - ah * kk * 0.55); ctx.lineTo(cx - blink.side * ah * kk * 0.2, cy + ah * kk * 0.55);
+  ctx.closePath(); ctx.fill();
+  ctx.globalAlpha = a0;
+}
+
+function drawBody(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: number, k: number, clock: number, id: number): void {
   const def = KINDS[kind];
   const W = def.w;
   const kk = Math.max(k, ((kind === 'baken' ? 3.5 : 4.5) * gfx.u) / W);

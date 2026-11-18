@@ -13,12 +13,27 @@ export const BALANCE = {
    */
   speed: {
     knots: [[0, 210], [1000, 325], [2000, 370], [6000, 430], [12000, 480], [16000, 520], [20000, 550], [27000, 600]] as ReadonlyArray<readonly [number, number]>,
-    slowFactor: 0.78, slowTau: 0.18,
+    slowFactor: 0.6, slowTau: 0.18,
     /** Phantom-Turbo: Tempofaktor und Ein-/Ausblendzeit. */
-    boostFactor: 1.2, boostTau: 0.35,
+    boostFactor: 1.35, boostTau: 0.3,
   },
-  /** Dauer der Power-ups in aktiver Spielzeit. Spurblitz: Zeitfenster, in dem er bis zu zwei Hindernisse seiner Spur räumt. */
-  effects: { shield: 10, slow: 7, magnet: 15, blitz: 6, glide: 8, boost: 6, guide: 10 },
+  /**
+   * Dauer der Power-ups in aktiver Spielzeit (P1-Rebalancing). Spurblitz: gespeicherte Aktivierung – wirkt einmal, sobald in der
+   * aktuellen Spur ein Hindernis in Reichweite kommt, und verfällt nach dieser Zeit.
+   */
+  effects: { shield: 15, slow: 3.5, magnet: 7, blitz: 5, glide: 3, boost: 2.25, guide: 5 },
+  /**
+   * P1: Near Miss, Combo und Neon Rush. Zeiten in aktiver Spielzeit (Sim-Zeit; Pause und Tab-Wechsel zählen nicht).
+   * nearMiss: Gefahrenfenster `ttcMax` (s bis zum Zusammenstoß, ab dem eine Ausweichbewegung als knapp gilt), `courseMargin` (m seitlich über die
+   * Hitboxen hinaus, die noch als Kollisionskurs gelten), `maxGap` (größter seitlicher Randabstand beim Passieren), `minShift` (m Querverschiebung durch Eingabe).
+   */
+  style: {
+    nearMiss: { points: 100, ttcMax: 1.5, courseMargin: 0.35, maxGap: 2.4, minShift: 1.0 },
+    combo: { window: 4, windowMagnet: 6, maxMult: 5 },
+    rush: { chargePerMiss: 20, chargeSlow: 10, duration: 5, cooldown: 6, pointsMult: 2 },
+    /** Zeitblase: Near-Miss-Punkte (einmal, in der zentralen Punkteberechnung). */
+    slowPointsMult: 0.5,
+  },
   road: { lanes: 3, laneWidth: 3.6, halfWidth: 5.4 },
   player: { width: 1.9, len: 4.2, hitInsetX: 0.07, hitInsetZ: 0.2, maxX: 4.45 },
   obstacle: { hitInset: 0.05 },
@@ -52,17 +67,21 @@ export const BALANCE = {
   pickups: {
     freq: 1,
     on: { shield: true, slow: true, clear: true, magnet: true, glide: true, boost: true, guide: true } as Record<string, boolean>,
-    share: { shield: 1, slow: 1, clear: 1, magnet: 1, glide: 0.3, boost: 1, guide: 1 } as Record<string, number>,
+    /** Relative Anteile = Auswahlgewicht (P1: Schild 20 %, Zeitblase 18 %, Spurblitz 14 %, Magnet 12 %, Fliegen 9 %, Phantom 14 %, Pfadfinder 13 %). */
+    share: { shield: 1, slow: 0.9, clear: 0.7, magnet: 0.6, glide: 0.45, boost: 0.7, guide: 0.65 } as Record<string, number>,
     glideBoost: 0,
   },
   /** Kulisse nach Strecke (Admin): Lichtstützpunkte in Metern, Mondaufstieg, Neon-Intensität, Schalter. */
   scenery: { keys: [0, 15000, 17000, 20000] as number[], moonFrom: 17500, moonSpan: 13500, /** Maßstab der Kulissenabschnitte (1 = normal; Sprint komprimiert). */ stageScale: 1, neon: 1, planes: true, peds: true, fountains: true },
   /** Standardpegel (Admin) für Musik, Motor, Effekte und Effekte; persönliche Einstellungen der Spieler haben Vorrang. */
   audio: { music: 1, engine: 1, sfx: 1 },
-  /** Spurblitz: Reichweite und Zahl entfernter Hindernisse; Magnet: Reichweite der Anziehung. */
-  powers: { blitzRange: 90, blitzMax: 2, magnetRange: 130 },
+  /**
+   * Spurblitz: Wirkbereich als Kollisionszeit (s) auf der aktuellen Spur und Höchstzahl entfernter Hindernisse. Magnet: Anziehungsradius in Spurbreiten,
+   * Reichweite nach vorn (m). Schutzphasen (s) nach abgefangenem Treffer und nach dem Phantom-Turbo. Fliegen: längstes Verlängern der Landung (s).
+   */
+  powers: { blitzTtc: 2.0, blitzMax: 3, magnetLanes: 1.1, magnetRange: 130, graceShield: 0.5, graceBoost: 0.5, glideHoldMax: 1.0 },
   /** Gleitflug: Abheben, Sinken und Flughöhe (m); Gesamtdauer effects.glide, der Rest ist Flug. */
-  glide: { up: 0.5, down: 1.0, height: 4.2, minT: 25, /** erstes Fliegen-Angebot frühestens nach dieser Strecke (m) */ firstFrom: 550 },
+  glide: { up: 0.5, down: 1.0, height: 4.2, minT: 25, /** erstes Fliegen-Angebot frühestens nach dieser Strecke (m) */ firstFrom: 550, /** Das erste Angebot ist ein Tor über drei Spuren (aus: normale gewichtete Auswahl). */ firstGate: false },
   restartDelayMs: 450,
   /** Leichte Bögen, die automatisch mitgefahren werden. */
   curves: { firstStart: 300, firstLen: 260, firstK: 1 / 1100, minR: 650, varR: 550 },
@@ -83,7 +102,22 @@ export const BALANCE = {
      */
     react: 0.4, reachEff: 0.6, blockMargin: 0.45, speedMargin: 1.04,
     mults: [1, 1.3, 1.7, 2.4, 3.5],
-    /** Erstes Power-up nach ≈ 6–9 s (Platzierung vor der nächsten Begegnung), danach alle 9–14 s. */
-    pickupFirst: [4.6, 6.4], pickupEvery: [9, 14],
+    /** Erstes Power-up nach ≈ 12–18 s (Platzierung vor der nächsten Begegnung), danach alle ≈ 18–25 s. */
+    pickupFirst: [12, 18], pickupEvery: [18, 25],
+  },
+  /**
+   * P1.2 dynamischer Verkehr. Phasen nach aktiver Fahrzeit (s): 0–20 Einstieg, 20–45 Aufbau, 45–90 Arcade Flow, ab 90 High-Score.
+   * Je Phase: Anteil der Spurwechsler an geeigneten Fahrzeugen, gleichzeitige Spurwechsel (hart begrenzt), Dichte-Faktor (Lücken ÷ Faktor).
+   * lc: Vorwarnung (s) mit Blinker, Dauer der Querbewegung, Entscheidungsfenster (s Annäherungszeit), Mindestannäherungszeit bei Warnbeginn,
+   * Sicherheitsabstände; horizon = Prüfhorizont des Fairness-Validators.
+   */
+  dynamic: {
+    on: true,
+    phaseStart: [0, 20, 45, 90] as readonly number[],
+    changerShare: [0, 0.08, 0.15, 0.2] as readonly number[],
+    maxActive: [0, 1, 1, 2] as readonly number[],
+    density: [1, 1.08, 1.18, 1.28] as readonly number[],
+    lc: { warn: 1.1, move: 0.9, decideMin: 2.0, decideMax: 4.4, minTtc: 2.0, visible: 430, zMargin: 7, laneGap: 1.4 },
+    horizon: 2.8, step: 0.05, playerReact: 0.4,
   },
 } as const;

@@ -1,7 +1,7 @@
 import { load, save } from '../storage/storage';
 import { BALANCE } from '../config/balance';
 
-export type Sfx = 'start' | 'shield' | 'slow' | 'clear' | 'magnet' | 'glide' | 'land' | 'boost' | 'guide' | 'shieldHit' | 'crash' | 'record' | 'effectEnd';
+export type Sfx = 'start' | 'shield' | 'slow' | 'clear' | 'magnet' | 'glide' | 'land' | 'boost' | 'guide' | 'shieldHit' | 'crash' | 'record' | 'effectEnd' | 'nearMiss' | 'rushStart' | 'rushEnd' | 'rushTick' | 'laneWarn' | 'zap';
 
 type Ctx = AudioContext;
 
@@ -457,10 +457,13 @@ export class Sound {
     s.start(t); s.stop(t + dur + 0.05);
   }
 
-  sfx(name: Sfx): void {
+  /**
+   * Effekt abspielen. `level` (nur nearMiss): Combo-Stufe 1…5+ – jede Stufe klingt eine Stufe höher (steigende Rückmeldung, ohne die Musik lange zu verdecken).
+   */
+  sfx(name: Sfx, level = 1): void {
     const c = this.ready();
     if (!c || this.muted) return;
-    if (name !== 'effectEnd') this.duck(name === 'crash' ? 0.6 : 0.3);
+    if (name !== 'effectEnd' && name !== 'laneWarn' && name !== 'rushTick') this.duck(name === 'crash' ? 0.6 : name === 'nearMiss' ? 0.12 : 0.3);
     const t = c.currentTime;
     const m = this.sfxBus!;
     switch (name) {
@@ -477,6 +480,26 @@ export class Sound {
       case 'land': this.noise(t, 0.2, 0.3, 1800, 200); this.note(140, t, 0.25, 'sine', 0.2, m, 60); this.note(520, t + 0.02, 0.12, 'triangle', 0.06, m, 260); break;
       case 'magnet': this.note(1100, t, 0.08, 'sine', 0.12, m); this.note(1100, t + 0.16, 0.08, 'sine', 0.1, m); this.note(1650, t + 0.32, 0.22, 'sine', 0.1, m); break;
       case 'effectEnd': this.note(520, t, 0.18, 'sine', 0.09, m, 300); break;
+      case 'nearMiss': {
+        // kurzer „Whoosh“ plus zwei steigende Töne; Tonhöhe folgt der Combo-Stufe (Halbtonschritte, Pentatonik-ähnlich)
+        const st = [0, 2, 4, 7, 9][Math.max(0, Math.min(4, level - 1))], f = 660 * Math.pow(2, st / 12);
+        this.noise(t, 0.09, 0.12, 5200, 1400);
+        this.note(f, t, 0.1, 'square', 0.07, m); this.note(f * 1.5, t + 0.06, 0.16, 'triangle', 0.1, m);
+        break;
+      }
+      case 'rushStart':
+        // markanter Start: Aufwärtsschwenk, Quint-Akkord und kurzer Rauschimpuls
+        this.noise(t, 0.35, 0.22, 800, 7000); this.note(220, t, 0.4, 'sawtooth', 0.12, m, 880);
+        [523, 659, 784, 1047].forEach((fr, i) => this.note(fr, t + 0.08 + i * 0.05, 0.3, 'square', 0.07, m));
+        break;
+      case 'rushEnd': this.note(784, t, 0.22, 'triangle', 0.1, m, 330); this.note(392, t + 0.08, 0.24, 'sine', 0.08, m, 196); break;
+      case 'rushTick': this.note(1760, t, 0.05, 'sine', 0.035, m); break;
+      case 'laneWarn': this.note(1500, t, 0.035, 'square', 0.035, m); this.note(1100, t + 0.11, 0.035, 'square', 0.03, m); break;
+      case 'zap':
+        // elektrisches Knistern für den Spurblitz: schnelle Rauschimpulse und fallender Sägezahn
+        this.noise(t, 0.22, 0.3, 7000, 900); this.noise(t + 0.06, 0.12, 0.22, 6000, 1500);
+        this.note(1300, t, 0.18, 'sawtooth', 0.1, m, 180); this.note(2600, t + 0.02, 0.08, 'square', 0.05, m, 800);
+        break;
     }
   }
 }

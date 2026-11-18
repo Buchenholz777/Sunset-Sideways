@@ -1,0 +1,60 @@
+/* P1: Stilwertung (Near Miss, Combo, Neon Rush), Hinweis-Pop-ups und Ergebnis-Kennzahlen.
+   Kompakt, links neben der Fahrbahn; keine Überlagerung der Steuerflächen (pointer-events: none). */
+#hud-style { margin: 6px 0 0; display: flex; flex-direction: column; gap: 3px; width: clamp(112px, 17vw, 150px); text-shadow: 0 2px 0 #000a; }
+.st-score { display: flex; align-items: baseline; gap: 6px; line-height: 1.05; }
+.st-score .lbl { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; opacity: .75; }
+.st-score .val { font-size: clamp(15px, 2.3vw, 22px); font-weight: 800; font-variant-numeric: tabular-nums; color: #7fe3c4; }
+#hud-combo { display: flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 4px; background: #070a24cc; border: 1px solid var(--magenta); color: var(--magenta); font-weight: 800; }
+#hud-combo[hidden] { display: none; }
+#hud-combo .cx { font-size: 16px; min-width: 2.1ch; font-variant-numeric: tabular-nums; }
+#hud-combo .cap { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; opacity: .8; }
+#hud-combo.pop .cx { animation: cx-pop .22s ease-out 1; }
+.bar { position: relative; display: block; flex: 1; height: 5px; min-width: 24px; border-radius: 3px; background: #ffffff22; overflow: hidden; }
+.bar b { position: absolute; left: 0; top: 0; bottom: 0; width: 0; border-radius: 3px; background: currentColor; }
+#hud-rush { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 6px; row-gap: 1px; align-items: center; padding: 2px 6px; border-radius: 4px; background: #070a24cc; border: 1px solid var(--cyan); color: var(--cyan); font-weight: 800; }
+#hud-rush .rl { font-size: 10px; letter-spacing: .1em; text-transform: uppercase; grid-column: 1; }
+#hud-rush .rt { font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; grid-column: 2; grid-row: 1; }
+#hud-rush .bar { grid-column: 1 / span 2; grid-row: 2; }
+#hud-rush.cd { opacity: .62; }
+#hud-rush.on { color: #fff; border-color: var(--magenta); background: linear-gradient(90deg, #ff3fa4cc, #2ee6d6cc); box-shadow: 0 0 10px #ff3fa4aa; text-shadow: 0 1px 0 #0008; }
+#hud-rush.on .bar { background: #00000044; }
+#hud-rush.start { animation: rush-start .3s ease-out 1; }
+
+#fx-miss { position: absolute; left: 50%; top: calc(var(--sat) + 46%); transform: translateX(-50%); z-index: 3; padding: 3px 12px; border-radius: 999px; background: #070a24cc; border: 1.5px solid var(--cyan); color: var(--cyan); font: 900 clamp(13px, 2.6vh, 18px)/1.1 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; pointer-events: none; animation: miss-pop .8s ease-out 1 both; }
+#fx-miss[hidden] { display: none; }
+#fx-miss.combo { border-color: var(--magenta); color: var(--magenta); }
+#fx-miss.rush { border-color: #fff; color: #fff; background: linear-gradient(90deg, #ff3fa4e6, #2ee6d6e6); font-size: clamp(15px, 3.2vh, 22px); animation: rush-start .32s ease-out 1, miss-pop 1s ease-out 1 both; }
+#fx-miss.lost { border-color: #ffb23f; color: #ffb23f; font-size: clamp(11px, 2.1vh, 14px); }
+html.touch:not([data-phase="running"]) #fx-miss { display: none; }
+
+/* Ergebnis: Kennzahlen des Laufs; lesbar auf dem Smartphone (zwei Spalten). Der Verlauf deckt jetzt die längere Anzeige ab. */
+#screen-result { background: linear-gradient(#070a24ee, #070a24cc 60%, #070a2400 98%); padding-top: calc(var(--sat) + 8%); }
+#screen-result .best, #screen-result .res-line { text-shadow: 0 1px 4px #070a24; }
+.res-stats { list-style: none; margin: 4px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 10px; width: min(100%, 460px); }
+.res-stats li { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 4px; border-radius: 8px; background: #070a24b3; border: 1px solid #ffffff22; }
+.res-stats .n { font-size: clamp(18px, 4.4vw, 26px); font-weight: 900; font-variant-numeric: tabular-nums; color: var(--mint); }
+.res-stats li:nth-child(2) .n { color: var(--cyan); } .res-stats li:nth-child(3) .n { color: var(--magenta); } .res-stats li:nth-child(4) .n { color: var(--amber); }
+.res-stats .l { font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; opacity: .8; text-align: center; }
+.record.sm { font-size: 17px; margin: 0; }
+.best.sm { font-size: 14px; opacity: .85; }
+@media (max-width: 520px) { .res-stats { grid-template-columns: repeat(2, 1fr); } }
+@media (max-height: 420px) { .res-stats { grid-template-columns: repeat(4, 1fr); margin: 0; gap: 4px 6px; } .res-stats li { padding: 3px 2px; } .res-stats .n { font-size: 16px; } .res-stats .l { font-size: 9px; } .best.sm { display: none; } }
+
+/* kleine Displays: Stilwertung noch kompakter, nichts über der Fahrbahn */
+@media (max-width: 600px), (max-height: 520px) {
+  #hud-style { width: 104px; gap: 2px; margin-top: 4px; }
+  .st-score .val { font-size: 15px; }
+  #hud-combo { padding: 1px 5px; } #hud-combo .cx { font-size: 14px; } #hud-combo .cap { display: none; }
+  #hud-rush { padding: 1px 5px; } #hud-rush .rl { font-size: 9px; } #hud-rush .rt { font-size: 11px; }
+  #fx-miss { top: calc(var(--sat) + 40%); }
+}
+
+@keyframes cx-pop { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }
+@keyframes rush-start { 0% { transform: translateX(-50%) scale(1.35); filter: brightness(1.6); } 100% { transform: translateX(-50%) scale(1); filter: none; } }
+@keyframes miss-pop { 0% { opacity: 0; transform: translate(-50%, 8px); } 15% { opacity: 1; transform: translate(-50%, 0); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -6px); } }
+#hud-rush.start { animation-name: rush-start-hud; }
+@keyframes rush-start-hud { 0% { transform: scale(1.12); filter: brightness(1.6); } 100% { transform: scale(1); filter: none; } }
+@media (prefers-reduced-motion: reduce) {
+  #fx-miss, #fx-miss.rush { animation: none; }
+  #hud-combo.pop .cx, #hud-rush.start { animation: none; }
+}

@@ -38,8 +38,8 @@ const of = (p: Pattern) => flat.filter((e) => e.pattern === p);
 describe('Begegnungen mit eigener Entscheidung', () => {
   it('Lkw, Baustelle und Umweg kommen in 40 Läufen à 150 s regelmäßig vor und wechseln mit anderen Mustern', () => {
     for (const p of ['truck', 'works', 'detour'] as Pattern[]) expect(of(p).length, p).toBeGreaterThanOrEqual(15);
-    // Abwechslung: nie dieselbe Spezialbegegnung fünfmal hintereinander
-    for (const run of all) { let streak = 1; for (let i = 1; i < run.length; i++) { streak = run[i].pattern === run[i - 1].pattern ? streak + 1 : 1; expect(streak).toBeLessThanOrEqual(5); } }
+    // Abwechslung: nie dieselbe Spezialbegegnung fünfmal hintereinander (Einzelhindernisse im Einstieg dürfen sich wiederholen)
+    for (const run of all) { let streak = 1; for (let i = 1; i < run.length; i++) { streak = run[i].pattern === run[i - 1].pattern ? streak + 1 : 1; if (run[i].pattern !== 'single') expect(streak).toBeLessThanOrEqual(5); } }
   });
 
   it('Lkw: breiter, langsamer Lkw in einer Spur, die anderen Spuren bleiben frei; Vorbeifahrzeit gemessen und Messwert dokumentiert (kein Dauerüberholen bei diesem Tempo)', () => {

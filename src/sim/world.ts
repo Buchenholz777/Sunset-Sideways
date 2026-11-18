@@ -15,9 +15,22 @@ export const KINDS: Record<ObjKind, KindDef> = {
   barrier: { w: 2.6, len: 0.7, moving: false },
 };
 
+/**
+ * Spurwechsel eines Verkehrsteilnehmers (Typ B). idle: noch nicht angekündigt (nur Anlage), warn: Blinker (mindestens `lc.warn` s, keine Querbewegung),
+ * move: weiche Querbewegung (Dauer `lc.move`), done/cancelled: abgeschlossen bzw. verworfen. `fromX/toX` = Spurmitten, `t` = Zeit in der Stufe.
+ */
+export interface LaneChange {
+  stage: 'idle' | 'warn' | 'move' | 'done' | 'cancelled';
+  t: number; fromX: number; toX: number;
+  /** Von einer Verkehrsformation fest vorgesehen (Chance 1, Prüfung bleibt Pflicht). */
+  scripted?: boolean;
+}
+
 export interface Obstacle {
   id: number; kind: ObjKind; x: number; z: number; vz: number;
   hit: boolean; knockT: number; knockVx: number;
+  /** Verkehrsteilnehmer mit Spurwechsel (nur bewegte Fahrzeuge). */
+  lc?: LaneChange;
   /** Durch den Spur-Räumer entfernt (Rückmeldung in der Darstellung). */
   cleared?: boolean;
   /** Vom Impulsschild weggestoßen. */
