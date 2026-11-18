@@ -127,6 +127,8 @@ export class Sim {
   /** Winkel der Fahrzeugnase gegenüber der Straßentangente (aus der Quergeschwindigkeit). */
   get relAngle(): number { return Math.atan2(this.vq, Math.max(1, this.speedKmh / 3.6)); }
   get bodyYaw(): number { return Math.atan(this.road.heading(this.s)) + this.relAngle; }
+  /** Drehung der Trefferfläche: nur ein kleiner, begrenzter Teil des Nasenwinkels, damit die Box beim schnellen Ausweichen nicht seitlich aufgeht. */
+  private hitRel(vq: number, vm: number): number { const a = Math.atan2(vq, Math.max(1, vm)) * B.player.hitYawK; return Math.max(-B.player.hitYawMax, Math.min(B.player.hitYawMax, a)); }
   get phi(): number { return Math.tan(this.bodyYaw); }
   get slowActive(): boolean { return this.slowT > 0; }
   get airborne(): boolean { return this.glideT > 0; }
@@ -166,7 +168,7 @@ export class Sim {
     if (this.crashed) return;
     const P = B.player;
     const s0 = this.s, X0 = this.X, q0 = this.q;
-    const yaw0 = this.bodyYaw;
+    const yaw0 = Math.atan(this.road.heading(s0)) + this.hitRel(this.vq, this.speedKmh / 3.6);
     const body0 = playerFootprint(X0, s0, yaw0);
 
     this.slowF += ((this.slowT > 0 ? B.speed.slowFactor : 1) - this.slowF) * (1 - Math.exp(-dt / B.speed.slowTau));
@@ -180,7 +182,7 @@ export class Sim {
     let qNew = q0 + this.vq * dt;
     if (Math.abs(qNew) > P.maxX) { qNew = clamp(qNew, -P.maxX, P.maxX); this.vq = 0; }
     const XNew = this.road.center(sNew) + qNew;
-    const yaw1 = Math.atan(this.road.heading(sNew)) + Math.atan2(this.vq, Math.max(1, vm));
+    const yaw1 = Math.atan(this.road.heading(sNew)) + this.hitRel(this.vq, vm);
     const body1 = playerFootprint(XNew, sNew, yaw1);
     const ts = this.slowF;
     const hits: Hit[] = [];

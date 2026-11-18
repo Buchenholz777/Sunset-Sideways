@@ -371,7 +371,7 @@ describe('Gleitflug', () => {
       const s = base();
       if (withSlow) { s.slowT = B.effects.slow; s.slowF = B.speed.slowFactor; }
       s.glideT = 0.03;
-      s.obstacles = [mkObs('truck', 0, s.s - 6, 10)];                  // überlappt den Wagen beim Aufsetzen
+      s.obstacles = [mkObs('truck', 0, s.s - 3, 10)];                  // überlappt den Wagen beim Aufsetzen
       let landed = false, placed = false;
       for (let i = 0; i < 120 * 5 && !s.crashed; i++) {
         s.step(DT, { dir: 0, target: 0 });
@@ -381,7 +381,7 @@ describe('Gleitflug', () => {
       }
       expect(landed).toBe(true);
       expect(s.crashed).toBe(true);
-      expect(s.crash!.kind).toBe('baken');                              // der Lkw selbst hat nicht getroffen
+      expect(s.crash!.kind).toBe("baken");                              // der Lkw selbst hat nicht getroffen
     });
   }
   it('Landung ohne Überlappung: Lkw direkt davor trifft regulär', () => {

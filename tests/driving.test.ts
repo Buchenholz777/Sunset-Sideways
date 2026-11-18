@@ -230,3 +230,27 @@ describe('Zeitlupe', () => {
     expect(b.q).toBeCloseTo(a.q, 6);
   });
 });
+
+describe('Trefferfläche: spätes Ausweichen', () => {
+  const mk = (z: number): Sim => {
+    const s = new Sim(12, { startS: 3000, startT: 8 }); (s.gen as unknown as { update: () => void }).update = () => {};
+    s.pickups = [];
+    s.obstacles = [{ id: 1, kind: 'baken', x: 0, z: s.s + z, vz: 0, hit: false, knockT: 0, knockVx: 0 }];
+    return s;
+  };
+  it('Tastatur: 0,25 s vor dem Hindernis nach links gelenkt, kein Unfall', () => {
+    for (const dir of [-1, 1] as const) {
+      const s = mk(0); const v = s.speedKmh / 3.6; s.obstacles[0].z = s.s + v * 0.25 + 1;
+      for (let i = 0; i < 120 * 1.5 && !s.crashed; i++) s.step(DT, { dir, target: null });
+      expect(s.crashed).toBe(false);
+    }
+  });
+  it('Touch: 0,25 s vor dem Hindernis Ziel in die Nachbarspur, kein Unfall', () => {
+    const s = mk(0); const v = s.speedKmh / 3.6; s.obstacles[0].z = s.s + v * 0.25 + 1;
+    for (let i = 0; i < 120 * 1.5 && !s.crashed; i++) s.step(DT, { dir: 0, target: B.road.laneWidth });
+    expect(s.crashed).toBe(false);
+  });
+  it('Die Trefferfläche dreht sich beim Ausweichen höchstens um hitYawMax', () => {
+    expect(B.player.hitYawMax).toBeLessThanOrEqual(0.1);
+  });
+});

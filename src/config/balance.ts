@@ -35,7 +35,8 @@ export const BALANCE = {
     slowPointsMult: 0.5,
   },
   road: { lanes: 3, laneWidth: 3.6, halfWidth: 5.4 },
-  player: { width: 1.9, len: 4.2, hitInsetX: 0.07, hitInsetZ: 0.2, maxX: 4.45 },
+  /** Trefferfläche: vorn und hinten je hitInsetZ kürzer als der Wagen (die sichtbare Nase liegt ca. 1 m hinter der Kollisionskante); hitYawK/hitYawMax begrenzen ihre Drehung beim Ausweichen. */
+  player: { width: 1.9, len: 4.2, hitInsetX: 0.07, hitInsetZ: 1.0, maxX: 4.45, hitYawK: 0.3, hitYawMax: 0.1 },
   obstacle: { hitInset: 0.05 },
   pickup: { len: 1.2, width: 1.4 },
   /**
