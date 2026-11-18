@@ -13,6 +13,7 @@ import { lightT } from './render/scenery';
 import { Sound } from './audio/sound';
 import { load, save } from './storage/storage';
 import { PICKUP_LABEL, applyConfig, type PickupKey } from './config/runtime';
+import { LeaderboardUi } from './leaderboard/ui';
 import { SPRINT_CONFIG, SPRINT_ENABLED, SPRINT_FINISH_M, SPRINT_ID, SPRINT_ROUTE, SPRINT_SEED, sprintStageScale } from './sprint/rules';
 import { BUILTIN, Telemetry, eventActive, fetchConfig, randomId, type RemoteConfig } from './net/remote';
 
@@ -121,6 +122,8 @@ export class Game {
   private missTimer: ReturnType<typeof setTimeout> | undefined;
   private lastRushSec = -1;
   private lastPassSfx = 0;
+  /** Weltrangliste (optional; Veröffentlichung nur auf ausdrücklichen Wunsch). */
+  private lbui = new LeaderboardUi();
 
   private el = {
     hud: $('hud'), dist: $('hud-distance'), best: $('hud-best'), bestWrap: $('hud-best-wrap'), speed: $('hud-speed'),
@@ -255,7 +258,7 @@ export class Game {
   private nativeTarget(t: EventTarget | null): boolean { return !!(t as HTMLElement | null)?.closest?.('button, a[href], summary, input, select, textarea, [contenteditable]'); }
 
   private isActionKey = (c: string): boolean => c === 'Enter' || c === 'Space' || c === 'NumpadEnter';
-  private overlayVisible = (): boolean => !this.el.start.hidden || !this.el.paused.hidden || !this.el.result.hidden;
+  private overlayVisible = (): boolean => !this.lbui.isOpen && (!this.el.start.hidden || !this.el.paused.hidden || !this.el.result.hidden);
 
   private onKeyDown(e: KeyboardEvent): void {
     this.held.add(e.code);
@@ -286,6 +289,7 @@ export class Game {
       case 'again':
         if (this.state.phase === 'crashed' && performance.now() - this.crashAt >= B.restartDelayMs) this.startRun(this.mode);
         break;
+      case 'lb': if (this.state.phase === 'preview' || this.state.phase === 'crashed') this.lbui.open(this.mode); break;
       case 'share': void this.share(); break;
       case 'copy': void this.copyLink(); break;
       case 'resume': if (this.state.phase === 'paused') this.resume(); break;
@@ -327,6 +331,8 @@ export class Game {
     else applyConfig(this.remote.config, eventActive(this.remote));
     this.sound.applyLevels();
     this.runId = randomId(8);
+    this.lbui.offer(null);
+    if (!this.excluded) void this.lbui.api.begin(mode);
     this.runSeen.clear();
     this.runMiles = 0;
     this.runOpen = true;
@@ -759,6 +765,8 @@ export class Game {
     $('res-style-record').hidden = !rec;
     $('res-style-best').textContent = this.styleBest.toLocaleString('de-DE');
     $('res-style-best-label').parentElement!.hidden = sprint;
+    // Weltrangliste: Veröffentlichung anbieten (nie in Testfahrt/QA, nie ohne Punkte)
+    this.lbui.offer(this.excluded || st.styleScore <= 0 ? null : { mode: sprint ? 'sprint' : 'endless', score: st.styleScore, dist: sprint ? Math.min(SPRINT_FINISH_M, Math.floor(sim.s)) : Math.floor(sim.s), dur: sim.t - sim.t0, nm: st.nearMissCount, gp: st.gatePoints });
   }
 
   private fxChip(li: HTMLElement, remaining: number, key: 'shield' | 'slow' | 'magnet' | 'blitz' | 'glide' | 'boost' | 'guide'): void {

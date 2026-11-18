@@ -38,6 +38,11 @@ export const SCHEMA: string[] = [
   `CREATE INDEX IF NOT EXISTS pickups_ts ON pickups (ts)`,
   `CREATE TABLE IF NOT EXISTS attempts (k TEXT NOT NULL, ts INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS attempts_k ON attempts (k, ts)`,
+  // Weltrangliste: pseudonyme Gäste (zufällige ID, frei wählbarer Name) und veröffentlichte Läufe; Schreibzugriff nur über die geprüfte Server-API
+  `CREATE TABLE IF NOT EXISTS lb_players (id TEXT PRIMARY KEY, name TEXT NOT NULL, created INTEGER NOT NULL, last INTEGER NOT NULL, banned INTEGER NOT NULL DEFAULT 0)`,
+  `CREATE TABLE IF NOT EXISTS lb_runs (run TEXT PRIMARY KEY, pid TEXT NOT NULL, mode TEXT NOT NULL, score INTEGER NOT NULL, dist INTEGER NOT NULL, dur REAL NOT NULL, nm INTEGER NOT NULL DEFAULT 0, gp INTEGER NOT NULL DEFAULT 0, ver TEXT NOT NULL, rules INTEGER NOT NULL, ts INTEGER NOT NULL, status TEXT NOT NULL, reason TEXT)`,
+  `CREATE INDEX IF NOT EXISTS lb_runs_rank ON lb_runs (mode, rules, status, score DESC, dist DESC, ts)`,
+  `CREATE INDEX IF NOT EXISTS lb_runs_pid ON lb_runs (pid, ts)`,
 ];
 
 /** Spätere Spalten für bereits bestehende Datenbanken (jede Anweisung einzeln; „Spalte existiert schon“ ist erwartet und wird ignoriert). */
@@ -73,5 +78,6 @@ export async function purge(db: Db, now: number, days: number): Promise<void> {
     ['DELETE FROM visits WHERE ts < ?', cutoff],
     ['DELETE FROM sessions WHERE expires_at < ? OR revoked = 1', now - 86400_000],
     ['DELETE FROM attempts WHERE ts < ?', now - 86400_000],
+    ["DELETE FROM lb_runs WHERE status = 'rejected' AND ts < ?", now - 30 * 86400_000],
   ]);
 }

@@ -94,6 +94,7 @@
         <div class="start-actions">
           <button id="btn-start" class="primary" type="button" data-action="start">Fahren</button>
           <button id="btn-sprint" class="secondary sprint-btn" type="button" hidden data-action="sprint"><strong>Sunset Sprint</strong><span>Erreiche die Neonnacht</span></button>
+          <button id="btn-lb" class="secondary lb-btn" type="button" data-action="lb">Weltrangliste</button>
         </div>
         <div id="challenge" class="challenge" role="status" hidden></div>
         <div id="howto" data-mode="keys">
@@ -169,6 +170,18 @@
         <p class="best"><span id="res-best-label">Bestweite:</span> <strong id="res-best">0 m</strong></p>
         <p class="best sm"><span id="res-style-best-label">Stil-Rekord:</span> <strong id="res-style-best">0</strong></p>
         <button id="btn-again" class="primary" type="button" data-action="again" disabled>Nochmal fahren</button>
+        <div id="res-lb" class="res-lb" hidden>
+          <p class="res-lb-t">Weltrangliste</p>
+          <form id="lb-form" class="lb-form" autocomplete="off" novalidate>
+            <label for="lb-name" class="sr-only">Dein Name für die Weltrangliste</label>
+            <input id="lb-name" type="text" maxlength="16" placeholder="Dein Name" autocomplete="nickname" autocapitalize="off" spellcheck="false" enterkeyhint="send" />
+            <button id="lb-publish" class="secondary" type="submit">Veröffentlichen</button>
+          </form>
+          <p id="lb-msg" class="lb-msg" role="status" aria-live="polite"></p>
+          <p id="lb-rank" class="lb-rank" role="status"></p>
+          <button id="lb-view" class="linklike" type="button">Weltrangliste ansehen</button>
+          <p class="lb-priv">Name und Ergebnis werden öffentlich angezeigt. Ohne Veröffentlichung bleibt alles auf diesem Gerät.</p>
+        </div>
         <div class="res-actions">
           <button id="btn-share" class="secondary" type="button" data-action="share" hidden>Freund herausfordern</button>
           <button id="btn-endless" class="secondary" type="button" data-action="endless" hidden>Endless fahren</button>
@@ -180,6 +193,25 @@
           <button id="btn-copy" class="secondary" type="button" data-action="copy">Link kopieren</button>
           <p id="share-msg" role="status"></p>
         </div>
+      </div>
+    </section>
+    <section id="screen-lb" class="overlay lb" role="dialog" aria-modal="true" aria-labelledby="lb-title" hidden>
+      <div class="panel lb-panel">
+        <h2 id="lb-title">Weltrangliste</h2>
+        <div class="lb-tabs" role="tablist" aria-label="Spielmodus">
+          <button type="button" role="tab" data-lb-mode="endless" aria-selected="true" class="on">Endless</button>
+          <button type="button" role="tab" data-lb-mode="sprint" aria-selected="false">Sunset Sprint</button>
+        </div>
+        <div class="lb-tabs" role="tablist" aria-label="Zeitraum">
+          <button type="button" role="tab" data-lb-period="all" aria-selected="true" class="on">Gesamt</button>
+          <button type="button" role="tab" data-lb-period="7d" aria-selected="false">Letzte 7 Tage</button>
+        </div>
+        <div id="lb-me" class="lb-me" role="status"></div>
+        <div class="lb-scroll">
+          <table class="lb-table"><thead><tr><th scope="col">Platz</th><th scope="col">Spieler</th><th scope="col">Punkte</th><th scope="col">Distanz</th></tr></thead><tbody id="lb-body"></tbody></table>
+        </div>
+        <p id="lb-note" class="lb-note" role="status"></p>
+        <button id="lb-close" class="primary" type="button">Schließen</button>
       </div>
     </section>
   </div>

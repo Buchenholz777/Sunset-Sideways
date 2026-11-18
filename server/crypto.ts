@@ -6,6 +6,11 @@ const hex = (u: ArrayBuffer | Uint8Array): string => Array.from(new Uint8Array(u
 
 export const randomBytes = (n: number): Uint8Array<ArrayBuffer> => crypto.getRandomValues(new Uint8Array(n));
 export const randomToken = (n = 32): string => b64(randomBytes(n)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+/** HMAC-SHA-256 (hex): überprüfbare, serverseitig ausgestellte Berechtigungen ohne Speicherung. */
+export const hmacHex = async (secret: string, msg: string): Promise<string> => {
+  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return hex(await crypto.subtle.sign('HMAC', key, enc.encode(msg)));
+};
 export const sha256Hex = async (s: string): Promise<string> => hex(await crypto.subtle.digest('SHA-256', enc.encode(s)));
 
 /** Zeitkonstanter Vergleich. */

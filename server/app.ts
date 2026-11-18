@@ -1,4 +1,5 @@
 import { DEFAULT_CONFIG, clone, normalize, withProfile } from '../src/config/runtime';
+import { BALANCE as B } from '../src/config/balance';
 import { MAX_BODY, ingest } from './ingest';
 import { DbLimiter, Limiter, checkPassword, createSession, findSession, passwordProblem, revokeSession, safeEqual, setPassword, type Session } from './auth';
 import { ensureSchema, kvDel, kvGet, kvSet, purge, type D1Like, type Db } from './db';
@@ -7,6 +8,7 @@ import { compare, overview, type Period } from './kpi';
 import { checkSite } from './seo';
 import { randomToken, sha256Hex } from './crypto';
 import * as gsc from './gsc';
+import * as lb from './leaderboard';
 
 /** Umgebung (Cloudflare Pages: Bindings, Variablen und Secrets; lokal: aus process.env gebildet). */
 export interface AppEnv {
@@ -50,6 +52,9 @@ export function createHandler(d: Deps): (req: Request) => Promise<Response | nul
   const sopts = { idleMs, absoluteMs: num(env.SESSION_ABSOLUTE_DAYS, 7) * 86400_000 };
   const retentionDays = num(env.RETENTION_DAYS, 30);
   const loginFail = new DbLimiter(db, 8, 15 * 60_000), loginFailAll = new DbLimiter(db, 40, 15 * 60_000), pwFail = new DbLimiter(db, 5, 15 * 60_000);
+  // Weltrangliste: Ratenbegrenzung je IP (Datenbank, instanzübergreifend) und Lesezugriffe (Instanz)
+  const lbGuest = new DbLimiter(db, 20, 3600_000), lbStart = new DbLimiter(db, 400, 3600_000), lbSubmit = new DbLimiter(db, B.leaderboard.submissionLimits.perMinute, 60_000), lbMe = new DbLimiter(db, 60, 60_000);
+  const lbRead = new Limiter(90, 60_000);
 
   const ipOf = (req: Request): string => req.headers.get('cf-connecting-ip') ?? ((req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() || 'lokal');
   const urlOrigin = (u: URL): string => u.origin;
@@ -217,6 +222,11 @@ button[disabled]{opacity:.6;cursor:wait}#msg{min-height:1.5em;margin-top:12px;co
       return json(200, { period: periodOf(u), ...(await compare(db, periodOf(u), t, a, b, { dev: q1(u, 'dev'), ver: q1(u, 'ver'), ev: evOf(u) })) });
     }
 
+    // Weltrangliste: Kennzahlen und Moderation (nur mit Sitzung und CSRF-Token)
+    if (path === '/lb' && method === 'GET') return json(200, await lb.adminOverview(db, t));
+    if (path === '/lb/remove' && method === 'POST') { const b = (await readJson(req, 1024)) as { run?: unknown }; return typeof b.run === 'string' && (await lb.removeRun(db, b.run)) ? json(200, { ok: true }) : json(404, { error: 'Lauf nicht gefunden.' }); }
+    if (path === '/lb/ban' && method === 'POST') { const b = (await readJson(req, 1024)) as { pid?: unknown; banned?: unknown }; return typeof b.pid === 'string' && (await lb.banPlayer(db, b.pid, b.banned !== false)) ? json(200, { ok: true }) : json(404, { error: 'Gast nicht gefunden.' }); }
+
     // SEO
     if (path === '/seo' && method === 'GET') { const r = await kvGet(db, 'seo_report'); return json(200, { domain: await domainOf(u), publicOrigin: env.PUBLIC_ORIGIN ?? null, report: r ? JSON.parse(r) : null }); }
     if (path === '/seo/check' && method === 'POST') {
@@ -266,6 +276,51 @@ button[disabled]{opacity:.6;cursor:wait}#msg{min-height:1.5em;margin-top:12px;co
     return json(404, { error: 'Nicht gefunden.' });
   }
 
+  // ---------------------------------------------------------------- Weltrangliste (öffentlich; Schreibzugriff nur über diese geprüften Endpunkte)
+  async function lbApi(req: Request, u: URL, t: number): Promise<Response> {
+    const path = u.pathname.slice('/api/lb'.length);
+    const ip = ipOf(req);
+    const secret = await lb.lbSecret(db, env.APP_SECRET);
+    const limited = (): Response => publicJson(429, { error: 'Zu viele Anfragen. Bitte später erneut versuchen.' });
+    if (path === '/top' && req.method === 'GET') {
+      if (!lbRead.hit(ip, t)) return limited();
+      const mode = u.searchParams.get('mode') ?? 'endless', period = u.searchParams.get('period') ?? 'all';
+      if (!lb.isMode(mode) || !lb.isPeriod(period)) return publicJson(400, { error: 'Ungültiger Modus oder Zeitraum.' });
+      const entries = await lb.top(db, mode, period, t);
+      return respond(200, JSON.stringify({ mode, period, rules: B.leaderboard.scoreRulesVersion, entries }), { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=15', 'x-content-type-options': 'nosniff' });
+    }
+    if (req.method !== 'POST') return publicJson(405, { error: 'Methode nicht erlaubt.' });
+    if (!sameOrigin(req, u) || !isJson(req)) return publicJson(403, { error: 'Anfrage abgelehnt.' });
+    let body: Record<string, unknown>;
+    try { body = ((await readJson(req, 2048)) ?? {}) as Record<string, unknown>; } catch (e) { return publicJson((e as { status?: number }).status ?? 400, { error: 'Ungültige Anfrage.' }); }
+    if (path === '/guest') {
+      if (await lbGuest.blocked(`lbg:${ip}`, t)) return limited();
+      await lbGuest.hit(`lbg:${ip}`, t);
+      return publicJson(200, { token: (await lb.issueGuest(secret)).token });
+    }
+    if (path === '/start') {
+      if (!lb.isMode(body.mode)) return publicJson(400, { error: 'Ungültiger Modus.' });
+      if (await lbStart.blocked(`lbs:${ip}`, t)) return limited();
+      await lbStart.hit(`lbs:${ip}`, t);
+      return publicJson(200, await lb.issueTicket(secret, body.mode, t));
+    }
+    if (path === '/me') {
+      if (await lbMe.blocked(`lbm:${ip}`, t)) return limited();
+      await lbMe.hit(`lbm:${ip}`, t);
+      const pid = await lb.verifyGuest(secret, body.token);
+      if (!pid) return publicJson(200, { has: false });
+      const mode = lb.isMode(body.mode) ? body.mode : 'endless', period = lb.isPeriod(body.period) ? body.period : 'all';
+      return publicJson(200, await lb.myRank(db, pid, mode, period, t));
+    }
+    if (path === '/submit') {
+      if (await lbSubmit.blocked(`lbp:${ip}`, t)) return limited();
+      await lbSubmit.hit(`lbp:${ip}`, t);
+      const r = await lb.submit(db, secret, t, body);
+      return publicJson(r.status, r.body);
+    }
+    return publicJson(404, { error: 'Nicht gefunden.' });
+  }
+
   // Private Dateien der Admin-Oberfläche: nur mit gültiger Sitzung, nie zwischengespeichert
   async function privateAsset(path: string): Promise<Response> {
     const r = d.assets ? await d.assets(path) : null;
@@ -311,6 +366,8 @@ button[disabled]{opacity:.6;cursor:wait}#msg{min-height:1.5em;margin-top:12px;co
       if (p.startsWith('/_admin/')) return privateAsset(p);
       return privateAsset('/_admin/');                       // /admin und /admin/<Ansicht> → App-Shell
     }
+
+    if (p === '/api/lb' || p.startsWith('/api/lb/')) return lbApi(req, u, t);
 
     if (p === '/api/config' && method === 'GET') {
       const token = u.searchParams.get('preview');

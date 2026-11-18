@@ -4,10 +4,12 @@ import { clear, h } from './dom';
 import { renderOverview } from './overview';
 import { renderSettings } from './settings';
 import { renderSeo } from './seo';
+import { renderLeaderboard } from './leaderboard';
 
 const VIEWS = [
   { id: 'overview', label: 'Übersicht', render: renderOverview },
   { id: 'settings', label: 'Spieleinstellungen', render: renderSettings },
+  { id: 'leaderboard', label: 'Rangliste', render: renderLeaderboard },
   { id: 'seo', label: 'SEO', render: renderSeo },
 ] as const;
 type ViewId = (typeof VIEWS)[number]['id'];

@@ -1,0 +1,43 @@
+/* Weltrangliste: bestehender Sunset-/Neon-Stil, dunkler transparenter Grund, dezente Akzente. */
+.start-actions .lb-btn { min-height: 44px; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+#screen-lb { z-index: 8; cursor: default; background: #070a24f4; }
+.lb-panel { width: min(94vw, 560px); max-width: 560px; gap: 8px; align-items: stretch; text-align: left; max-height: 100%; }
+.lb-panel h2 { margin: 0; text-align: center; letter-spacing: .06em; text-transform: uppercase; font-size: clamp(20px, 4vh, 28px); text-shadow: 0 0 14px #ff4fd855; }
+.lb-tabs { display: flex; gap: 6px; justify-content: center; }
+.lb-tabs button { flex: 1 1 0; min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1.5px solid #ffffff2a; background: #0c1030aa; color: #cfd3ff; font: 700 14px/1 system-ui, sans-serif; cursor: pointer; }
+.lb-tabs button.on { border-color: var(--cyan, #5fe0ff); color: #fff; background: #16206a99; box-shadow: 0 0 10px #5fe0ff44; }
+.lb-tabs button:focus-visible, #lb-close:focus-visible, .lb-form input:focus-visible { outline: 3px solid #ffe27a; outline-offset: 2px; }
+.lb-me { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; padding: 8px 12px; border-radius: 10px; background: #0c1030b0; border: 1px solid #ff4fd855; font-size: 13px; color: #cfd3ff; min-height: 20px; }
+.lb-me-v { color: #fff; }
+.lb-me-none { grid-column: 1 / -1; color: #aab0e0; }
+.lb-scroll { overflow-y: auto; max-height: min(52vh, 420px); border-radius: 10px; background: #070a24cc; border: 1px solid #ffffff1c; -webkit-overflow-scrolling: touch; }
+.lb-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: clamp(13px, 2.2vh, 15px); }
+.lb-table th { position: sticky; top: 0; background: #0d1240; color: #9aa0ff; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; padding: 8px 8px; text-align: right; }
+.lb-table th:nth-child(2), .lb-table td.nm { text-align: left; }
+.lb-table td { padding: 7px 8px; border-top: 1px solid #ffffff12; text-align: right; color: #eef0ff; }
+.lb-table td.rk { width: 3.2em; color: #9aa0ff; }
+.lb-table td.nm { overflow-wrap: anywhere; }
+.lb-r.top1 td { color: #ffe27a; font-weight: 800; background: #ffe27a14; }
+.lb-r.top2 td { color: #e6ecff; font-weight: 700; background: #cfd8ff10; }
+.lb-r.top3 td { color: #ffb98a; font-weight: 700; background: #ff9a5a10; }
+.lb-r.mine td { background: #5fe0ff1a; }
+.lb-note { margin: 0; text-align: center; font-size: 12px; color: #aab0e0; }
+#lb-close { align-self: center; }
+
+/* Veröffentlichen im Ergebnisbild (nie verpflichtend, klein neben „Nochmal fahren“) */
+.res-lb { width: min(100%, 360px); display: flex; flex-direction: column; gap: 6px; align-items: center; padding: 8px 10px; border-radius: 10px; background: #0c1030a0; border: 1px solid #5fe0ff33; cursor: default; }
+.res-lb-t { margin: 0; font: 800 12px/1 system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #5fe0ff; }
+.lb-form { display: flex; gap: 6px; width: 100%; }
+.lb-form[hidden], .res-lb[hidden] { display: none; }
+.lb-form input { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 8px 10px; border-radius: 8px; border: 1.5px solid #ffffff33; background: #070a24; color: #fff; font: 600 16px/1 system-ui, sans-serif; }
+.lb-form button { min-height: 44px; white-space: nowrap; }
+.lb-msg { margin: 0; min-height: 1.1em; font-size: 13px; color: #cfd3ff; }
+.lb-msg.err { color: #ff9a9a; }
+.lb-msg.ok { color: #8affc1; }
+.lb-rank { margin: 0; font-size: 13px; color: #ffe27a; font-weight: 700; }
+.lb-rank:empty { display: none; }
+.linklike { background: none; border: 0; color: #9aa0ff; text-decoration: underline; font: 600 13px/1.2 system-ui, sans-serif; cursor: pointer; padding: 6px 8px; min-height: 36px; }
+.lb-priv { margin: 0; font-size: 11px; color: #8a90c8; text-align: center; }
+@media (max-height: 520px) { .lb-scroll { max-height: 34vh; } .res-lb { padding: 6px 8px; } }
