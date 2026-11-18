@@ -45,15 +45,15 @@ export const BALANCE = {
    */
   steer: {
     /** Bei 210 km/h … */
-    base: { vKey: 18, tauUp: 0.03, tauStop: 0.035, vTouch: 30, tauTouch: 0.03, lag: 0.02 },
+    base: { vKey: 28, tauUp: 0.018, tauStop: 0.022, vTouch: 46, tauTouch: 0.02, lag: 0.012 },
     /** … und bei 600 km/h (dazwischen stetig): je schneller, desto schneller der Spurwechsel. */
-    fast: { vKey: 44, tauUp: 0.018, tauStop: 0.022, vTouch: 85, tauTouch: 0.016, lag: 0.008 },
+    fast: { vKey: 56, tauUp: 0.012, tauStop: 0.014, vTouch: 110, tauTouch: 0.011, lag: 0.005 },
     vLo: 210, vHi: 600,
     /** Empfindlichkeit (Admin): Tastatur und Touch; skaliert Querzielgeschwindigkeit bzw. Fingerweg. Die Erreichbarkeitsprüfung rechnet mit dem kleineren Wert. */
     sens: { key: 1, touch: 1 },
   },
   /** Fingerweg in Bildbreiten → Meter (22 m je Bildbreite: ein Drittel Breite = Außenspur zu Außenspur), Totzone gegen Zittern; das Ziel bleibt nach dem Loslassen `settle` Sekunden bestehen. */
-  touch: { deadPx: 8, mPerWidth: 22, settle: 0.8 },
+  touch: { deadPx: 6, mPerWidth: 30, settle: 0.8 },
   /** Erster klarer Ausweichmoment nach ≈ 3 s (175 m), Hindernis in der Mitte ⇒ zwei Ausweichwege. */
   start: { firstAnchor: 175 },
   /** Verkehrstempo je Tempoklasse in km/h (Lkw nur in der langsamen Klasse). */

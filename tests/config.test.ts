@@ -205,6 +205,9 @@ describe('Jeder Regler hat beobachtbare Wirkung im Spiel', () => {
     for (let i = 0; i < 40 * 120 && !sim.crashed; i++) sim.step(B.dt, botInput(sim, i, cache));
     expect(sim.crashed).toBe(false);
     const bad = cfg((c) => { c.tempo.maxKmh = 700; c.controls.key = 0.5; c.controls.touch = 0.5; c.tempo.density = 1.6; });
-    expect(analyze(bad).issues.some((i) => i.level === 'error' && (i.path === 'controls.key' || i.path === 'controls.touch'))).toBe(true);
+    // Mit der schnelleren Standardlenkung erreicht kein Reglerwert mehr den Konfliktbereich; der Mechanismus wird mit künstlich langsamer Lenkung geprüft
+    const S = B.steer as unknown as { base: Record<string, number>; fast: Record<string, number> }, b0 = { ...S.base }, f0 = { ...S.fast };
+    try { for (const k of ['vKey', 'vTouch']) { S.base[k] *= 0.3; S.fast[k] *= 0.3; } expect(analyze(bad).issues.some((i) => i.level === 'error' && (i.path === 'controls.key' || i.path === 'controls.touch'))).toBe(true); }
+    finally { Object.assign(S.base, b0); Object.assign(S.fast, f0); }
   });
 });

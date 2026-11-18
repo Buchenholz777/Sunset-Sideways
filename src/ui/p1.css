@@ -20,7 +20,7 @@
 #hud-rush.on .bar { background: #00000044; }
 #hud-rush.start { animation: rush-start .3s ease-out 1; }
 
-#fx-miss { position: absolute; left: 50%; top: calc(var(--sat) + 46%); transform: translateX(-50%); z-index: 3; padding: 3px 12px; border-radius: 999px; background: #070a24cc; border: 1.5px solid var(--cyan); color: var(--cyan); font: 900 clamp(13px, 2.6vh, 18px)/1.1 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; pointer-events: none; animation: miss-pop .8s ease-out 1 both; }
+#fx-miss { position: absolute; left: 50%; top: calc(var(--sat) + 19%); transform: translateX(-50%); z-index: 3; padding: 3px 12px; border-radius: 999px; background: #070a24cc; border: 1.5px solid var(--cyan); color: var(--cyan); font: 900 clamp(13px, 2.6vh, 18px)/1.1 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; pointer-events: none; animation: miss-pop .8s ease-out 1 both; }
 #fx-miss[hidden] { display: none; }
 #fx-miss.combo { border-color: var(--magenta); color: var(--magenta); }
 #fx-miss.rush { border-color: #fff; color: #fff; background: linear-gradient(90deg, #ff3fa4e6, #2ee6d6e6); font-size: clamp(15px, 3.2vh, 22px); animation: rush-start .32s ease-out 1, miss-pop 1s ease-out 1 both; }
@@ -46,7 +46,7 @@ html.touch:not([data-phase="running"]) #fx-miss { display: none; }
   .st-score .val { font-size: 15px; }
   #hud-combo { padding: 1px 5px; } #hud-combo .cx { font-size: 14px; } #hud-combo .cap { display: none; }
   #hud-rush { padding: 1px 5px; } #hud-rush .rl { font-size: 9px; } #hud-rush .rt { font-size: 11px; }
-  #fx-miss { top: calc(var(--sat) + 40%); }
+  #fx-miss { top: calc(var(--sat) + 17%); }
 }
 
 @keyframes cx-pop { 0% { transform: scale(1.5); } 100% { transform: scale(1); } }

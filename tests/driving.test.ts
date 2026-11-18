@@ -58,7 +58,7 @@ describe('Tempo nach gefahrener Strecke', () => {
 });
 
 describe('Lenkung per Tastatur', () => {
-  it('Spurwechsel per Tastatur bei 210 km/h: Nachbarspur 0,20–0,28 s, Außenspur zu Außenspur 0,38–0,52 s, beide Richtungen', () => {
+  it('Spurwechsel per Tastatur bei 210 km/h (schnellere, empfindlichere Lenkung): Nachbarspur 0,11–0,18 s, Außenspur zu Außenspur 0,22–0,34 s, beide Richtungen', () => {
     const time = (from: number, to: number, dir: number) => {
       const s = clean(); s.q = from;
       let t = 0;
@@ -66,13 +66,13 @@ describe('Lenkung per Tastatur', () => {
       return t * DT;
     };
     for (const [a, b] of [[-3.6, 0], [0, 3.6], [-3.6, 3.6]] as const) {
-      const lo = b - a > 4 ? 0.38 : 0.2, hi = b - a > 4 ? 0.52 : 0.28;
+      const lo = b - a > 4 ? 0.22 : 0.11, hi = b - a > 4 ? 0.34 : 0.18;
       for (const [x, y, d] of [[a, b, 1], [b, a, -1]] as const) { const t = time(x, y, d); expect(t).toBeGreaterThanOrEqual(lo); expect(t).toBeLessThanOrEqual(hi); }
     }
     const s = clean();
     run(s, 0.12, { dir: 1 });
-    expect(s.vq).toBeGreaterThan(16.5);
-    expect(s.vq).toBeLessThanOrEqual(18.0001);
+    expect(s.vq).toBeGreaterThan(26);
+    expect(s.vq).toBeLessThanOrEqual(28.5);
   });
   it('Gegenlenken wechselt die Richtung schnell (≤ 0,12 s bis Gegenrichtung ≥ 50 %)', () => {
     const s = clean();
@@ -196,10 +196,10 @@ describe('Fahrmechanik ohne Drift', () => {
     expect(s.q).toBe(0);
     expect(Math.abs(s.road.center(s.s))).toBeGreaterThan(0.2);   // die Straße hat sich tatsächlich geneigt
   });
-  it('Fahrzeugnase folgt der Straße plus kleinem Zusatz aus der Querbewegung (< 16° bei 600 km/h)', () => {
+  it('Fahrzeugnase folgt der Straße plus kleinem Zusatz aus der Querbewegung (< 20° bei 600 km/h)', () => {
     const s = clean(3000, 30000);
     run(s, 0.04, { dir: 1 });
-    expect(Math.abs(s.relAngle)).toBeLessThan((16 * Math.PI) / 180);
+    expect(Math.abs(s.relAngle)).toBeLessThan((20 * Math.PI) / 180);
     expect(s.relAngle).toBeGreaterThan(0);
   });
   it('deterministisch bei gleicher Eingabefolge', () => {

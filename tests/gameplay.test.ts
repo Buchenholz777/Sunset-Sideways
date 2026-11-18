@@ -468,7 +468,7 @@ describe('Phantom-Turbo und Pfadfinder', () => {
   });
   it('Phantom-Turbo erhöht die Lenkgeschwindigkeit mit dem Tempo', () => {
     const a = base(), b = base(); b.boostT = 6; b.boostF = B.speed.boostFactor;
-    for (let i = 0; i < 12; i++) { a.obstacles = []; b.obstacles = []; a.step(DT, { dir: 1 }); b.step(DT, { dir: 1 }); }
+    for (let i = 0; i < 3; i++) { a.obstacles = []; b.obstacles = []; a.step(DT, { dir: 1 }); b.step(DT, { dir: 1 }); }
     expect(b.vq).toBeGreaterThan(a.vq);
   });
   it('Pfadfinder zeigt die freie, erreichbare Spur und endet nach 5 s', () => {

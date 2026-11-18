@@ -10,6 +10,7 @@ import { ensureSchema, type Db } from '../server/db';
 import { sqliteDb } from '../server/sqlite';
 import { setPassword as setPw } from '../server/auth';
 import { DEFAULT_CONFIG, clone } from '../src/config/runtime';
+import { BALANCE as B } from '../src/config/balance';
 
 const PW = 'Ein-sehr-gutes-Passwort-1';
 let clock = 1_800_000_000_000;
@@ -223,9 +224,14 @@ describe('Konfiguration, Veröffentlichung, Ereignis', () => {
 
   it('Kombination hohes Tempo + dichter Verkehr + niedrige Empfindlichkeit wird am Regler gemeldet und blockiert', async () => {
     await setDraft((d) => { d.tempo.maxKmh = 700; d.tempo.density = 1.6; d.traffic.minGap = 0.4; d.controls.key = 0.5; d.controls.touch = 0.5; });
-    const st = await (await a.req('GET', '/api/admin/settings')).json() as { issues: Array<{ path: string; level: string; msg: string }> };
-    expect(st.issues.some((i) => i.path === 'controls.key' && i.level === 'error')).toBe(true);
-    expect((await a.w('POST', '/api/admin/publish', {})).status).toBe(409);
+    // künstlich langsame Lenkung (die schnellere Standardlenkung erreicht den Konfliktbereich nicht mehr)
+    const S = B.steer as unknown as { base: Record<string, number>; fast: Record<string, number> }, b0 = { ...S.base }, f0 = { ...S.fast };
+    for (const k of ['vKey', 'vTouch']) { S.base[k] *= 0.3; S.fast[k] *= 0.3; }
+    try {
+      const st = await (await a.req('GET', '/api/admin/settings')).json() as { issues: Array<{ path: string; level: string; msg: string }> };
+      expect(st.issues.some((i) => i.path === 'controls.key' && i.level === 'error')).toBe(true);
+      expect((await a.w('POST', '/api/admin/publish', {})).status).toBe(409);
+    } finally { Object.assign(S.base, b0); Object.assign(S.fast, f0); }
   });
 
   it('Flugwoche: startet mit dem Veröffentlichen, endet automatisch, wird durch andere Änderungen nicht neu gestartet', async () => {
