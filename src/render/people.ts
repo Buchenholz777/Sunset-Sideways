@@ -62,7 +62,10 @@ export function drawPed(ctx: CanvasRenderingContext2D, sx: number, sy: number, k
   L(-0.27 * wm, 0.8 * H + bob + sw * 0.03, 0.07, 0.3 * H, o.top);
   L(0.2 * wm, 0.8 * H + bob - sw * 0.03, 0.07, 0.3 * H, o.top);
   if (p.type === 4) L(0.18 * wm, 0.62 * H + bob, 0.16, 0.2, '#2a1a30');            // Tasche
-  L(-0.09, H + bob, 0.18, 0.2, p.pose === 2 ? o.hair : o.skin);
+  L(-0.24 * wm, 0.84 * H + bob, 0.48 * wm, 0.07, o.top);                              // Schulterlinie (breiter als der Rumpf)
+  L(-0.05, 0.86 * H + bob, 0.1, 0.07, o.skin);                                         // Hals
+  L(-0.13 * wm + sw * 0.07, 0.05, 0.14 * wm, 0.05, '#12122a'); L(0.01 * wm - sw * 0.07, 0.05, 0.14 * wm, 0.05, '#12122a');   // Schuhe
+  if (kk * 0.2 >= 3) { ctx.fillStyle = p.pose === 2 ? o.hair : o.skin; ctx.beginPath(); ctx.ellipse(sx, sy - (H - 0.1 + bob) * kk, 0.1 * kk, 0.11 * kk, 0, 0, 6.2832); ctx.fill(); } else L(-0.09, H + bob, 0.18, 0.2, p.pose === 2 ? o.hair : o.skin);
   L(-0.1, H + 0.02 + bob, 0.2, 0.08, o.hair);                                      // Haar bzw. Mütze
   if (p.type === 2) L(-0.12, H + 0.04 + bob, 0.28, 0.04, '#e8461a');
   if (gfx.lights > 0.1) {
