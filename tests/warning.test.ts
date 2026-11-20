@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, PROFILES } from '../src/config/runtime';
-import { DRAW, READ_OBJECT_PX, makeLayout, readableDistance } from '../src/render/projection';
+import { DRAW, READ_OBJECT_PX, gammaBoost, makeLayout, readableDistance } from '../src/render/projection';
 import { KINDS } from '../src/sim/world';
 
 /**
@@ -47,6 +47,21 @@ describe('Einblendung neuer Hindernisse (350 ms) und Vorwarnzeit', () => {
           expect(effective, `${n} ${kind} ${kmh} km/h: ${effective.toFixed(2)} s`).toBeGreaterThanOrEqual(NEED_S * (kmh > 600 ? 0.9 : 1));
           expect(Math.min(readable, shown) / v - effective, `${n} ${kind}: Verlust durch Einblendung`).toBeLessThanOrEqual(0.36);
         }
+      }
+    }
+  });
+});
+
+describe('Warnzeit bei 1000 km/h (neue Obergrenze)', () => {
+  it('Fahrzeuge bleiben auf allen Formaten ≥ 0,8 s erkennbar (Reaktion 0,4 s + Spurwechsel + Reserve), auch nach der Einblendung', () => {
+    const v = 1000 / 3.6;
+    for (const [n, w, h] of LAYOUTS) {
+      const L = makeLayout(w, h); L.gamma -= gammaBoost(1000);
+      const fullAt = Math.min(DRAW, Math.max(300, 2.3 * v)) - 0.35 * v;
+      for (const kind of ['taxi', 'cabrio', 'sedan', 'truck', 'barrier'] as const) {
+        const readable = Math.min(DRAW, readableDistance(KINDS[kind].w, READ_OBJECT_PX, L));
+        const eff = Math.min(readable, fullAt) / v;
+        expect(eff, `${n} ${kind}: ${eff.toFixed(2)} s`).toBeGreaterThanOrEqual(0.8);
       }
     }
   });

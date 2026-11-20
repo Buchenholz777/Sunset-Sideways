@@ -20,14 +20,17 @@ describe('Tempo nach gefahrener Strecke', () => {
     const want: [number, number][] = [[0, 210], [1000, 325], [2000, 370], [6000, 430], [12000, 480], [16000, 520], [20000, 550], [27000, 600]];
     for (const [m, v] of want) expect(speedAtDist(m)).toBeCloseTo(v, 6);
   });
-  it('ab 27 km konstant 600 km/h; davor monoton steigend, ohne Sprünge und ohne Überschwinger', () => {
+  it('bis 27 km unveränderte Progression (600 km/h); danach gleiche Steigung weiter bis 1000 km/h; monoton, ohne Sprünge und ohne Überschwinger', () => {
     expect(speedAtDist(27000)).toBeCloseTo(600, 6);
-    expect(speedAtDist(1e6)).toBe(600);
+    expect(speedAtDist(1e6)).toBe(1000);
+    expect(speedAtDist(34000)).toBeCloseTo(650, 4);        // 50 km/h je 7 km: Steigung des letzten Abschnitts
+    expect(speedAtDist(27000 + 56000)).toBeCloseTo(1000, 3);
     let p = 0, maxStep = 0;
     for (let m = 0; m <= 30000; m += 5) {
       const v = speedAtDist(m);
       expect(v).toBeGreaterThanOrEqual(p - 1e-9);
-      expect(v).toBeLessThanOrEqual(600 + 1e-9);
+      expect(v).toBeLessThanOrEqual(1000 + 1e-9);
+      if (m <= 27000) expect(v).toBeLessThanOrEqual(600 + 1e-9);
       if (m > 0) maxStep = Math.max(maxStep, v - p);
       p = v;
     }
@@ -50,10 +53,13 @@ describe('Tempo nach gefahrener Strecke', () => {
     expect(s.speedKmh).toBeCloseTo(speedAtDist(s.s), 0);
     expect(s.speedKmh).toBeGreaterThan(270);
   });
-  it('Start bei 27 km und weiter: 600 km/h', () => {
+  it('Start bei 28 km: Tempo steigt weiter; absolute Obergrenze 1000 km/h gilt auch mit Phantom-Turbo', () => {
     const s = new Sim(12, { startS: 28000 }); s.obstacles = [];
     run(s, 1, { dir: 0 });
-    expect(s.speedKmh).toBeCloseTo(600, 1);
+    expect(s.speedKmh).toBeGreaterThan(600); expect(s.speedKmh).toBeLessThan(620);
+    const f = new Sim(12, { startS: 90000 }); f.obstacles = []; f.boostT = 5; f.boostF = 1.35;
+    run(f, 1, { dir: 0 });
+    expect(f.speedKmh).toBeLessThanOrEqual(1000 + 1e-6); expect(f.speedKmh).toBeGreaterThan(990);
   });
 });
 

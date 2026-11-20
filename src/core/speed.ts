@@ -3,11 +3,13 @@ import { BALANCE } from '../config/balance';
 /**
  * Grundtempo nach der gefahrenen Strecke des aktuellen Versuchs: Stützpunkte (m, km/h) aus der Balancing-Tabelle,
  * dazwischen monotone kubische Hermite-Interpolation (Fritsch–Carlson): stetig, ohne Überschwinger und ohne Sprünge.
- * Hinter dem letzten Stützpunkt bleibt das Tempo konstant (600 km/h).
+ * Hinter dem letzten Stützpunkt (27 km, 600 km/h) steigt das Tempo mit der Steigung des letzten Abschnitts weiter, bis BALANCE.speed.capKmh (1000 km/h) erreicht ist.
  */
 let X: number[] = [];
 let Y: number[] = [];
 let TAN: number[] = [];
+/** Anstieg hinter dem letzten Stützpunkt in km/h je km (Steigung des letzten Abschnitts). */
+let TAIL = 0;
 
 /** Baut Stützpunkte und Tangenten neu auf (Start, Admin-Konfiguration). */
 export function setSpeedKnots(knots: ReadonlyArray<readonly [number, number]>): void {
@@ -24,6 +26,7 @@ export function setSpeedKnots(knots: ReadonlyArray<readonly [number, number]>): 
     if (h > 3) { m[i] = (3 * aa * d[i]) / h; m[i + 1] = (3 * bb * d[i]) / h; }
   }
   TAN = m;
+  TAIL = n >= 2 ? Math.max(0, ((Y[n - 1] - Y[n - 2]) / (X[n - 1] - X[n - 2])) * 1000) : 0;
 }
 setSpeedKnots(BALANCE.speed.knots);
 
@@ -33,7 +36,7 @@ export const maxKmh = (): number => Y[Y.length - 1];
 /** Grundtempo in km/h nach s Metern gefahrener Strecke. */
 export function speedAtDist(s: number): number {
   if (s <= X[0]) return Y[0];
-  if (s >= X[X.length - 1]) return Y[Y.length - 1];
+  if (s >= X[X.length - 1]) return Math.min(BALANCE.speed.capKmh, Y[Y.length - 1] + (TAIL * (s - X[X.length - 1])) / 1000);
   let i = 0;
   while (s > X[i + 1]) i++;
   const h = X[i + 1] - X[i], t = (s - X[i]) / h;

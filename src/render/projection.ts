@@ -59,6 +59,15 @@ export function makeLayout(cssW: number, cssH: number): Layout {
   return { w, h, scale, portrait, cx: w / 2, hy, gy, Hv, fx, gamma: portrait ? 0.4 : 0.58, u: 2 / scale };
 }
 
+/**
+ * Mehr Fernsicht-Stauchung ab 600 km/h: ferne Fahrzeuge rücken im Bild näher und bleiben damit auch bei 1000 km/h lange genug erkennbar
+ * (Warnzeit ≥ 0,8 s). Stetig in der Geschwindigkeit; die Tiefe bis 12 m (Nahbereich, Wagen) ist davon nicht betroffen.
+ */
+export function gammaBoost(kmh: number): number {
+  const t = Math.max(0, Math.min(1, (kmh - 600) / 400));
+  return 0.1 * t * t * (3 - 2 * t);
+}
+
 /** Effektive Tiefe: identisch bis D0, dahinter D0·(d/D0)^γ. */
 export const depthEff = (d: number, L: Layout): number => (d <= D0 ? d : D0 * Math.pow(d / D0, L.gamma));
 export const depthInv = (de: number, L: Layout): number => (de <= D0 ? de : D0 * Math.pow(de / D0, 1 / L.gamma));

@@ -3,7 +3,7 @@ import { footprintCorners, obstacleFootprint, pickupFootprint, playerFootprint, 
 import type { Road } from '../sim/road';
 import { KINDS, type Gate, type Obstacle, type Pickup, type PickupType } from '../sim/world';
 
-import { CAM_BACK, DRAW, RENDER, chaseSlope, depthEff, isCrispScale, makeLayout, type Layout } from './projection';
+import { CAM_BACK, DRAW, RENDER, chaseSlope, gammaBoost, depthEff, isCrispScale, makeLayout, type Layout } from './projection';
 import { applyLight, decoType, decoX, drawDeco, LANDMARK_FAR, LANDMARK_SCALE, LANDMARK_TYPES, landmarksAhead, drawMoon, drawMountains, drawPlane, drawPortal, drawSkyline, drawSky, drawSun, hash, lightT, mixHex, PORTAL_Z, stageAt } from './scenery';
 import { CHUNK, drawPed, pedsInChunk } from './people';
 import { computeRows } from './rows';
@@ -47,6 +47,7 @@ const LANDMARKS = new Set(['wheel', 'eiffel', 'lake', 'fountain']);
 export class Renderer {
   private ctx: CanvasRenderingContext2D;
   L: Layout = makeLayout(320, 568);
+  private gamma0 = this.L.gamma;
   private lt = 0;
   /** Nur QA/Vergleich: Grundstücke abschalten (alte Straßenrand-Motive), um Kosten und Bild zu vergleichen. */
   lotsOn = true;
@@ -128,6 +129,7 @@ export class Renderer {
     const L = makeLayout(cssW, cssH);
     if (this.canvas.width !== L.w || this.canvas.height !== L.h) { this.canvas.width = L.w; this.canvas.height = L.h; }
     this.L = L;
+    this.gamma0 = L.gamma;
     gfx.u = L.u;
     this.canvas.style.imageRendering = isCrispScale(L.scale) ? 'pixelated' : 'auto';      // gebrochene Skalierung weich, ganzzahlige scharf
   }
@@ -244,6 +246,7 @@ export class Renderer {
     else this.brake = Math.max(0, this.brake - dt * 2);
     if (v.running) this.prevSpeed = v.speedKmh;
 
+    this.L.gamma = this.gamma0 - gammaBoost(v.speedKmh);
     const zc = v.s - B.player.len - CAM_BACK;
     this.lastZc = zc;
     const headT = chaseSlope(v.road.heading(v.s), v.phi, v.road.heading(v.s + 70));

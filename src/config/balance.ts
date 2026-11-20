@@ -13,6 +13,8 @@ export const BALANCE = {
    */
   speed: {
     knots: [[0, 210], [1000, 325], [2000, 370], [6000, 430], [12000, 480], [16000, 520], [20000, 550], [27000, 600]] as ReadonlyArray<readonly [number, number]>,
+    /** Absolute Tempo-Obergrenze (km/h) einschließlich Phantom-Turbo und Neon Rush. Hinter dem letzten Stützpunkt steigt das Grundtempo mit der Steigung des letzten Abschnitts weiter, bis diese Grenze erreicht ist. */
+    capKmh: 1000,
     slowFactor: 0.6, slowTau: 0.18,
     /** Phantom-Turbo: Tempofaktor und Ein-/Ausblendzeit. */
     boostFactor: 1.35, boostTau: 0.3,

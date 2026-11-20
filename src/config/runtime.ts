@@ -94,7 +94,7 @@ export interface Field {
 const pk = (k: PickupKey) => PICKUP_LABEL[k];
 export const FIELDS: Field[] = [
   { path: 'tempo.startKmh', label: 'Starttempo', unit: 'km/h', min: 120, max: 320, step: 5, group: 'tempo', important: true, effect: 'So schnell fährt der Wagen beim Losfahren.' },
-  { path: 'tempo.maxKmh', label: 'Höchstes Grundtempo', unit: 'km/h', min: 300, max: 700, step: 10, group: 'tempo', important: true, effect: 'Das Tempo, bei dem die Kurve endet und die Fahrt gleichmäßig weitergeht.' },
+  { path: 'tempo.maxKmh', label: 'Höchstes Grundtempo', unit: 'km/h', min: 300, max: 1000, step: 10, group: 'tempo', important: true, effect: 'Das Tempo, bei dem die Kurve endet. Danach steigt es mit der letzten Steigung langsam weiter, bis 1000 km/h erreicht sind.' },
   { path: 'tempo.distToMaxKm', label: 'Strecke bis zum Höchsttempo', unit: 'km', min: 8, max: 45, step: 1, group: 'tempo', important: true, effect: 'Kürzere Strecke = das Spiel wird schneller schwer.' },
   { path: 'tempo.density', label: 'Begegnungsdichte', unit: '×', min: 0.6, max: 1.6, step: 0.05, group: 'tempo', important: true, effect: 'Wie dicht Ausweichstellen aufeinander folgen (1 = bisher).' },
   { path: 'traffic.minGap', label: 'Mindestabstand dichter Ausweichstellen', unit: 's', min: 0.4, max: 2.5, step: 0.05, group: 'traffic', effect: 'Kleinster zeitlicher Abstand zwischen zwei Ausweichstellen.' },

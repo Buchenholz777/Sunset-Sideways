@@ -88,7 +88,8 @@ describe('Jeder Regler hat beobachtbare Wirkung im Spiel', () => {
     applyConfig(cfg((c) => { c.tempo.startKmh = 150; c.tempo.maxKmh = 500; c.tempo.distToMaxKm = 10; }));
     expect(speedAtDist(0)).toBeCloseTo(150, 5);
     expect(speedAtDist(10000)).toBeCloseTo(500, 5);
-    expect(speedAtDist(30000)).toBeCloseTo(500, 5);
+    expect(speedAtDist(30000)).toBeGreaterThan(500);       // dahinter steigt das Tempo mit der letzten Steigung weiter
+    expect(speedAtDist(30000)).toBeLessThanOrEqual(1000);
     expect(speedAtDist(5000)).toBeGreaterThan(300);
     expect(knotsFor(DEFAULT_CONFIG.tempo)).toEqual([[0, 210], [1000, 325], [2000, 370], [6000, 430], [12000, 480], [16000, 520], [20000, 550], [27000, 600]]);
     const sim = new Sim(7, {});

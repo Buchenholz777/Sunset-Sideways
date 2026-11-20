@@ -192,7 +192,7 @@ export class Sim {
     this.boostF += ((this.boostT > 0 ? B.speed.boostFactor : 1) - this.boostF) * (1 - Math.exp(-dt / B.speed.boostTau));
     this.lateral(dt, inp);
     this.rushF += ((this.style.rushActive ? B.style.rush.speedMult : 1) - this.rushF) * (1 - Math.exp(-dt / B.style.rush.speedTau));
-    this.speedKmh = speedAtDist(this.s) * this.slowF * Math.min(1.4, this.boostF * this.rushF);   // Phantom-Turbo und Rush stapeln nur bis ×1,4
+    this.speedKmh = Math.min(B.speed.capKmh, speedAtDist(this.s) * this.slowF * Math.min(1.4, this.boostF * this.rushF));   // Phantom-Turbo und Rush stapeln nur bis ×1,4; absolute Obergrenze 1000 km/h
     const vm = this.speedKmh / 3.6;
 
     const ds = vm * dt;

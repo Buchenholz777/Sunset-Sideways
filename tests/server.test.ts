@@ -219,7 +219,7 @@ describe('Konfiguration, Veröffentlichung, Ereignis', () => {
     expect((await pub()).id).toBe('1');                                                                                   // nichts geändert
     await setDraft((d) => { (d.tempo as unknown as Record<string, number>).maxKmh = 99999; });
     st = await (await a.req('GET', '/api/admin/settings')).json() as never;
-    expect((st as unknown as { draft: typeof DEFAULT_CONFIG }).draft.tempo.maxKmh).toBe(700);
+    expect((st as unknown as { draft: typeof DEFAULT_CONFIG }).draft.tempo.maxKmh).toBe(1000);
   });
 
   it('Kombination hohes Tempo + dichter Verkehr + niedrige Empfindlichkeit wird am Regler gemeldet und blockiert', async () => {
