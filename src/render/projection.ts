@@ -24,15 +24,34 @@ export interface Layout {
  * Interne Pixelauflösung (ganzzahlig skaliert) und Projektionsparameter. Quer- und Hochformat
  * werden getrennt komponiert; im Hochformat bestimmt die Breite die Brennweite.
  */
+
+/** Zielgröße der kurzen Seite des Zeichenpuffers (Bildpunkte) und Obergrenze der Gesamtpixel (Welt-Canvas). */
+export const RENDER = { shortLandscape: 540, shortPortrait: 480, maxPixels: 520_000, fxMaxPixels: 4_200_000 } as const;
+
+/**
+ * Verhältnis CSS-Pixel : Puffer-Pixel (stufenlos, ≥ 1). Kleine Displays laufen 1:1; große Fenster rendern bis ca. 960 × 540 (statt zuvor
+ * ganzzahlig 640 × 360) und bleiben unter dem Pixelbudget. Kontinuierlich in der Fenstergröße: keine Sprünge an Schwellen.
+ */
+export function renderScale(cssW: number, cssH: number): number {
+  const portrait = cssH > cssW;
+  const short = Math.min(cssW, cssH);
+  let s = Math.max(1, short / (portrait ? RENDER.shortPortrait : RENDER.shortLandscape));
+  const px = (cssW * cssH) / (s * s);
+  if (px > RENDER.maxPixels) s *= Math.sqrt(px / RENDER.maxPixels);
+  return Math.round(s * 1000) / 1000;
+}
+
+/** true, wenn das Verhältnis (fast) ganzzahlig ist → scharfe Pixelkanten ohne Schwebungen; sonst weiche Skalierung. */
+export const isCrispScale = (s: number): boolean => Math.abs(s - Math.round(s)) < 0.02;
+
 export function makeLayout(cssW: number, cssH: number): Layout {
   const portrait = cssH > cssW;
-  const target = portrait ? 220 : 300; // feinere Weltauflösung als zuvor (weniger grobe Pixelblöcke)
-  const scale = Math.max(1, Math.floor(Math.min(cssW, cssH) / target));
+  const scale = renderScale(cssW, cssH);
   const w = Math.max(80, Math.round(cssW / scale));
   const h = Math.max(80, Math.round(cssH / scale));
   // Hochformat: Horizont etwas tiefer → weniger Tiefenstreckung nahe am Wagen (Wagen und Hindernisse wirken nicht in die Länge gezogen, Abstände stimmen mit der Kollisionsbox überein)
-  const hy = Math.round(h * (portrait ? 0.49 : 0.34));
-  const gy = Math.round(h * (portrait ? 0.81 : 0.82));
+  const hy = Math.round(h * ((portrait ? 0.49 : 0.34)));
+  const gy = Math.round(h * ((portrait ? 0.81 : 0.82)));
   const Hv = (gy - hy) * CAM_BACK;
   // Hochformat: Straße füllt die Bildbreite (Ränder leicht angeschnitten) – sonst wirkt alles schmal und in die Länge gezogen
   const fx = Math.min(0.87 * h, ((portrait ? 1.0 : 0.85) * w * CAM_BACK) / (2 * B.road.halfWidth));

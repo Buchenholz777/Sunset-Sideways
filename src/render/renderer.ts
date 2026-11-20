@@ -3,7 +3,7 @@ import { footprintCorners, obstacleFootprint, pickupFootprint, playerFootprint, 
 import type { Road } from '../sim/road';
 import { KINDS, type Gate, type Obstacle, type Pickup, type PickupType } from '../sim/world';
 
-import { CAM_BACK, DRAW, chaseSlope, depthEff, makeLayout, type Layout } from './projection';
+import { CAM_BACK, DRAW, RENDER, chaseSlope, depthEff, isCrispScale, makeLayout, type Layout } from './projection';
 import { applyLight, decoType, decoX, drawDeco, LANDMARK_FAR, LANDMARK_SCALE, LANDMARK_TYPES, landmarksAhead, drawMoon, drawMountains, drawPlane, drawPortal, drawSkyline, drawSky, drawSun, hash, lightT, mixHex, PORTAL_Z, stageAt } from './scenery';
 import { CHUNK, drawPed, pedsInChunk } from './people';
 import { computeRows } from './rows';
@@ -122,12 +122,14 @@ export class Renderer {
 
   resize(cssW: number, cssH: number): void {
     this.cssW = cssW;
-    const dpr = Math.min(3, Math.max(1, (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1)));
+    let dpr = Math.min(3, Math.max(1, (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1)));
+    dpr = Math.min(dpr, Math.max(1, Math.sqrt(RENDER.fxMaxPixels / Math.max(1, cssW * cssH))));      // Pixelbudget der Effektebene
     if (this.fxCanvas) { const w = Math.round(cssW * dpr), h = Math.round(cssH * dpr); if (this.fxCanvas.width !== w || this.fxCanvas.height !== h) { this.fxCanvas.width = w; this.fxCanvas.height = h; this.fxDirty = true; } }
     const L = makeLayout(cssW, cssH);
     if (this.canvas.width !== L.w || this.canvas.height !== L.h) { this.canvas.width = L.w; this.canvas.height = L.h; }
     this.L = L;
     gfx.u = L.u;
+    this.canvas.style.imageRendering = isCrispScale(L.scale) ? 'pixelated' : 'auto';      // gebrochene Skalierung weich, ganzzahlige scharf
   }
 
   /** Lokales Feedback am Wagen (Partikel begrenzt). */
