@@ -334,6 +334,12 @@ function drawBox(env: LotEnv, side: number, p: Extract<Prim, { t: 'box' }>, dNea
     fillPoly(env, edge, faceCol(env, p.trim, 'road', side, 1 - fog));
     if (env.lights > 0.2 && p.neon) { const glow: V3[] = [[x0, p.z0, p.h1 - t * 2], [x0, p.z1, p.h1 - t * 2], [x0, p.z1, p.h1 - t], [x0, p.z0, p.h1 - t]]; fillPoly(env, glow, p.neon, env.lights); }
   }
+  // Tiefe: Schlagschatten unter der Dachkante und dunkler Sockel – gliedern große Flächen in Dach, Wand und Fuß (günstig: zwei Flächen je Baukörper)
+  if (p.h1 - p.h0 >= 3 && dNear < 260) {
+    const t = p.trim ? Math.min(0.35, (p.h1 - p.h0) * 0.12) : 0, sh = Math.min(0.9, (p.h1 - p.h0) * 0.12);
+    fillPoly(env, [[x0, p.z0, p.h1 - t - sh], [x0, p.z1, p.h1 - t - sh], [x0, p.z1, p.h1 - t], [x0, p.z0, p.h1 - t]], '#120d2a', 0.22);
+    if (p.h0 < 0.5) fillPoly(env, [[x0, p.z0, p.h0], [x0, p.z1, p.h0], [x0, p.z1, p.h0 + 0.7], [x0, p.z0, p.h0 + 0.7]], '#120d2a', 0.28);
+  }
   // Lisenen: wenige dunklere senkrechte Bänder gliedern große Fassaden (nah und nur bei voller Qualität)
   if (p.bands && dNear < 220 && env.quality < 1) {
     const n = p.bands, span = p.z1 - p.z0, bw = Math.min(1.6, span / (n * 4 + 2));
@@ -364,6 +370,10 @@ function drawBox(env: LotEnv, side: number, p: Extract<Prim, { t: 'box' }>, dNea
         const hb = p.h0 + (r + (rows === 1 ? 0.28 : 0.35)) * (wh / rows), hh = (wh / rows) * (rows === 1 ? 0.4 : 0.36);
         const lit = env.lights > 0.3 && hash(Math.floor(p.z0 * 3) + c * 7 + r * 13 + Math.floor(p.u0)) > 0.4;
         fillPoly(env, [[x0, zz, hb], [x0, zz + zw, hb], [x0, zz + zw, hb + hh], [x0, zz, hb + hh]], lit ? '#ffd36b' : faceCol(env, '#2a2a52', 'road', side, 1 - fog));
+        if (dNear < 120) {   // Fensterbank (helle Unterkante) und Laibungsschatten oben: Fenster wirken eingelassen
+          fillPoly(env, [[x0, zz - 0.15, hb - 0.14], [x0, zz + zw + 0.15, hb - 0.14], [x0, zz + zw + 0.15, hb], [x0, zz - 0.15, hb]], faceCol(env, mixHex(p.col, '#ffffff', 0.35), 'road', side, 1 - fog));
+          fillPoly(env, [[x0, zz, hb + hh], [x0, zz + zw, hb + hh], [x0, zz + zw, hb + hh + 0.12], [x0, zz, hb + hh + 0.12]], '#120d2a', 0.3);
+        }
       }
     }
   }

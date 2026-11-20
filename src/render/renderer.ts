@@ -277,6 +277,8 @@ export class Renderer {
     P.curb = mixHex('#b99a9c', '#7c6ca8', lt); P.seam = mixHex('#5a4452', '#271f40', lt);
     P.a1 = mixHex('#4f465e', '#262944', lt); P.a2 = mixHex('#554b63', '#2b2e4c', lt);
     P.haze = mixHex('#c27a8a', '#4a2070', lt);
+    // ruhigerer Bodenfluss: die Wechselfarben von Gelände, Gehweg und Asphalt liegen enger beieinander (weniger auffällige Querbänder)
+    P.g2 = mixHex(P.g1, P.g2, 0.4); P.w2 = mixHex(P.w1, P.w2, 0.45); P.a2 = mixHex(P.a1, P.a2, 0.45);
     drawSky(ctx, L, lt, this.clock, this.reducedMotion);
     drawSun(ctx, L, v.s);
     drawMoon(ctx, v.s, L, lt);
