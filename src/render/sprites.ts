@@ -82,6 +82,8 @@ function drawBody(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: 
   const W = def.w;
   const kk = Math.max(k, ((kind === 'baken' ? 3.5 : 4.5) * gfx.u) / W);
   const L = (x0: number, top: number, w: number, h: number, c: string) => rect(ctx, sx + (x0 - W / 2) * kk, sy - top * kk, w * kk, h * kk, c);
+  /** Polygon in Fahrzeugkoordinaten (x von links, Höhe über Boden), ohne Rundung: weiche, saubere Schrägen. */
+  const poly = (pts: number[][], c: string) => { ctx.fillStyle = c; ctx.beginPath(); pts.forEach(([x, t], i) => { const px = sx + (x - W / 2) * kk, py = sy - t * kk; if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); }); ctx.closePath(); ctx.fill(); };
   // dunkle Bodenauflage
   L(-0.2, 0.12, W + 0.4 + 1.6 * gfx.sun, 0.3, 'rgba(0,0,10,0.6)');
   if (kind === 'baken') {
@@ -130,6 +132,9 @@ function drawBody(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: 
     wheels(); L(0.06, 0.5, 0.42, 0.4, '#0a0a14'); L(W - 0.48, 0.5, 0.42, 0.4, '#0a0a14');
     L(0, 3.6, W, 2.95, P.body);
     L(0, 3.6, W, 0.1, P.light);
+    L(0, 3.5, 0.1, 2.85, P.light); L(W - 0.1, 3.5, 0.1, 2.85, P.dark); L(0, 0.78, W, 0.12, P.dark);   // Lichtkante links, Schattenkante rechts, Sockel
+    L(0.1, 0.46, 0.34, 0.3, '#06060c'); L(W - 0.44, 0.46, 0.34, 0.3, '#06060c');                   // Schmutzfänger
+    L(0.3, 0.72, W - 0.6, 0.1, '#6a6a7a');                                                           // Stoßstange
     L(W / 2 - 0.02, 3.4, 0.04, 2.6, P.dark);
     L(0.12, 2.1, 0.08, 0.5, P.dark); L(W - 0.2, 2.1, 0.08, 0.5, P.dark);
     for (let i = 0; i < 8; i++) L((i * W) / 8, 1.0, W / 8, 0.2, i % 2 ? '#ffd23a' : '#d8332b');
@@ -143,8 +148,9 @@ function drawBody(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: 
     L(0, 0.88, W, 0.6, P.body); L(0, 0.88, W, 0.07, P.light);
     L(0.05, 0.34, W - 0.1, 0.12, '#15152a');
     for (let i = 0; i < 8; i++) L(0.04 + (i * (W - 0.08)) / 8, 0.66, (W - 0.08) / 8, 0.1, i % 2 ? '#101018' : '#f4f1e6');   // Schachbrettstreifen
-    L(0.2, 1.42, W - 0.4, 0.55, P.dark); L(0.2, 1.42, W - 0.4, 0.06, P.light);
-    L(0.3, 1.36, W - 0.6, 0.42, '#0e1530');
+    poly([[0.2, 1.42], [W - 0.2, 1.42], [W - 0.32, 1.97], [0.32, 1.97]], P.dark); L(0.32, 1.95, W - 0.64, 0.05, P.light);
+    poly([[0.3, 1.46], [W - 0.3, 1.46], [W - 0.4, 1.9], [0.4, 1.9]], '#0e1530'); poly([[0.4, 1.8], [0.62, 1.8], [0.52, 1.9], [0.4, 1.9]], '#3a4e86');   // Heckscheibe mit Glanzecke
+    L(0, 0.88, 0.07, 0.5, P.light); L(W - 0.07, 0.88, 0.07, 0.5, P.dark); L(W / 2 - 0.22, 0.58, 0.44, 0.13, '#f4f1e6'); L(W / 2 - 0.22, 0.46, 0.44, 0.02, '#1a1a2a');
     tail(0.86, 0.2, 0.34);
     // Dachleuchte: gelber Kasten mit hellem Rand, eigenes Licht (kein Pickup-Symbol)
     L(W / 2 - 0.3, 1.62, 0.6, 0.2, '#fff3a0'); L(W / 2 - 0.3, 1.62, 0.6, 0.05, '#ffffff');
@@ -158,7 +164,8 @@ function drawBody(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: 
     L(0.05, 0.34, W - 0.1, 0.12, '#15152a');
     L(0.12, 1.05, W - 0.24, 0.3, '#1c0f26');
     L(0.28, 1.2, 0.24, 0.32, P.dark); L(W - 0.52, 1.2, 0.24, 0.32, P.dark);
-    L(0.1, 1.28, W - 0.2, 0.05, '#0e1530');
+    poly([[0.1, 1.28], [W - 0.1, 1.28], [W - 0.18, 1.36], [0.18, 1.36]], '#0e1530');   // geneigter Scheibenrahmen
+    L(0, 0.8, 0.07, 0.5, P.light); L(W - 0.07, 0.8, 0.07, 0.5, P.dark); L(W / 2 - 0.22, 0.52, 0.44, 0.13, '#f4f1e6');
     tail(0.78, 0.17, 0.4);
     return;
   }
@@ -166,8 +173,9 @@ function drawBody(ctx: CanvasRenderingContext2D, kind: ObjKind, sx: number, sy: 
   L(0, 0.9, W, 0.62, P.body); L(0, 0.9, W, 0.07, P.light);
   L(0.05, 0.34, W - 0.1, 0.12, '#15152a');
   const cw = W * 0.78;
-  L((W - cw) / 2, 1.42, cw, 0.52, P.dark); L((W - cw) / 2, 1.42, cw, 0.06, P.light);
-  L((W - cw) / 2 + 0.1, 1.34, cw - 0.2, 0.38, '#0e1530');
+  poly([[(W - cw) / 2, 1.42], [(W + cw) / 2, 1.42], [(W + cw) / 2 - 0.14, 1.94], [(W - cw) / 2 + 0.14, 1.94]], P.dark); L((W - cw) / 2 + 0.14, 1.92, cw - 0.28, 0.05, P.light);
+  poly([[(W - cw) / 2 + 0.1, 1.46], [(W + cw) / 2 - 0.1, 1.46], [(W + cw) / 2 - 0.2, 1.88], [(W - cw) / 2 + 0.2, 1.88]], '#0e1530'); poly([[(W - cw) / 2 + 0.2, 1.78], [(W - cw) / 2 + 0.42, 1.78], [(W - cw) / 2 + 0.32, 1.88], [(W - cw) / 2 + 0.2, 1.88]], '#3a4e86');
+  L(0, 0.9, 0.07, 0.5, P.light); L(W - 0.07, 0.9, 0.07, 0.5, P.dark); L(W / 2 - 0.22, 0.58, 0.44, 0.13, '#f4f1e6');
   tail(0.88, 0.17, 0.42);
   L(W / 2 - 0.25, 0.7, 0.5, 0.14, P.dark);
 }
