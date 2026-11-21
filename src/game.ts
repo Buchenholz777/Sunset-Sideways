@@ -162,6 +162,8 @@ export class Game {
         give: (shield: number, slow = 0, magnet = 0, glide = 0, boost = 0, guide = 0) => { if (this.sim) { this.sim.shieldT = shield; this.sim.slowT = slow; this.sim.magnetT = magnet; if (glide > 0) this.sim.glideT = glide; this.sim.boostT = boost; this.sim.guideT = guide; } },
         scene: (t: number | null) => { this.qaSceneT = t; this.render(1 / 60); },
         /** Simulation um sec Sekunden vorstellen (feste Schritte), anschließend ein Bild zeichnen. target = absolute Querposition q (m). */
+        /** Nur Tests: aktuelle Streckenumgebung (Art, Stärke 0…1) und Position. */
+        route: () => ({ ...this.renderer.routeNow, s: this.sim?.s ?? 0 }),
         advance: (sec: number, target: number | null = null, dir = 0) => this.qaAdvance(sec, target, dir),
         setQ: (q: number) => { if (this.sim) this.sim.q = q; },
         /** Nur Tests: Generator anhalten und die Strecke leeren. */
@@ -690,7 +692,7 @@ export class Game {
         shieldFrac: sim.shieldT / B.effects.shield, rush: sim.style.rushActive, gates: sim.gates, obstacles: sim.obstacles, pickups: sim.pickups,
         crash: sim.crash ? { id: sim.crash.id } : null, running, sceneT: this.qaSceneT ?? sim.t - sim.t0, seed: sim.seed, finishZ: this.mode === 'sprint' ? SPRINT_FINISH_M : undefined,
       };
-      if (running) { this.sound.setLight(lightT(sim.s)); this.sound.update(sim.speedKmh, false, 0); }
+      if (running) { this.sound.setLight(lightT(sim.s)); this.sound.update(sim.speedKmh, false, 0); this.sound.setEnv(this.renderer.routeNow.kind, this.renderer.routeNow.k); } else this.sound.setEnv(null, 0);
     }
     this.renderer.draw(v, this.state.phase === 'paused' && !this.qaHook ? 0 : frameDt);
     if (sim && this.state.phase !== 'preview') this.updateHud(sim);

@@ -152,29 +152,48 @@ function drawSign(ctx: CanvasRenderingContext2D, text: string, col: string, fram
 
 // -------------------------------------------------------------------------- Spielautomat (Meter, Ursprung Mitte, 1,3 × 2,3 m; reine Dekoration)
 const REEL = ['#ff3b3b', '#ffd23a', '#2ee6d6', '#ff4fd8', '#ffffff', '#7fe36a'];
+/** Gehäuse, Fenster, Bedienfeld und Hebel einmal in ein kleines Bild gezeichnet und wiederverwendet (statt ~30 Zeichenaufrufe je Automat und Bild). */
+let slotSprite: HTMLCanvasElement | null = null;
+const SLOT_PX = 56;
+function slotBody(c: CanvasRenderingContext2D): void {
+  c.fillStyle = '#c9962e'; c.fillRect(-0.65, -1.15, 1.3, 2.3);                       // goldenes Gehäuse
+  c.fillStyle = '#e8c25a'; c.fillRect(-0.65, -1.15, 1.3, 0.08); c.fillRect(-0.65, -1.15, 0.07, 2.3);
+  c.fillStyle = '#4a1a8a'; c.fillRect(-0.55, -1.05, 1.1, 0.42);                       // violetter Aufsatz
+  c.fillStyle = '#0c0a1e'; c.fillRect(-0.5, -0.5, 1, 0.78);                           // Walzenfenster
+  c.fillStyle = '#fff3d0'; c.globalAlpha = 0.2; c.fillRect(-0.5, -0.5, 1, 0.78); c.globalAlpha = 1;
+  for (let r = 0; r < 3; r++) { c.fillStyle = '#0c0a1e'; c.fillRect(-0.47 + r * 0.32, -0.47, 0.3, 0.72); }
+  c.fillStyle = '#7a1f3a'; c.fillRect(-0.55, 0.36, 1.1, 0.26);                        // Bedienfeld
+  c.fillStyle = '#ff3b3b'; c.fillRect(-0.4, 0.43, 0.2, 0.12); c.fillStyle = '#2ee6d6'; c.fillRect(-0.1, 0.43, 0.2, 0.12); c.fillStyle = '#ffd23a'; c.fillRect(0.2, 0.43, 0.2, 0.12);
+  c.fillStyle = '#12091f'; c.fillRect(-0.45, 0.72, 0.9, 0.32);                        // Ausgabefach
+  c.strokeStyle = '#d8d8e8'; c.lineWidth = 0.07; c.lineCap = 'round';                // Hebel (Seite zur Straße)
+  c.beginPath(); c.moveTo(0.65, -0.1); c.lineTo(0.88, -0.55); c.stroke();
+  c.fillStyle = '#ff2a2a'; c.beginPath(); c.arc(0.88, -0.58, 0.1, 0, 6.3); c.fill();
+  c.globalAlpha = 0.18; c.fillStyle = '#ffd9a0'; c.fillRect(-0.55, -0.5, 0.18, 0.78); c.globalAlpha = 1;   // Scheibenreflex
+}
+function getSlotSprite(): HTMLCanvasElement | null {
+  if (slotSprite) return slotSprite;
+  if (typeof document === 'undefined') return null;
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(1.8 * SLOT_PX); cv.height = Math.round(2.4 * SLOT_PX);        // Platz für den Hebel rechts
+  const c = cv.getContext('2d');
+  if (!c) return null;
+  c.translate(0.5 * SLOT_PX + 0.65 * SLOT_PX, 1.2 * SLOT_PX); c.scale(SLOT_PX, SLOT_PX);
+  slotBody(c);
+  slotSprite = cv;
+  return cv;
+}
+/** Spielautomat (Meter, Ursprung Mitte, 1,3 × 2,3 m): nah mit laufenden Walzen und blinkendem Aufsatz, fern nur das Gehäusebild. Reine Dekoration. */
 function drawSlot(ctx: CanvasRenderingContext2D, seed: number, near: boolean, clock: number, reduced: boolean): void {
-  ctx.fillStyle = '#c9962e'; ctx.fillRect(-0.65, -1.15, 1.3, 2.3);                       // goldenes Gehäuse
-  ctx.fillStyle = '#e8c25a'; ctx.fillRect(-0.65, -1.15, 1.3, 0.08); ctx.fillRect(-0.65, -1.15, 0.07, 2.3);
-  ctx.fillStyle = '#4a1a8a'; ctx.fillRect(-0.55, -1.05, 1.1, 0.42);                       // violetter Aufsatz
+  const sp = getSlotSprite();
+  if (sp) ctx.drawImage(sp, -0.65 - 0.5, -1.2, 1.8, 2.4); else { ctx.save(); slotBody(ctx); ctx.restore(); }
+  if (!near) return;
   const on = reduced ? 0 : Math.floor(clock * 3 + seed) % 3;
   ctx.fillStyle = '#ffe27a'; for (let i = 0; i < 3; i++) { ctx.globalAlpha = i === on ? 1 : 0.45; ctx.fillRect(-0.4 + i * 0.4, -0.93, 0.2, 0.16); } ctx.globalAlpha = 1;
-  ctx.fillStyle = '#0c0a1e'; ctx.fillRect(-0.5, -0.5, 1, 0.78);                           // Walzenfenster
-  ctx.fillStyle = '#fff3d0'; ctx.globalAlpha = 0.2; ctx.fillRect(-0.5, -0.5, 1, 0.78); ctx.globalAlpha = 1;
   for (let r = 0; r < 3; r++) {
     const rx = -0.5 + 0.03 + r * 0.32;
-    ctx.fillStyle = '#0c0a1e'; ctx.fillRect(rx, -0.47, 0.3, 0.72);
     const ph = reduced ? 0.4 : ((clock * (0.5 + 0.17 * r) + seed * 0.37 + r * 0.31) % 1);
-    const sy = -0.4 + ph * 0.55;
-    ctx.fillStyle = REEL[(seed + r * 2) % REEL.length]; ctx.beginPath(); ctx.arc(rx + 0.15, sy, 0.11, 0, 6.3); ctx.fill();
-    if (near) { ctx.fillStyle = REEL[(seed + r * 3 + 1) % REEL.length]; ctx.fillRect(rx + 0.07, sy + 0.2, 0.16, 0.1); }
+    ctx.fillStyle = REEL[(seed + r * 2) % REEL.length]; ctx.beginPath(); ctx.arc(rx + 0.15, -0.4 + ph * 0.55, 0.11, 0, 6.3); ctx.fill();
   }
-  ctx.fillStyle = '#7a1f3a'; ctx.fillRect(-0.55, 0.36, 1.1, 0.26);                        // Bedienfeld
-  if (near) { ctx.fillStyle = '#ff3b3b'; ctx.fillRect(-0.4, 0.43, 0.2, 0.12); ctx.fillStyle = '#2ee6d6'; ctx.fillRect(-0.1, 0.43, 0.2, 0.12); ctx.fillStyle = '#ffd23a'; ctx.fillRect(0.2, 0.43, 0.2, 0.12); }
-  ctx.fillStyle = '#12091f'; ctx.fillRect(-0.45, 0.72, 0.9, 0.32);                        // Ausgabefach
-  ctx.strokeStyle = '#d8d8e8'; ctx.lineWidth = 0.07; ctx.lineCap = 'round';              // Hebel (Seite zur Straße)
-  ctx.beginPath(); ctx.moveTo(0.65, -0.1); ctx.lineTo(0.88, -0.55); ctx.stroke();
-  ctx.fillStyle = '#ff2a2a'; ctx.beginPath(); ctx.arc(0.88, -0.58, 0.1, 0, 6.3); ctx.fill();
-  ctx.globalAlpha = 0.18; ctx.fillStyle = '#ffd9a0'; ctx.fillRect(-0.55, -0.5, 0.18, 0.78); ctx.globalAlpha = 1;   // Scheibenreflex
 }
 export { drawSlot };
 
@@ -210,6 +229,8 @@ function drawCell(env: LotEnv, st: EncState, i: number, z0: number, z1: number):
     // Pilaster an der Zellgrenze
     strip(env, x, z0, z0 + 0.7, 0, roofH, shade(look.pilaster, dN), casino ? 0.55 : 1);
   }
+  // Ferne Zellen (> 200 m) nur als Hülle: Decke, Wände, Lichtlinien – Rippen, Lichtbänder, Säulen und Automaten wären dort nur Flimmern und kosten Zeit
+  if (dN > 200 || (env.quality > 1 && dN > 120)) return;
   // Deckenrippe und Lichtleisten (längs, abwechselnd Farben)
   poly(env, [[-WX, z0, roofH - 0.05], [WX, z0, roofH - 0.05], [WX, z0 + 1.6, roofH - 0.05], [-WX, z0 + 1.6, roofH - 0.05]], shade(look.rib, dN));
   poly(env, [[-WX, z0, roofH - 0.06], [WX, z0, roofH - 0.06], [WX, z0 + 0.14, roofH - 0.06], [-WX, z0 + 0.14, roofH - 0.06]], shade(i % 2 ? look.led2 : look.led1, dN * 0.7), 0.85);
@@ -217,10 +238,10 @@ function drawCell(env: LotEnv, st: EncState, i: number, z0: number, z1: number):
     const col = (i + b + 3) % 3 === 0 ? look.led1 : (i + b + 3) % 3 === 1 ? look.led2 : st.neon.a;
     const x = b * 3.9;
     poly(env, [[x - 0.17, z0 + 1.5, roofH - 0.04], [x + 0.17, z0 + 1.5, roofH - 0.04], [x + 0.17, z1 - 1.5, roofH - 0.04], [x - 0.17, z1 - 1.5, roofH - 0.04]], shade(col, dN * 0.6));
-    if (near && env.quality < 2) poly(env, [[x - 0.7, z0 + 1.2, roofH - 0.04], [x + 0.7, z0 + 1.2, roofH - 0.04], [x + 0.7, z1 - 1.2, roofH - 0.04], [x - 0.7, z1 - 1.2, roofH - 0.04]], col, 0.12);
+    if (dN < 60 && env.quality < 1) poly(env, [[x - 0.7, z0 + 1.2, roofH - 0.04], [x + 0.7, z0 + 1.2, roofH - 0.04], [x + 0.7, z1 - 1.2, roofH - 0.04], [x - 0.7, z1 - 1.2, roofH - 0.04]], col, 0.12);
   }
   // Bodenreflexe: dezenter Farbschleier, die Fahrbahnmarkierungen bleiben darunter lesbar
-  poly(env, [[-B_HALF, z0, 0], [B_HALF, z0, 0], [B_HALF, z1, 0], [-B_HALF, z1, 0]], (i % 2 ? look.led2 : look.led1), casino ? 0.06 : 0.07);
+  if (dN < 90) poly(env, [[-B_HALF, z0, 0], [B_HALF, z0, 0], [B_HALF, z1, 0], [-B_HALF, z1, 0]], (i % 2 ? look.led2 : look.led1), casino ? 0.06 : 0.07);
 
   if (casino) {
     // Säulen vor der Wand (außerhalb der Fahrspuren) und Spielautomaten in den Nischen
@@ -239,8 +260,8 @@ function drawCell(env: LotEnv, st: EncState, i: number, z0: number, z1: number):
         if (zm + 0.7 > z1 || zm - env.zc < 6) continue;
         const f = frame(env, mx, zm, 1.15, side);
         if (!f) continue;
-        const nearM = dN < 90 && env.quality < 2;
-        if (dN > 300 || (env.quality > 1 && dN > 120)) { strip(env, mx, zm - 0.6, zm + 0.6, 0, 2.3, shade('#c9962e', dN)); continue; }
+        const nearM = dN < 70 && env.quality < 2;
+        if (dN > 190 || (env.quality > 0 && dN > 110)) { if (dN < 330) strip(env, mx, zm - 0.6, zm + 0.6, 0, 2.3, shade('#c9962e', dN)); continue; }
         ctx.save(); ctx.transform(f[0], f[1], f[2], f[3], f[4], f[5]);
         drawSlot(ctx, (i * 7 + m * 3 + (side > 0 ? 1 : 0)) | 0, nearM, env.clock, env.reduced);
         ctx.restore();

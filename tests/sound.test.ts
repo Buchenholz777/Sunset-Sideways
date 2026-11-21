@@ -72,3 +72,30 @@ describe('Reifenquietschen', () => {
     expect(() => { s.update(250, false, 0); s.setMuted(true); s.update(250, false, 1); s.stopLoops(); }).not.toThrow();
   });
 });
+
+describe('Streckenumgebung (Tunnel-Hall, Casino-Ambience)', () => {
+  it('baut die Knoten einmal auf, stapelt bei vielen Aufrufen nichts und baut nach dem Ereignis ab', () => {
+    const { FakeCtx, counts } = fakeAudio();
+    vi.stubGlobal('window', { AudioContext: FakeCtx });
+    const s = new Sound();
+    s.unlock();
+    const o0 = counts.osc, b0 = counts.src;
+    for (let i = 0; i < 300; i++) s.setEnv('PALM_TUNNEL', 0.2 + (i % 5) * 0.2);
+    expect(counts.osc - o0).toBe(2); expect(counts.src - b0).toBe(1);
+    s.setEnv(null, 0);                                   // Ausfahrt vorbei
+    s.setEnv('CASINO_INTERIOR', 1);                      // nächstes Ereignis: neu aufgebaut, nicht doppelt
+    expect(counts.osc - o0).toBe(4);
+    for (let i = 0; i < 50; i++) s.setEnv('CASINO_INTERIOR', 1);
+    expect(counts.osc - o0).toBeGreaterThanOrEqual(4);
+  });
+  it('Casino-Automatenklänge entfallen bei stummem Ton; ohne Web Audio bleibt es ein No-Op', () => {
+    expect(() => new Sound().setEnv('CASINO_INTERIOR', 1)).not.toThrow();
+    const { FakeCtx, counts } = fakeAudio();
+    vi.stubGlobal('window', { AudioContext: FakeCtx });
+    const s = new Sound();
+    s.unlock(); s.setMuted(true);
+    const before = counts.osc;
+    for (let i = 0; i < 20; i++) s.setEnv('CASINO_INTERIOR', 1);
+    expect(counts.osc - before).toBe(2);                 // nur die Dauerknoten, keine einzelnen Töne
+  });
+});

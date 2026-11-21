@@ -444,6 +444,56 @@ export class Sound {
     }
   }
 
+  // ---------- Streckenumgebung: Tunnel-Hall und Casino-Ambience (dezent, folgt den Soundeinstellungen) ----------
+  private envN: { send: GainNode; hum: GainNode; amb: GainNode; osc: OscillatorNode[]; src: AudioBufferSourceNode } | null = null;
+  private envDingT = 0;
+  /**
+   * Umgebungsklang nach Streckenereignis (kind: 'PALM_TUNNEL' | 'CASINO_INTERIOR' | null) und Stärke k (0…1): kurzer, weicher Hall auf Motor und Effekten,
+   * Tunnel mit leisem elektrischem Summen, Casino mit gedämpftem Stimmengewirr und seltenen, hellen Automatenklängen. Weiche Übergänge, kein Browser-Autoplay vor der ersten Eingabe.
+   */
+  setEnv(kind: string | null, k: number): void {
+    const c = this.ready();
+    if (!c || !this.engBus || !this.sfxBus || !this.master) return;
+    if ((!kind || k < 0.01) && !this.envN) return;
+    const t = c.currentTime;
+    if (!this.envN) {
+      const send = c.createGain(); send.gain.value = 0;
+      const d1 = c.createDelay(0.5); d1.delayTime.value = 0.083;
+      const d2 = c.createDelay(0.5); d2.delayTime.value = 0.131;
+      const fb = c.createGain(); fb.gain.value = 0.42;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2600;
+      this.engBus.connect(send); this.sfxBus.connect(send);
+      send.connect(d1); send.connect(d2); d1.connect(fb); d2.connect(fb); fb.connect(d1); fb.connect(d2); d1.connect(lp); d2.connect(lp); lp.connect(this.master);
+      const hum = c.createGain(); hum.gain.value = 0;
+      const o1 = c.createOscillator(); o1.type = 'sine'; o1.frequency.value = 55;
+      const o2 = c.createOscillator(); o2.type = 'triangle'; o2.frequency.value = 110.7;
+      o1.connect(hum); o2.connect(hum); hum.connect(this.master); o1.start(); o2.start();
+      const amb = c.createGain(); amb.gain.value = 0;
+      const src = c.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+      const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 700; bp.Q.value = 0.7;
+      src.connect(bp).connect(amb).connect(this.master); src.start();
+      this.envN = { send, hum, amb, osc: [o1, o2], src };
+    }
+    const E = this.envN, tun = kind === 'PALM_TUNNEL' ? k : 0, cas = kind === 'CASINO_INTERIOR' ? k : 0;
+    E.send.gain.setTargetAtTime(0.2 * tun + 0.1 * cas, t, 0.15);
+    E.hum.gain.setTargetAtTime(0.014 * tun, t, 0.2);
+    E.amb.gain.setTargetAtTime(0.012 * cas, t, 0.25);
+    // Casino: gelegentlich ein heller, leiser Automatenklang (Zufallsabstand 1–3 s, nie bei abgeschaltetem Ton)
+    if (cas > 0.4 && !this.muted && t > this.envDingT) {
+      this.envDingT = t + 1 + Math.random() * 2;
+      const f = [1568, 1976, 2349, 1319][Math.floor(Math.random() * 4)];
+      this.note(f, t, 0.18, 'sine', 0.018 * cas, this.sfxBus);
+      this.note(f * 1.5, t + 0.09, 0.14, 'sine', 0.012 * cas, this.sfxBus);
+    }
+    if (!kind && k < 0.01) {                       // Ereignis vorbei: Knoten abbauen (keine dauerhaft laufenden Oszillatoren)
+      const old = this.envN; this.envN = null;
+      old.send.gain.setTargetAtTime(0, t, 0.1);
+      for (const o of old.osc) { try { o.stop(t + 0.6); } catch { /* bereits gestoppt */ } }
+      try { old.src.stop(t + 0.6); } catch { /* bereits gestoppt */ }
+      try { this.engBus.disconnect(old.send); this.sfxBus.disconnect(old.send); } catch { /* ok */ }
+    }
+  }
+
   // ---------- Neon Rush: leises elektrisches Summen während des Rushs ----------
   private rushHum: { g: GainNode; o: OscillatorNode[] } | null = null;
   /** Schaltet das Rush-Summen ein/aus (Sägezahn-Quint mit langsamem Tremolo über den Motor-Bus; folgt den Soundeinstellungen). */
