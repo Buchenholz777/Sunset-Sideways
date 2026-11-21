@@ -1,4 +1,5 @@
 import { B_HALF } from './lotsconst';
+import { BALANCE } from '../config/balance';
 import { rect } from './sprites';
 import { drawDeco, hash, landmarkInLot, mixHex } from './scenery';
 
@@ -8,6 +9,9 @@ import { drawDeco, hash, landmarkInLot, mixHex } from './scenery';
  * Kuppen und Kamerabewegung mit. Koordinaten je Grundstück: u = Abstand ab Bordstein nach außen (m), z = Streckenposition (m).
  */
 export const LOT = 72;
+/** Ab hier gilt die Nacht für Casino-Gebäude (Blaue Stunde, Licht ≈ 0,7 – derselbe Zustand, der Fenster, Sterne und Neon steuert). */
+const CASINO_NIGHT_Z = BALANCE.scenery.keys[2] + 1200;
+export const CASINO_BLDG = ['NEON PALACE', 'SUNSET ROYALE', 'MIDNIGHT CLUB', 'LUCKY LIGHTS'];
 export interface PP { sx: number; sy: number; d: number; k: number }
 export interface LotEnv {
   ctx: CanvasRenderingContext2D;
@@ -24,12 +28,12 @@ export interface LotEnv {
 export interface Item { d: number; draw: () => void }
 
 type Prim =
-  | { t: 'box'; u0: number; u1: number; z0: number; z1: number; h0: number; h1: number; col: string; trim?: string; win?: 'motel' | 'car' | 'shed' | 'tower' | 'garage'; neon?: string; skip?: 'top'; /** senkrechte Lisenen auf der Straßenseite (gliedern große helle Flächen) */ bands?: number }
+  | { t: 'box'; u0: number; u1: number; z0: number; z1: number; h0: number; h1: number; col: string; trim?: string; win?: 'motel' | 'car' | 'shed' | 'tower' | 'garage' | 'casino'; neon?: string; skip?: 'top'; /** senkrechte Lisenen auf der Straßenseite (gliedern große helle Flächen) */ bands?: number }
   | { t: 'gnd'; pts: Array<[number, number]>; col: string; a: number; glow?: boolean }
   | { t: 'line'; u0: number; u1: number; z: number; w: number; col: string; a: number }
   | { t: 'bush'; u: number; z: number; s: number }
   | { t: 'palm'; u: number; z: number; s: number; ph: number }
-  | { t: 'sign'; u: number; z: number; h: number; txt: string; col: string };
+  | { t: 'sign'; u: number; z: number; h: number; txt: string; col: string; /** Breite des Schildes (m), Standard 3,2 */ w?: number };
 
 export interface Lot { prims: Prim[]; detail: boolean }
 
@@ -37,7 +41,7 @@ const CAR_COLS = ['#f2c21a', '#d8453f', '#3f6fb5', '#2fb7a8', '#f0ece0', '#8b93a
 
 // ------------------------------------------------------------------ Grundstücke
 /** Welche Art von Grundstück liegt in Abschnitt i auf dieser Seite? (nur Wüstenrand/Motels und Art-déco-Boulevard) */
-export type LotKind = 'motel' | 'open' | 'shed' | 'pocket' | 'deco' | 'court' | 'garage' | 'plaza' | 'tower' | 'neon' | 'hotel' | 'show' | 'fair' | 'quiet';
+export type LotKind = 'casino' | 'motel' | 'open' | 'shed' | 'pocket' | 'deco' | 'court' | 'garage' | 'plaza' | 'tower' | 'neon' | 'hotel' | 'show' | 'fair' | 'quiet';
 
 export function lotKind(i: number, side: number, stage: number): LotKind {
   const r = (i % 4 + 4) % 4;
@@ -62,6 +66,8 @@ export function lotKind(i: number, side: number, stage: number): LotKind {
   // Unterhaltungsviertel – Showhalle mit Vorplatz, offene Lücke mit Blick in den Mittelgrund, Turm;
   // Neonmeile – einzelne helle Fassade, danach ruhiger Abschnitt.
   const q = (r + (right ? 0 : 2)) % 4;
+  // Casino-Boulevard: erst in der Nachtphase (vorhandener Licht-Stützpunkt, Blaue Stunde) ersetzen Casinos einzelne Showhallen, Plätze und Neonblöcke
+  if (stage >= 3 && i * LOT + LOT / 2 >= CASINO_NIGHT_Z && ((stage === 3 && (q === 0 || q === 3)) || (stage >= 4 && q === 0))) return 'casino';
   if (stage === 2) return q === 0 ? 'tower' : q === 1 ? 'hotel' : q === 2 ? 'open' : 'garage';
   if (stage === 3) return q === 0 ? 'show' : q === 1 ? 'open' : q === 2 ? 'tower' : 'plaza';
   return q === 0 ? 'neon' : q === 1 ? 'quiet' : q === 2 ? 'tower' : 'quiet';
@@ -239,6 +245,25 @@ function buildLot(i: number, side: number, stage: number): Lot {
       for (let n = 0; n < 3; n++) prims.push({ t: 'palm', u: 5 + h(33 + n) * 6, z: z0 + 10 + n * 22, s: 1.1, ph: h(36 + n) * 6 });
       break;
     }
+    case 'casino': {
+      // Casino am Boulevard: Vorplatz mit rotem Teppich zum Eingang, goldene Fassade mit großen Fenstern (Spielautomaten dahinter), Neonname, Palmen
+      const nm = CASINO_BLDG[Math.floor(h(5) * CASINO_BLDG.length)];
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 4], [3.4, z0 + 62], [30, z0 + 62], [30, z0 + 4]], col: '#3a2a52', a: 0.95 });
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 30], [3.4, z0 + 36], [25, z0 + 36], [25, z0 + 30]], col: '#8a1830', a: 0.95 });                      // roter Teppich zum Eingang
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 29.6], [3.4, z0 + 30], [25, z0 + 30], [25, z0 + 29.6]], col: '#ffcf6b', a: 0.9 });
+      prims.push({ t: 'gnd', pts: [[3.4, z0 + 36], [3.4, z0 + 36.4], [25, z0 + 36.4], [25, z0 + 36]], col: '#ffcf6b', a: 0.9 });
+      prims.push({ t: 'gnd', pts: [[5, z0 + 12], [5, z0 + 28], [22, z0 + 28], [22, z0 + 12]], col: '#ffcf6b', a: 0.3, glow: true });
+      prims.push({ t: 'gnd', pts: [[5, z0 + 38], [5, z0 + 56], [22, z0 + 56], [22, z0 + 38]], col: '#b46bff', a: 0.3, glow: true });
+      prims.push({ t: 'box', u0: 24, u1: 42, z0: z0 + 6, z1: z0 + 60, h0: 0, h1: 12, col: '#c9a86a', trim: '#ffcf6b', win: 'casino', neon: '#ff4fd8' });
+      prims.push({ t: 'box', u0: 22.4, u1: 24, z0: z0 + 28.6, z1: z0 + 29.8, h0: 0, h1: 8.5, col: '#e8c25a' });                                       // Eingangssäulen
+      prims.push({ t: 'box', u0: 22.4, u1: 24, z0: z0 + 36.2, z1: z0 + 37.4, h0: 0, h1: 8.5, col: '#e8c25a' });
+      prims.push({ t: 'box', u0: 22.2, u1: 24.2, z0: z0 + 28.4, z1: z0 + 37.6, h0: 8.5, h1: 9.2, col: '#ffcf6b', trim: '#ff4fd8' });                  // Vordach
+      prims.push({ t: 'sign', u: 2.2, z: z0 + 33, h: 8.4, txt: nm, col: '#ffcf6b', w: 9.4 });
+      prims.push({ t: 'palm', u: 4.6, z: z0 + 24, s: 1.0, ph: h(30) * 6 });
+      prims.push({ t: 'palm', u: 4.6, z: z0 + 43, s: 0.95, ph: h(31) * 6 });
+      prims.push({ t: 'palm', u: 4.6, z: z0 + 10, s: 0.9, ph: h(32) * 6 });
+      break;
+    }
     case 'neon': {
       // Neonmeile: Vorplatz mit farbigen Lichtinseln, niedriger Casino-Block mit leuchtender Dachkante, dahinter ein Turm
       prims.push({ t: 'gnd', pts: [[3.4, z0 + 4], [3.4, z0 + 46], [28, z0 + 46], [28, z0 + 4]], col: '#4a3f68', a: 0.9 });
@@ -360,6 +385,19 @@ function drawBox(env: LotEnv, side: number, p: Extract<Prim, { t: 'box' }>, dNea
         fillPoly(env, [[x0, p.z0 + 1, hb], [x0, p.z1 - 1, hb], [x0, p.z1 - 1, hb + 2.0], [x0, p.z0 + 1, hb + 2.0]], faceCol(env, '#2a2638', 'road', side, 1 - fog));
         if (env.lights > 0.25) for (let z = p.z0 + 2; z < p.z1 - 3; z += 4.2) fillPoly(env, [[x0, z, hb + 0.2], [x0, z + 1.6, hb + 0.2], [x0, z + 1.6, hb + 0.8], [x0, z, hb + 0.8]], '#ffb45a', 0.9);
       }
+    } else if (p.win === 'casino') {
+      // Große Panoramafenster in Gold, dahinter Spielautomaten (Dekoration): nur nah und bei voller Qualität
+      const cols = Math.max(2, Math.floor(span / 5.2)), cw = span / cols;
+      for (const [hb, hh] of [[1.4, 3.2], [6.2, 3.2]]) for (let c = 0; c < cols; c++) {
+        const zz = p.z0 + c * cw + cw * 0.12, zw = cw * 0.76;
+        fillPoly(env, [[x0, zz, hb], [x0, zz + zw, hb], [x0, zz + zw, hb + hh], [x0, zz, hb + hh]], '#2a0f2e');
+        fillPoly(env, [[x0, zz, hb], [x0, zz + zw, hb], [x0, zz + zw, hb + hh], [x0, zz, hb + hh]], '#ffcf6b', 0.16 + 0.5 * env.lights);
+        if (dNear < 150) for (let m = 0; m < 3; m++) {
+          const zm = zz + zw * (0.12 + m * 0.3), mw = zw * 0.22;
+          fillPoly(env, [[x0, zm, hb + 0.2], [x0, zm + mw, hb + 0.2], [x0, zm + mw, hb + hh - 0.5], [x0, zm, hb + hh - 0.5]], hash(c * 9 + m * 5 + Math.floor(p.z0)) > 0.5 ? '#b8862a' : '#7a3fc0');
+          fillPoly(env, [[x0, zm + mw * 0.15, hb + hh * 0.42], [x0, zm + mw * 0.85, hb + hh * 0.42], [x0, zm + mw * 0.85, hb + hh * 0.7], [x0, zm + mw * 0.15, hb + hh * 0.7]], ['#ff3b3b', '#2ee6d6', '#ffd23a', '#ff4fd8'][(c + m + Math.floor(env.clock * 2)) & 3]);
+        }
+      }
     } else if (p.win === 'car') {
       for (const zz of [p.z0 + 0.12, p.z1 - 0.52]) fillPoly(env, [[x0, zz, p.h0 + 0.4], [x0, zz + 0.4, p.h0 + 0.4], [x0, zz + 0.4, p.h0 + 0.6], [x0, zz, p.h0 + 0.6]], '#ff2a2a');
     } else {
@@ -390,10 +428,15 @@ function groundShadow(env: LotEnv, side: number, p: Extract<Prim, { t: 'box' }>)
 }
 
 /** Grundstücke eines Abschnitts als sortierbare Zeichenobjekte. */
-export function lotItems(env: LotEnv, i: number, side: number, stage: number, out: Item[]): void {
+export function lotItems(env: LotEnv, i: number, side: number, stage: number, out: Item[], block?: (z0: number, z1: number) => boolean): void {
   const lot = lotAt(i, side, stage);
   const { ctx } = env;
   for (const pr of lot.prims) {
+    if (block) {
+      // Teile, die in einen Tunnel oder ein Casino hineinragen würden, entfallen (die Wände begrenzen den Raum)
+      const z0 = pr.t === 'gnd' ? Math.min(...pr.pts.map((q) => q[1])) : pr.t === 'box' ? pr.z0 : pr.z, z1 = pr.t === 'gnd' ? Math.max(...pr.pts.map((q) => q[1])) : pr.t === 'box' ? pr.z1 : pr.t === 'line' ? pr.z + pr.w : pr.z;
+      if (block(z0, z1)) continue;
+    }
     switch (pr.t) {
       case 'gnd': {
         const far = Math.max(...pr.pts.map((q) => q[1])) - env.zc;
@@ -459,7 +502,7 @@ export function lotItems(env: LotEnv, i: number, side: number, stage: number, ou
           ctx.globalAlpha = env.fade(d);
           const k = p.k;
           rect(ctx, p.sx - 0.1 * k, p.sy - pr.h * k, 0.2 * k, pr.h * k, '#3b3f6e');
-          const bw = 3.2 * k, bh = 1.4 * k, bx = p.sx - bw / 2, by = p.sy - pr.h * k - bh * 0.2;
+          const bw = (pr.w ?? 3.2) * k, bh = 1.4 * k, bx = p.sx - bw / 2, by = p.sy - pr.h * k - bh * 0.2;
           rect(ctx, bx - 0.12 * k, by - 0.12 * k, bw + 0.24 * k, bh + 0.24 * k, '#14122a');
           rect(ctx, bx, by, bw, bh, env.lights > 0.25 ? pr.col : mixHex(pr.col, '#14122a', 0.55));
           if (k > 4) {

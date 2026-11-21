@@ -8,6 +8,8 @@ import { applyLight, decoType, decoX, drawDeco, LANDMARK_FAR, LANDMARK_SCALE, LA
 import { CHUNK, drawPed, pedsInChunk } from './people';
 import { computeRows } from './rows';
 import { LOT, lotItems, type LotEnv } from './lots';
+import { encState, enclosureItems } from './enclosure';
+import { eventsIn, planRoute, routeStrength, type RouteEvent } from '../sim/route';
 import { PAL, blinkerIntensity, blinkerLight, drawBlinkerLight, drawObstacle, drawPickup, drawShieldArc, gfx, rect, type Blinker, type BlinkerLight } from './sprites';
 import { drawCar } from './car3d';
 
@@ -37,6 +39,8 @@ export type BurstKind = 'crash' | PickupType | 'shieldHit' | 'land';
 
 const MAX_PARTICLES = 120;
 
+const NO_ROUTE: readonly RouteEvent[] = [];
+
 /** Abstand der Streckenschilder (m). */
 export const KM_SIGN_EVERY = 5000;
 /** Grundstücke (räumliche Körper) gelten für die Abschnitte bis zu dieser Stufe; darüber bleiben die bisherigen Straßenrand-Motive. */
@@ -51,6 +55,10 @@ export class Renderer {
   private lt = 0;
   /** Nur QA/Vergleich: Grundstücke abschalten (alte Straßenrand-Motive), um Kosten und Bild zu vergleichen. */
   lotsOn = true;
+  private plan: readonly RouteEvent[] = NO_ROUTE;
+  private rs: { kind: RouteEvent['kind'] | null; k: number } = { kind: null, k: 0 };
+  private edgeA = '#2ee6d6';
+  private edgeB: string = PAL.magenta;
   private pal = { g1: '#1b1033', g2: '#21143c', s1: '#3a2a66', s2: '#30235a', a1: '#262944', a2: '#2b2e4c', haze: '#4a2070', w1: '#443a66', w2: '#3e355e', curb: '#7c6ca8', seam: '#271f40' };
   /** Darstellungswinkel des Wagens gegenüber der Kamera: dezent beim Lenken, sonst 0 (Heck waagerecht). */
   private dtLast = 1 / 60;
@@ -224,6 +232,8 @@ export class Renderer {
     return { sx: p.sx, sy: p.sy };
   }
 
+  /** Aktuelle Streckenumgebung (Art und Stärke 0…1) für Klang und Anzeige. */
+  get routeNow(): { kind: RouteEvent['kind'] | null; k: number } { return this.rs; }
   get viewSize(): { w: number; h: number; hy: number } { return { w: this.L.w, h: this.L.h, hy: this.L.hy }; }
 
   private lat(z: number, zc: number): number { return this.road.center(z) - this.camXw - this.camHead * (z - zc); }
@@ -270,7 +280,11 @@ export class Renderer {
       this.shake = Math.max(0, this.shake - dt * 3);
     }
     // Himmel (fern, unabhängig von Tempo, Lenkung und Drift): Sterne, Mond, Flugzeug – dahinter Berge und Skyline
-    const lt = lightT(v.s);
+    // Streckenereignis (Tunnel/Casino) nach Distanz: weiche Ein- und Ausblendung der Stimmung; im Tunnel gelten Nachtlichter, im Casino Teppich und Gold
+    const plan = v.finishZ === undefined ? planRoute(v.seed) : NO_ROUTE;
+    const rs = routeStrength(plan, v.s);
+    this.plan = plan; this.rs = rs;
+    const lt = rs.kind === 'PALM_TUNNEL' ? Math.max(lightT(v.s), 0.9 * rs.k) : lightT(v.s);
     this.lt = lt;
     applyLight(lt);
     const P = this.pal;
@@ -280,6 +294,7 @@ export class Renderer {
     P.curb = mixHex('#b99a9c', '#7c6ca8', lt); P.seam = mixHex('#5a4452', '#271f40', lt);
     P.a1 = mixHex('#4f465e', '#262944', lt); P.a2 = mixHex('#554b63', '#2b2e4c', lt);
     P.haze = mixHex('#c27a8a', '#4a2070', lt);
+    this.carpet(P, rs.kind === 'CASINO_INTERIOR' ? rs.k : 0);
     // ruhigerer Bodenfluss: die Wechselfarben von Gelände, Gehweg und Asphalt liegen enger beieinander (weniger auffällige Querbänder)
     P.g2 = mixHex(P.g1, P.g2, 0.4); P.w2 = mixHex(P.w1, P.w2, 0.45); P.a2 = mixHex(P.a1, P.a2, 0.45);
     drawSky(ctx, L, lt, this.clock, this.reducedMotion);
@@ -342,6 +357,16 @@ export class Renderer {
     this.hilly = computeRows((z) => this.road.height(z), zc, this.elev0, L, this.rowD, this.occD, this.occY);
   }
 
+  /** Casino-Durchfahrt: roter Teppich als Fahrbahnbelag (nur Farbe), goldene Ränder und Bordsteine. */
+  private carpet(P: { a1: string; a2: string; w1: string; w2: string; curb: string; g1: string; g2: string }, k: number): void {
+    this.edgeA = k > 0 ? mixHex('#2ee6d6', '#ffcf6b', k) : '#2ee6d6';
+    this.edgeB = k > 0 ? mixHex(PAL.magenta, '#ffcf6b', k) : PAL.magenta;
+    if (k <= 0) return;
+    P.a1 = mixHex(P.a1, '#7c1228', 0.92 * k); P.a2 = mixHex(P.a2, '#8e1a32', 0.92 * k);
+    P.w1 = mixHex(P.w1, '#4c1c26', k); P.w2 = mixHex(P.w2, '#421620', k);
+    P.curb = mixHex(P.curb, '#d9a93a', k); P.g1 = mixHex(P.g1, '#1a0a12', k); P.g2 = mixHex(P.g2, '#1e0c16', k);
+  }
+
   /** Höchste Bildzeile des Geländes, das Objekte in Tiefe d verdecken kann (nur nähere Geländepunkte zählen). */
   private occlusionY(d: number): number {
     const D = this.occD, Y = this.occY;
@@ -402,8 +427,8 @@ export class Renderer {
       // Details (Kanten, Spurtrenner) werden mit der Entfernung gedimmt: ruhiger Sichtkorridor
       ctx.globalAlpha = 1 - 0.7 * far;
       const ew = Math.max(1, 0.3 * k);
-      rect(ctx, l, y, ew, 1, '#2ee6d6');
-      rect(ctx, r - ew, y, ew, 1, PAL.magenta);
+      rect(ctx, l, y, ew, 1, this.edgeA);
+      rect(ctx, r - ew, y, ew, 1, this.edgeB);
       // dichtere Markierungsfolge (Bodenfluss): 6-m-Takt
       if ((((z / 6) % 2) + 2) % 2 < 1) {
         const lw = Math.max(1, 0.16 * k);
@@ -456,12 +481,16 @@ export class Renderer {
   private scene(v: View, zc: number): void {
     const { ctx, L } = this;
     const items: Drawable[] = [];
+    const evs = eventsIn(this.plan, zc, zc + DRAW);
+    const inEv = (z: number): boolean => { for (const e of evs) if (z >= e.start - 2 && z <= e.end + 2) return true; return false; };
+    const blockZ = (a: number, b: number): boolean => { for (const e of evs) if (b > e.start && a < e.end) return true; return false; };
     const STEP = 22;
     const k0 = Math.ceil((zc + 4) / STEP);
     const k1 = Math.floor((zc + DRAW) / STEP);
     const lod = this.quality > 0;
     for (let k = k0; k <= k1; k++) {
       const z = k * STEP;
+      if (inEv(z) || inEv(z + 11)) continue;                          // im Tunnel / Casino: Wände statt Straßenrand
       for (const side of [-1, 1]) {
         let type = decoType(k, side, z);
         if (LANDMARK_TYPES.has(type)) continue;                       // Wahrzeichen: eigene Schleife mit Fernsicht (unten)
@@ -500,7 +529,7 @@ export class Renderer {
     // werden von näheren Grundstücken und Kuppen verdeckt (Zeichenreihenfolge, occlusionY) und ziehen auf ihrer Straßenseite vorbei.
     for (const m of landmarksAhead(zc + 4, zc + LANDMARK_FAR)) {
       const p = this.proj(zc, m.x, m.z);
-      if (p.d < 4) continue;
+      if (p.d < 4 || inEv(m.z)) continue;
       const stripIn = m.type === 'eiffel' ? smoothStep((v.s - (B.scenery.keys[3] - 200)) / 900) * Math.min(1, B.scenery.neon) : 1;
       const near = 1 - smoothStep((p.d - 380) / 700);                            // fern: in Dunst getaucht, nah: volle Farbe
       const aIn = smoothStep((LANDMARK_FAR - p.d) / 250);                          // weiches Auftauchen am Rand der Sichtweite
@@ -523,9 +552,11 @@ export class Renderer {
       for (let i = Math.floor((zc + 2) / LOT) - 1; i <= Math.floor((zc + DRAW) / LOT); i++) {
         const mid = i * LOT + LOT / 2;
         if (stageAt(mid) > LOT_STAGE_MAX || mid < 40) continue;
-        for (const side of [-1, 1]) lotItems(env, i, side, stageAt(mid), items);
+        for (const side of [-1, 1]) lotItems(env, i, side, stageAt(mid), items, evs.length ? blockZ : undefined);
       }
     }
+    // Neon-Palmen-Tunnel und Casino-Durchfahrt (Wände, Decke, Portale, Dekoration)
+    if (evs.length) { const envE = this.lotEnv(zc); for (const e of evs) enclosureItems(envE, encState(e, envE.camH), zc, DRAW, items); }
     // Zieltor (Sunset Sprint)
     if (v.finishZ !== undefined && v.finishZ - zc > 4 && v.finishZ - zc < DRAW) {
       const pl = this.proj(zc, -(B.road.halfWidth + 0.9), v.finishZ), pr = this.proj(zc, B.road.halfWidth + 0.9, v.finishZ);
@@ -534,7 +565,7 @@ export class Renderer {
     // Streckenschilder: alle 5 km ein Straßenschild mit der geschafften Reichweite am rechten Straßenrand
     for (let m = Math.ceil((zc + 4) / KM_SIGN_EVERY) * KM_SIGN_EVERY; m <= zc + DRAW; m += KM_SIGN_EVERY) {
       const p = this.proj(zc, B.road.halfWidth + 1.25, m);
-      if (p.d < 3) continue;
+      if (p.d < 3 || inEv(m)) continue;
       items.push({ d: p.d, draw: () => { ctx.globalAlpha = this.fade(p.d); this.kmSign(p, m / 1000); ctx.globalAlpha = 1; } });
     }
     if (stageAt(v.s) === 0 || v.s < PORTAL_Z + 40) {
@@ -590,7 +621,7 @@ export class Renderer {
       for (let c = c0; c <= c1 && n < cap && B.scenery.peds; c++) for (const side of [-1, 1]) for (const ped of pedsInChunk(c, side)) {
         const walkDz = ped.pose === 0 && !this.reducedMotion ? Math.sin(this.clock * 0.32 + ped.phase) * 2.4 : 0;        // kurzer Weg auf dem Gehweg
         const p = this.proj(zc, ped.x, ped.z + walkDz);
-        if (p.d < 5 || p.d > 210 || n >= cap) continue;
+        if (p.d < 5 || p.d > 210 || n >= cap || inEv(ped.z)) continue;
         n++;
         items.push({ d: p.d, draw: () => { ctx.globalAlpha = this.fade(p.d, 1); drawPed(ctx, p.sx, p.sy, p.k, ped, this.clock); ctx.globalAlpha = 1; } });
       }

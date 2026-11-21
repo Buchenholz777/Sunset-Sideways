@@ -42,10 +42,19 @@ describe('Landmarken der Strecke', () => {
     }
   });
   it('Viertel unterscheiden sich in ihren Grundstücken', () => {
-    const kinds = (stage: number) => new Set(Array.from({ length: 8 }, (_, i) => [lotKind(i + 300, 1, stage), lotKind(i + 300, -1, stage)]).flat());
+    const kinds = (stage: number) => new Set(Array.from({ length: 8 }, (_, i) => [lotKind(i + 120, 1, stage), lotKind(i + 120, -1, stage)]).flat());
     expect(kinds(2).has('hotel')).toBe(true);
     expect(kinds(3).has('show')).toBe(true);
     expect(kinds(4).has('quiet')).toBe(true);
     expect([...kinds(2)].join()).not.toBe([...kinds(3)].join());
+  });
+  it('Casino-Gebäude erscheinen nur in der Nachtphase (ab ≈ 18,2 km), dort abwechselnd mit anderen Grundstücken', () => {
+    const day = new Set<string>(), night = new Set<string>();
+    for (let i = 0; i < 700; i++) for (const side of [-1, 1]) {
+      const z = i * 72 + 36, stage = z < 10000 ? 2 : z < 20000 ? 3 : 4;
+      (z < 18_000 ? day : night).add(lotKind(i, side, stage) === 'casino' ? 'casino' : 'other');
+    }
+    expect(day.has('casino')).toBe(false);
+    expect(night.has('casino')).toBe(true); expect(night.has('other')).toBe(true);
   });
 });
