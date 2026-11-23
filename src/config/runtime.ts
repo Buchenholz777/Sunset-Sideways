@@ -1,5 +1,5 @@
 import { BALANCE } from './balance';
-import { setSpeedKnots } from '../core/speed';
+import { setSpeedKnots, speedAtDist } from '../core/speed';
 
 /**
  * Laufzeit-Konfiguration des Spiels (im Admin-Bereich einstellbar). Reine Daten + reine Funktionen, kein DOM:
@@ -14,7 +14,8 @@ export type VehicleKey = keyof typeof KINDS_LABEL;
 
 export interface GameConfig {
   profile: 'relaxed' | 'arcade' | 'hard' | 'custom';
-  tempo: { startKmh: number; maxKmh: number; distToMaxKm: number; density: number };
+  /** curveOn: eigene Steigerungskurve (Tempo je Streckenmarke aus CURVE_KM); dann gelten Start-/Höchsttempo und Strecke bis zum Maximum nicht. */
+  tempo: { startKmh: number; maxKmh: number; distToMaxKm: number; density: number; curveOn: boolean; curve: number[] };
   traffic: { taxi: number; cabrio: number; sedan: number; truck: number; baken: boolean; barrier: boolean; minGap: number };
   pickups: {
     freq: number;
@@ -35,7 +36,7 @@ const rec = <T>(v: T): Record<PickupKey, T> => ({ shield: v, slow: v, clear: v, 
 /** Standardwerte = bisheriges Spielverhalten (Profil „Arcade“). */
 export const DEFAULT_CONFIG: GameConfig = {
   profile: 'arcade',
-  tempo: { startKmh: 210, maxKmh: 600, distToMaxKm: 27, density: 1 },
+  tempo: { startKmh: 210, maxKmh: 600, distToMaxKm: 27, density: 1, curveOn: false, curve: [210, 325, 370, 410, 430, 450, 465, 480, 510, 550, 600, 655] },
   traffic: { taxi: 1, cabrio: 1, sedan: 1, truck: 1, baken: true, barrier: true, minGap: 0.6 },
   pickups: {
     freq: 1,
@@ -53,10 +54,23 @@ export const DEFAULT_CONFIG: GameConfig = {
 /** Ursprüngliche Tempostützpunkte (Form der Kurve). */
 export const BASE_KNOTS: ReadonlyArray<readonly [number, number]> = [[0, 210], [1000, 325], [2000, 370], [6000, 430], [12000, 480], [16000, 520], [20000, 550], [27000, 600]];
 
-/** Tempostützpunkte der Konfiguration: Form der Standardkurve, gestreckt auf Start-/Höchsttempo und Strecke bis zum Maximum. */
+/** Streckenmarken (km) der einstellbaren Steigerungskurve und erlaubter Tempobereich je Marke. Hinter der letzten Marke steigt das Tempo mit der Steigung des letzten Abschnitts weiter (Obergrenze 1000 km/h). */
+export const CURVE_KM = [0, 1, 2, 4, 6, 8, 10, 12, 15, 20, 27, 35] as const;
+export const CURVE = { min: 120, max: 1000, step: 5 } as const;
+
+/** Tempostützpunkte der Konfiguration: eigene Kurve (Marken) oder die Form der Standardkurve, gestreckt auf Start-/Höchsttempo und Strecke bis zum Maximum. */
 export function knotsFor(t: GameConfig['tempo']): Array<[number, number]> {
+  if (t.curveOn) return CURVE_KM.map((km, i) => [km * 1000, t.curve[i]] as [number, number]);
   const [, y0] = BASE_KNOTS[0], [x1, y1] = BASE_KNOTS[BASE_KNOTS.length - 1];
   return BASE_KNOTS.map(([x, y]) => [Math.round((x / x1) * t.distToMaxKm * 1000), t.startKmh + ((y - y0) / (y1 - y0)) * (t.maxKmh - t.startKmh)] as [number, number]);
+}
+
+/** Kurvenwerte aus beliebigen Stützpunkten ablesen (z. B. um die eigene Kurve aus dem aktuellen Verlauf zu starten). Stellt den globalen Tempoverlauf danach wieder her. */
+export function curveFromKnots(knots: ReadonlyArray<readonly [number, number]>): number[] {
+  setSpeedKnots(knots);
+  const out = CURVE_KM.map((km) => Math.min(CURVE.max, Math.max(CURVE.min, Math.round(speedAtDist(km * 1000) / CURVE.step) * CURVE.step)));
+  setSpeedKnots(BALANCE.speed.knots);
+  return out;
 }
 
 export const PROFILES: Record<'relaxed' | 'arcade' | 'hard', { label: string; text: string; patch: Partial<GameConfig['tempo']> & { minGap?: number } }> = {
@@ -68,7 +82,7 @@ export const PROFILES: Record<'relaxed' | 'arcade' | 'hard', { label: string; te
 export function withProfile(cfg: GameConfig, p: 'relaxed' | 'arcade' | 'hard'): GameConfig {
   const c = clone(cfg);
   const { minGap, ...tempo } = PROFILES[p].patch;
-  c.tempo = { ...c.tempo, ...tempo };
+  c.tempo = { ...c.tempo, ...tempo, curveOn: false };
   if (minGap !== undefined) c.traffic.minGap = minGap;
   c.profile = p;
   return normalize(c);
@@ -149,6 +163,15 @@ export function normalize(input: unknown): GameConfig {
   c.scenery.peds = bool(s.scenery?.peds, true);
   c.scenery.fountains = bool(s.scenery?.fountains, true);
   c.event.on = bool(s.event?.on, false);
+  const st = (s as { tempo?: { curveOn?: unknown; curve?: unknown } }).tempo;
+  c.tempo.curveOn = bool(st?.curveOn, false);
+  const raw = Array.isArray(st?.curve) ? (st!.curve as unknown[]) : [];
+  let prev = 0;
+  c.tempo.curve = CURVE_KM.map((_, i) => {                      // je Marke begrenzen, auf Schrittweite runden und nie fallen lassen (Tempo steigt oder bleibt)
+    const v = Math.min(CURVE.max, Math.max(CURVE.min, Math.round(num(raw[i], DEFAULT_CONFIG.tempo.curve[i]) / CURVE.step) * CURVE.step));
+    prev = Math.max(prev, v);
+    return prev;
+  });
   c.profile = s.profile === 'relaxed' || s.profile === 'hard' || s.profile === 'custom' ? s.profile : 'arcade';
   return c;
 }
@@ -165,7 +188,17 @@ export function validate(input: unknown): Issue[] {
     else if (v < f.min - 1e-9 || v > f.max + 1e-9) out.push({ path: f.path, level: 'error', msg: `Erlaubt sind ${f.min * (f.scale ?? 1)} bis ${f.max * (f.scale ?? 1)} ${f.unit}.` });
   }
   const c = normalize(src);
-  if (c.tempo.maxKmh - c.tempo.startKmh < 100) out.push({ path: 'tempo.maxKmh', level: 'error', msg: 'Höchsttempo muss mindestens 100 km/h über dem Starttempo liegen.' });
+  const cs = (src as { tempo?: { curveOn?: unknown; curve?: unknown } }).tempo;
+  if (cs?.curveOn === true && Array.isArray(cs.curve)) {
+    const cv = cs.curve as unknown[];
+    for (let i = 0; i < CURVE_KM.length; i++) {
+      const v = cv[i];
+      if (typeof v !== 'number' || !Number.isFinite(v)) { out.push({ path: 'tempo.curve', level: 'error', msg: `Bei ${CURVE_KM[i]} km fehlt ein Tempowert.` }); break; }
+      if (v < CURVE.min || v > CURVE.max) { out.push({ path: 'tempo.curve', level: 'error', msg: `Bei ${CURVE_KM[i]} km sind ${CURVE.min} bis ${CURVE.max} km/h erlaubt.` }); break; }
+      if (i > 0 && v < (cv[i - 1] as number) - 1e-9) { out.push({ path: 'tempo.curve', level: 'error', msg: `Das Tempo darf nicht fallen: bei ${CURVE_KM[i]} km ${v} km/h, davor ${cv[i - 1] as number} km/h.` }); break; }
+    }
+  }
+  if (!c.tempo.curveOn && c.tempo.maxKmh - c.tempo.startKmh < 100) out.push({ path: 'tempo.maxKmh', level: 'error', msg: 'Höchsttempo muss mindestens 100 km/h über dem Starttempo liegen.' });
   if (c.scenery.nightKm < c.scenery.duskKm + 2) out.push({ path: 'scenery.nightKm', level: 'error', msg: 'Die Nacht muss mindestens 2 km nach der Dämmerung beginnen.' });
   if (c.scenery.moonHighKm < c.scenery.nightKm) out.push({ path: 'scenery.moonHighKm', level: 'error', msg: 'Der Mond kann erst ab Nachtbeginn ganz oben stehen.' });
   const movers = c.traffic.taxi + c.traffic.cabrio + c.traffic.sedan + c.traffic.truck;
@@ -178,6 +211,7 @@ export function validate(input: unknown): Issue[] {
 
 /** Bei Schwerstufen-Kombinationen ohne Profil: Beschriftung. */
 export function detectProfile(c: GameConfig): GameConfig['profile'] {
+  if (c.tempo.curveOn) return 'custom';
   for (const p of ['relaxed', 'arcade', 'hard'] as const) {
     const t = PROFILES[p].patch;
     if (c.tempo.startKmh === t.startKmh && c.tempo.maxKmh === t.maxKmh && c.tempo.distToMaxKm === t.distToMaxKm && c.tempo.density === t.density && c.traffic.minGap === t.minGap) return p;
@@ -259,6 +293,11 @@ export function diffConfigs(a: GameConfig, b: GameConfig): Diff[] {
   for (const f of FIELDS) {
     const x = getPath(a, f.path), y = getPath(b, f.path);
     if (x !== y) out.push({ path: f.path, label: f.label, from: fmt(f, x), to: fmt(f, y) });
+  }
+  if (a.tempo.curveOn !== b.tempo.curveOn) out.push({ path: 'tempo.curveOn', label: 'Eigene Tempokurve', from: fmt(undefined, a.tempo.curveOn), to: fmt(undefined, b.tempo.curveOn) });
+  if (b.tempo.curveOn && (!a.tempo.curveOn || a.tempo.curve.join() !== b.tempo.curve.join())) {
+    const ch = CURVE_KM.map((km, i) => [km, i] as const).filter(([, i]) => !a.tempo.curveOn || a.tempo.curve[i] !== b.tempo.curve[i]);
+    for (const [km, i] of ch.slice(0, 12)) out.push({ path: `tempo.curve.${i}`, label: `Tempo bei ${km} km`, from: a.tempo.curveOn ? `${a.tempo.curve[i]} km/h` : 'Standardkurve', to: `${b.tempo.curve[i]} km/h` });
   }
   const sw: Array<[string, string]> = [['traffic.baken', 'Baken'], ['traffic.barrier', 'Absperrung'], ['scenery.planes', 'Flugzeuge'], ['scenery.peds', 'Fußgänger'], ['scenery.fountains', 'Brunnen'], ['event.on', 'Flugwoche'], ...PICKUPS.map((k): [string, string] => [`pickups.on.${k}`, pk(k)])];
   for (const [p, label] of sw) { const x = getPath(a, p), y = getPath(b, p); if (x !== y) out.push({ path: p, label, from: fmt(undefined, x), to: fmt(undefined, y) }); }

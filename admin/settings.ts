@@ -2,7 +2,7 @@ import { api, ApiError } from './api';
 import { clear, dt, dur, h, n0, n1, n2, pct, s } from './dom';
 import { hbars } from './charts';
 import {
-  DEFAULT_CONFIG, FIELD_BY_PATH, KINDS_LABEL, PICKUPS, PICKUP_LABEL, PROFILES, detectProfile, fromDisplay, getPath, knotsFor, pickupShares, setPath, toDisplay, trafficShares,
+  CURVE, CURVE_KM, curveFromKnots, DEFAULT_CONFIG, FIELD_BY_PATH, KINDS_LABEL, PICKUPS, PICKUP_LABEL, PROFILES, detectProfile, fromDisplay, getPath, knotsFor, pickupShares, setPath, toDisplay, trafficShares,
   type Diff, type Field, type GameConfig, type Issue, type PickupKey, type VehicleKey,
 } from '../src/config/runtime';
 import { setSpeedKnots, speedAtDist } from '../src/core/speed';
@@ -108,10 +108,10 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
   // ---------------------------------------------------------------- Abschnitte
   function curveSvg(): Node {
     const W = 560, H = 190, L = 46, R = 10, T = 10, B = 36;
-    const xMax = 45000, yMax = 720;
+    const xMax = 45000, yMax = draft.tempo.curveOn || draft.tempo.maxKmh > 700 ? 1000 : 720;
     const px = (m: number): number => L + (m / xMax) * (W - L - R), py = (v: number): number => T + (1 - v / yMax) * (H - T - B);
     const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart-svg curve', role: 'img', 'aria-label': `Tempo über der Strecke: Start ${draft.tempo.startKmh} km/h, Höchsttempo ${draft.tempo.maxKmh} km/h nach ${draft.tempo.distToMaxKm} km.` });
-    for (const v of [0, 200, 400, 600]) { svg.append(s('line', { x1: L, x2: W - R, y1: py(v), y2: py(v), class: 'grid' })); const t = s('text', { x: L - 6, y: py(v) + 4, class: 'tick', 'text-anchor': 'end' }); t.textContent = String(v); svg.append(t); }
+    for (const v of yMax > 720 ? [0, 250, 500, 750, 1000] : [0, 200, 400, 600]) { svg.append(s('line', { x1: L, x2: W - R, y1: py(v), y2: py(v), class: 'grid' })); const t = s('text', { x: L - 6, y: py(v) + 4, class: 'tick', 'text-anchor': 'end' }); t.textContent = String(v); svg.append(t); }
     for (const k of [0, 10, 20, 30, 40]) { const t = s('text', { x: px(k * 1000), y: H - B + 16, class: 'tick', 'text-anchor': 'middle' }); t.textContent = String(k); svg.append(t); }
     const xt = s('text', { x: (L + W - R) / 2, y: H - 4, class: 'axis-title', 'text-anchor': 'middle' }); xt.textContent = 'Strecke (km)'; svg.append(xt);
     const yt = s('text', { x: 11, y: (T + H - B) / 2, class: 'axis-title', 'text-anchor': 'middle', transform: `rotate(-90 11 ${(T + H - B) / 2})` }); yt.textContent = 'km/h'; svg.append(yt);
@@ -123,7 +123,58 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
     };
     svg.append(s('path', { d: path(BASE_KNOTS), class: 'line b dashed', fill: 'none' }));
     svg.append(s('path', { d: path(knotsFor(draft.tempo)), class: 'line a', fill: 'none' }));
+    if (draft.tempo.curveOn) CURVE_KM.forEach((km, i) => svg.append(s('circle', { cx: px(km * 1000), cy: py(draft.tempo.curve[i]), r: 3.5, class: 'dot a', fill: 'currentColor' })));
     return svg;
+  }
+
+  function toggleCurve(): HTMLElement {
+    const id = 't-tempo-curveOn';
+    const input = h('input', { type: 'checkbox', role: 'switch', id });
+    input.addEventListener('change', () => {
+      draft.tempo.curveOn = input.checked;
+      if (input.checked) draft.tempo.curve = curveFromKnots(knotsFor({ ...draft.tempo, curveOn: false }));      // Start: aktueller Verlauf, danach Punkt für Punkt änderbar
+      changed();
+    });
+    const state = h('span', { class: 'sw-state' });
+    updaters.push(() => { input.checked = draft.tempo.curveOn; state.textContent = draft.tempo.curveOn ? 'an' : 'aus'; });
+    return h('div', { class: 'ctl tog' }, h('label', { class: 'switch', for: id }, input, h('span', { class: 'track', 'aria-hidden': 'true' }), h('span', { class: 'sw-label' }, 'Eigene Steigerungskurve (Tempo je Strecke)'), state),
+      h('p', { class: 'effect' }, 'Legt fest, wie schnell der Wagen bei welcher Reichweite sein darf. Aus: die drei Regler unten (Start, Höchsttempo, Strecke) formen die Standardkurve.'));
+  }
+
+  function curveEditor(): HTMLElement {
+    const wrap = h('div', { class: 'curve-ed' });
+    const issue = h('div', { class: 'issue', role: 'status' });
+    const slot: HTMLElement[] = issueSlots.get('tempo.curve') ?? []; slot.push(issue); issueSlots.set('tempo.curve', slot);
+    const setAt = (i: number, raw: number): void => {
+      if (!Number.isFinite(raw)) return;
+      const v = Math.min(CURVE.max, Math.max(CURVE.min, Math.round(raw / CURVE.step) * CURVE.step));
+      const c = draft.tempo.curve; c[i] = v;
+      for (let j = i + 1; j < c.length; j++) c[j] = Math.max(c[j], v);          // Tempo fällt nie: spätere Marken ziehen mit
+      for (let j = i - 1; j >= 0; j--) c[j] = Math.min(c[j], v);                  // … frühere werden gedeckelt
+      changed();
+    };
+    const rows = CURVE_KM.map((km, i) => {
+      const id = `cv-${i}`;
+      const range = h('input', { id, type: 'range', min: CURVE.min, max: CURVE.max, step: CURVE.step, 'aria-label': `Tempo bei ${km} km` });
+      const num = h('input', { type: 'number', min: CURVE.min, max: CURVE.max, step: CURVE.step, inputmode: 'numeric', 'aria-label': `Tempo bei ${km} km als Zahl (km/h)`, class: 'num' });
+      range.addEventListener('input', () => setAt(i, Number(range.value)));
+      num.addEventListener('change', () => setAt(i, Number(num.value)));
+      const out = h('output', { for: id, class: 'val' });
+      const def = DEFAULT_CONFIG.tempo.curve[i];
+      updaters.push(() => {
+        const v = draft.tempo.curve[i];
+        range.value = String(v); if (document.activeElement !== num) num.value = String(v);
+        out.textContent = `${v} km/h`;
+        range.style.setProperty('--fill', `${((v - CURVE.min) / (CURVE.max - CURVE.min)) * 100}%`);
+      });
+      return h('div', { class: 'ctl' }, h('div', { class: 'ctl-head' }, h('label', { for: id }, `Tempo bei ${km} km`), out),
+        h('div', { class: 'ctl-row' }, range, h('span', { class: 'numwrap' }, num, h('span', { class: 'unit' }, 'km/h'))),
+        h('div', { class: 'ctl-meta' }, h('span', { class: 'def' }, `Standard: ${def} km/h`)));
+    });
+    const reset = h('button', { type: 'button', class: 'btn', onclick: () => { draft.tempo.curve = [...DEFAULT_CONFIG.tempo.curve]; changed(); } }, 'Auf Standardkurve zurücksetzen');
+    wrap.append(h('h3', null, 'Steigerungskurve'), h('p', { class: 'muted' }, 'Tempo, das der Wagen bei der jeweiligen Reichweite erreicht. Dazwischen wird weich verbunden; die Kurve darf nur steigen oder gleich bleiben (zieht ein Punkt hoch, ziehen die späteren Punkte mit). Hinter dem letzten Punkt (35 km) steigt das Tempo mit der Steigung des letzten Abschnitts weiter, höchstens bis 1000 km/h – ein flacher letzter Abschnitt hält das Tempo konstant.'), issue, ...rows, h('div', { class: 'dlg-actions' }, reset));
+    updaters.push(() => { wrap.hidden = !draft.tempo.curveOn; });
+    return wrap;
   }
 
   const tempo = card('tempo', 'Tempo & Schwierigkeit', 'Wie schnell das Spiel wird und wie dicht die Ausweichstellen kommen.',
@@ -141,7 +192,10 @@ export async function renderSettings(root: HTMLElement): Promise<void> {
       updaters.push(paint);
       return h('div', { class: 'profiles' }, seg, text);
     })(),
-    slider('tempo.startKmh'), slider('tempo.maxKmh'), slider('tempo.distToMaxKm'), slider('tempo.density'),
+    toggleCurve(),
+    (() => { const box = h('div', { class: 'simple-tempo' }, slider('tempo.startKmh'), slider('tempo.maxKmh'), slider('tempo.distToMaxKm')); updaters.push(() => { box.hidden = draft.tempo.curveOn; }); return box; })(),
+    curveEditor(),
+    slider('tempo.density'),
     derived(() => h('figure', { class: 'curve-fig' }, curveSvg(), h('figcaption', { class: 'muted' }, 'Tempo über der Strecke (durchgezogen: Entwurf, gestrichelt: bisherige Standardkurve).'))));
 
   const traffic = card('traffic', 'Verkehr', 'Welche Hindernisse vorkommen und wie dicht sie aufeinander folgen.',

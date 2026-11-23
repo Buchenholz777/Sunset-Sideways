@@ -25,8 +25,8 @@ export function analyze(input: unknown, seeds = [11, 23, 37, 59]): Analysis {
   applyConfig(cfg, false);
   const issues: Issue[] = [];
   const samples: Sample[] = [];
-  const dist = cfg.tempo.distToMaxKm;
-  for (const km of [0, Math.round(dist * 0.35), dist + 3]) {
+  const dist = cfg.tempo.curveOn ? 27 : cfg.tempo.distToMaxKm;
+  for (const km of cfg.tempo.curveOn ? [0, 12, 27, 38] : [0, Math.round(dist * 0.35), dist + 3]) {
     const startS = km * 1000;
     let enc = 0, fb = 0;
     const SPAN = 1500;

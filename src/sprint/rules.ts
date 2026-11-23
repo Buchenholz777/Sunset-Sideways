@@ -22,7 +22,7 @@ export const SPRINT_STAGE_SCALE = 0.275;
 export const SPRINT_CONFIG: GameConfig = (() => {
   const c = clone(DEFAULT_CONFIG);
   c.profile = 'custom';
-  c.tempo = { startKmh: 240, maxKmh: 520, distToMaxKm: 8, density: 1 };
+  c.tempo = { startKmh: 240, maxKmh: 520, distToMaxKm: 8, density: 1, curveOn: false, curve: DEFAULT_CONFIG.tempo.curve };
   c.scenery = { ...c.scenery, duskKm: 1, nightKm: 5.5, moonHighKm: 7 };
   c.event = { ...c.event, on: false };
   return normalize(c);
