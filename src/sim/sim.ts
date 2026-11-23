@@ -163,7 +163,7 @@ export class Sim {
   /** Flughöhe in Metern: 0,5 s Abheben, Reiseflug, 1 s Sinken. */
   get height(): number {
     if (this.glideT <= 0) return 0;
-    if (this.jump) { const u = Math.max(0, Math.min(1, 1 - this.glideT / this.glideTotal)); return RAMP.jumpH * 4 * u * (1 - u); }
+    if (this.jump) { const u = Math.max(0, Math.min(1, 1 - this.glideT / this.glideTotal)); return RAMP.jumpH * Math.sin(Math.PI * Math.pow(u, RAMP.rise)); }
     const G = B.glide, el = this.glideTotal - this.glideT;
     return G.height * Math.min(smooth(el / G.up), smooth(this.glideT / G.down));
   }

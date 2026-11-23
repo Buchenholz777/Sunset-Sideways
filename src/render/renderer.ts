@@ -267,17 +267,17 @@ export class Renderer {
    */
   private drawCarrier(zc: number, o: Obstacle): void {
     const cx = o.x, z = o.z, H = RAMP.height, hw = 1.2, L = 9.2, BLUE = '#2c6fdc', WHITE = '#eef2f8', STEEL = '#4b5470';
-    this.drawBox(zc, cx, -hw, hw, z + L + 0.3, z + L + 3.4, 0.55, 3.0, BLUE);                         // Führerhaus
-    this.drawBox(zc, cx, -hw, hw, z + L + 0.3, z + L + 3.4, 1.7, 2.2, WHITE);                         // weißer Streifen
+    this.drawBox(zc, cx, -hw, hw, z + L + 0.3, z + L + 3.4, 0.55, 3.3, BLUE);                         // Führerhaus
+    this.drawBox(zc, cx, -hw, hw, z + L + 0.3, z + L + 3.4, 1.8, 2.3, WHITE);                         // weißer Streifen
     this.drawBox(zc, cx, -hw, hw, z + 0.4, z + L, 0.5, H, STEEL);                                      // untere Ladefläche
-    this.drawBox(zc, cx, -hw, hw, z + 1.2, z + L, 2.95, 3.15, STEEL);                                  // obere Ladefläche
+    this.drawBox(zc, cx, -hw, hw, z + 1.2, z + L, 3.85, 4.05, STEEL);                                  // obere Ladefläche
     for (const zz of [z + 1.4, z + 2.6, z + 3.8]) for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * (hw + 0.1) - 0.17, sx * (hw + 0.1) + 0.17, zz, zz + 1.0, 0, 0.8, '#15171f');   // Achsen
     for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * (hw + 0.1) - 0.17, sx * (hw + 0.1) + 0.17, z + L + 0.9, z + L + 1.9, 0, 0.9, '#15171f');
     for (const zz of [z + 1.3, z + L - 0.3]) for (const sx of [-1, 1]) {                              // Stützen: blau-weiß gestreift
-      for (let i = 0; i < 4; i++) this.drawBox(zc, cx, sx * hw - 0.13, sx * hw + 0.13, zz, zz + 0.26, H + i * 0.4, H + (i + 1) * 0.4, i % 2 ? WHITE : BLUE);
-      this.drawBox(zc, cx, sx * hw - 0.13, sx * hw + 0.13, zz, zz + 0.26, 2.95, 3.9, BLUE);
+      for (let i = 0; i < 4; i++) this.drawBox(zc, cx, sx * hw - 0.13, sx * hw + 0.13, zz, zz + 0.26, H + i * 0.46, H + (i + 1) * 0.46, i % 2 ? WHITE : BLUE);
+      this.drawBox(zc, cx, sx * hw - 0.13, sx * hw + 0.13, zz, zz + 0.26, 3.85, 4.8, BLUE);
     }
-    for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * hw - 0.05, sx * hw + 0.05, z + 1.2, z + L, 3.15, 3.5, WHITE);   // Geländer oben
+    for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * hw - 0.05, sx * hw + 0.05, z + 1.2, z + L, 4.05, 4.4, WHITE);   // Geländer oben
     for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * hw - 0.05, sx * hw + 0.05, z + 0.4, z + L, H, H + 0.3, WHITE);    // Geländer unten
     const k = this.proj(zc, cx, z + 0.4);
     this.ctx.fillStyle = '#ff2a3d'; this.ctx.fillRect(k.sx - 1.05 * k.k, k.sy - 0.9 * k.k, 0.4 * k.k, 0.22 * k.k); this.ctx.fillRect(k.sx + 0.65 * k.k, k.sy - 0.9 * k.k, 0.4 * k.k, 0.22 * k.k);   // Rückleuchten

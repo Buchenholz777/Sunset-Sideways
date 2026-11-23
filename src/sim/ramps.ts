@@ -10,12 +10,14 @@ import type { Road } from './road';
  * Lage und Art hängen nur von Seed und Strecke ab (reproduzierbar); in Tunneln und Casinos gibt es keine Rampen.
  */
 export const RAMP = {
-  /** Flugdauer (s): 0,5 Abheben, ≈ 1,2 Reiseflug, 1 Sinken. */
-  fly: 2.4,
-  /** Scheitelhöhe des Sprungs (m): ein Bogen (Parabel), kein Schweben und kein Antrieb. */
-  jumpH: 3.2,
+  /** Flugdauer (s): steiles Abheben, dann langes Sinken. */
+  fly: 2.9,
+  /** Scheitelhöhe des Sprungs (m): ein hoher Bogen, kein Schweben und kein Antrieb. */
+  jumpH: 4.5,
+  /** Form des Bogens: Exponent < 1 steigt steil an (Scheitel bei u = 0,5^(1/rise)) und sinkt dann lang aus. */
+  rise: 0.55,
   /** Länge und Breite der Auffahrtsfläche (m) und Höhe der Oberkante (m); Autotransporter-Rampe schmaler (Breite des Aufliegers). */
-  len: 7, width: 3.0, truckWidth: 2.3, height: 1.25,
+  len: 5.5, width: 3.0, truckWidth: 2.3, height: 2.0,
   /** Erste Rampe frühestens ab (m), Abstand der folgenden (m), Anteil der Lkw-Rampen. */
   first: 1100, gapMin: 1100, gapMax: 2100, truckShare: 1,
   /** Tempo des Rampen-Lkw (m/s), wie die übrigen Lkw (36 km/h). */

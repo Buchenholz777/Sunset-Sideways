@@ -94,16 +94,17 @@ describe('Rampen im Dauerlauf', () => {
 });
 
 describe('Rampensprung', () => {
-  it('ist ein symmetrischer Bogen (Parabel) mit Scheitel RAMP.jumpH und ohne Düsenflug', () => {
+  it('ist ein hoher Bogen mit steilem Anstieg und Scheitel RAMP.jumpH und ohne Düsenflug', () => {
     const sim = new Sim(12, { ramps: true, startS: 700, noDynamic: true });
     sim.ramps = [{ id: 9301, x: 0, z: sim.s + 40, vz: 0, truck: false, taken: false }]; sim.obstacles = [];
     const hs: number[] = [];
     for (let i = 0; i < 4 / DT && !sim.crashed; i++) { sim.step(DT, { dir: 0, target: 0 }); if (sim.glideT > 0) { expect(sim.jump).toBe(true); hs.push(sim.height); } }
     expect(hs.length * DT).toBeGreaterThan(RAMP.fly - 0.1);
-    const mx = Math.max(...hs), mid = hs.length >> 1;
+    const mx = Math.max(...hs);
     expect(mx).toBeCloseTo(RAMP.jumpH, 1);
-    expect(Math.abs(hs[Math.floor(mid / 2)] - hs[Math.floor(mid * 1.5)])).toBeLessThan(0.15);
-    for (let i = 1; i < mid - 3; i++) expect(hs[i]).toBeGreaterThanOrEqual(hs[i - 1] - 1e-9);
+    expect(hs.indexOf(mx)).toBeLessThan(hs.length * 0.45);
+    expect(hs[hs.length - 1]).toBeLessThan(0.3);
+    for (let i = 1; i < hs.indexOf(mx) - 3; i++) expect(hs[i]).toBeGreaterThanOrEqual(hs[i - 1] - 1e-9);
   });
   it('Rampen-Lkw sind Autotransporter', () => {
     const sim = new Sim(12, { ramps: true, startS: 900, noDynamic: true });
