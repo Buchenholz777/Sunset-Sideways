@@ -127,3 +127,10 @@ Echtes Smartphone, Firefox/WebKit, Handspiel (Gefühl, Klang), Bildrate auf Ger�
 - **Klang**: `Sound.setEnv(kind, k)` (Hall, Tunnelsummen, Casino-Gemurmel); wird in `game.ts` mit `renderer.routeNow` gespeist.
 - **QA**: `?qa=1&startS=9500|10000|12500|19500|20000|25000` springt direkt (QA ist von Rangliste und Statistik ausgeschlossen); `__qa.route()`; Skripte `scripts/route_e2e.mjs`, `route_perf.mjs`; Tests `route.test.ts`, `highspeed.test.ts`.
 - **Admin: eigene Tempokurve** (`tempo.curveOn` + `tempo.curve`, Marken `CURVE_KM` 0/1/2/4/6/8/10/12/15/20/27/35 km, 120–1000 km/h, nie fallend): ersetzt Start-/Höchsttempo/Strecke bis zum Maximum, sobald aktiv (Einschalten übernimmt den aktuellen Verlauf). Hinter der letzten Marke gilt die Steigung des letzten Abschnitts bis 1000 km/h. Normalisierung erzwingt Monotonie; `validate` meldet fallende Werte. Tests: `tests/curve.test.ts`.
+
+## Themenwelten & Soundtrack-Pipeline
+- Tunnel-Themen (`TUNNEL_THEMES` in `src/sim/route.ts`): Tunnel n → Thema n % 4 (Cosmic, Atlantis, Kingdom, Jazz). Casino-Themen unabhängig (`variant % 4`: cosmic, atlantis, royal, jazz). Alles aus Distanz + Seed.
+- Rendering: `src/render/enclosure.ts` (Zellen, Portale, Casino-Szenen, Atlantis-Glas, Seeriese), `src/render/themeart.ts` (Vektorkunst: Planeten, Korallen, Ritter, Saxofon, Gäste, Spieltische, Jazzbühne). NS/AS sind entfernt.
+- Sternenbogen-Impuls (`starFlash`) nur Darstellung, bei „reduzierte Bewegung" aus.
+- Ambience je Thema: `Sound.setEnv(kind, k, theme)`.
+- Soundtrack: `src/audio/soundtrack.ts` lädt optional `/audio/soundtrack.json` (+ Audiodatei, Rush-Layer). Fehlt sie oder fehlt `license`, bleibt die Synth-Musik. **Die produzierte Aufnahme fehlt noch** – Paket in `docs/music/README.md` (Text, Harmonien, Generator-Prompt, Dateianforderungen, Rechte-Checkliste).

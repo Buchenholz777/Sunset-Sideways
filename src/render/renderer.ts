@@ -8,7 +8,7 @@ import { applyLight, decoType, decoX, drawDeco, LANDMARK_FAR, LANDMARK_SCALE, LA
 import { CHUNK, drawPed, pedsInChunk } from './people';
 import { computeRows } from './rows';
 import { LOT, lotItems, type LotEnv } from './lots';
-import { encState, enclosureItems } from './enclosure';
+import { encState, enclosureItems, starFlash } from './enclosure';
 import { eventsIn, planRoute, routeStrength, type RouteEvent } from '../sim/route';
 import { PAL, blinkerIntensity, blinkerLight, drawBlinkerLight, drawObstacle, drawPickup, drawShieldArc, gfx, rect, type Blinker, type BlinkerLight } from './sprites';
 import { drawCar } from './car3d';
@@ -56,7 +56,7 @@ export class Renderer {
   /** Nur QA/Vergleich: Grundstücke abschalten (alte Straßenrand-Motive), um Kosten und Bild zu vergleichen. */
   lotsOn = true;
   private plan: readonly RouteEvent[] = NO_ROUTE;
-  private rs: { kind: RouteEvent['kind'] | null; k: number } = { kind: null, k: 0 };
+  private rs: { kind: RouteEvent['kind'] | null; k: number; theme: number } = { kind: null, k: 0, theme: 0 };
   private edgeA = '#2ee6d6';
   private edgeB: string = PAL.magenta;
   private pal = { g1: '#1b1033', g2: '#21143c', s1: '#3a2a66', s2: '#30235a', a1: '#262944', a2: '#2b2e4c', haze: '#4a2070', w1: '#443a66', w2: '#3e355e', curb: '#7c6ca8', seam: '#271f40' };
@@ -233,7 +233,7 @@ export class Renderer {
   }
 
   /** Aktuelle Streckenumgebung (Art und Stärke 0…1) für Klang und Anzeige. */
-  get routeNow(): { kind: RouteEvent['kind'] | null; k: number } { return this.rs; }
+  get routeNow(): { kind: RouteEvent['kind'] | null; k: number; theme: number } { return this.rs; }
   get viewSize(): { w: number; h: number; hy: number } { return { w: this.L.w, h: this.L.h, hy: this.L.hy }; }
 
   private lat(z: number, zc: number): number { return this.road.center(z) - this.camXw - this.camHead * (z - zc); }
@@ -312,6 +312,15 @@ export class Renderer {
     this.player(v, zc);
     this.fxLayer(v, dt);
     ctx.restore();
+    if (!this.reducedMotion) {
+      // Cosmic Highway, Sternenbogen in der Tunnelmitte: kurzer, weicher Cyan-/Magenta-Impuls an den Bildrändern (nur Darstellung, höchstens 0,26 Deckkraft, kein Blitz)
+      const sf = starFlash(this.plan.find((e) => v.s >= e.start && v.s < e.end) ?? null, v.s);
+      if (sf > 0.01) {
+        const g = ctx.createLinearGradient(0, 0, L.w, 0);
+        g.addColorStop(0, `rgba(95,224,255,${(0.26 * sf).toFixed(3)})`); g.addColorStop(0.28, 'rgba(95,224,255,0)'); g.addColorStop(0.72, 'rgba(255,79,216,0)'); g.addColorStop(1, `rgba(255,79,216,${(0.26 * sf).toFixed(3)})`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, L.w, L.h);
+      }
+    }
     if (this.nmPulse > 0) {
       // Near Miss: weicher Lichtstreifen am Rand der Seite, an der das Fahrzeug vorbeiging (≈ 0,3 s, nur Darstellung)
       const w = L.w * 0.22, x0 = this.nmSide > 0 ? L.w - w : 0;

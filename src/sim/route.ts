@@ -9,13 +9,19 @@ import { createRng } from '../core/rng';
  */
 export type RouteKind = 'PALM_TUNNEL' | 'CASINO_INTERIOR';
 
+/** Themenwelten: Tunnel (0 Cosmic Highway, 1 Atlantis, 2 Neon Kingdom, 3 Midnight Jazz) und Casino (0 Cosmic, 1 Atlantis, 2 Royal Castle, 3 Midnight Jazz). */
+export const TUNNEL_THEMES = ['cosmic', 'atlantis', 'medieval', 'jazz'] as const;
+export const CASINO_THEMES = ['cosmic', 'atlantis', 'royal', 'jazz'] as const;
+
 export interface RouteEvent {
   kind: RouteKind;
   /** Streckenmeter der Einfahrt (Portal) und der Ausfahrt. */
   start: number;
   end: number;
-  /** Gestaltungsvariante (Farbwechsel der Palmen und Schilder, Casino-Namen) – nur Darstellung. */
+  /** Gestaltungsvariante (Farbwechsel, Casino-Namen) – nur Darstellung. */
   variant: number;
+  /** Themenwelt (Index in TUNNEL_THEMES bzw. CASINO_THEMES). Tunnel folgen der Reihenfolge Cosmic → Atlantis → Kingdom → Jazz und beginnen danach von vorn; Casinos wählen unabhängig davon. */
+  theme: number;
   id: number;
 }
 
@@ -51,7 +57,7 @@ export function planRoute(seed: number): RouteEvent[] {
   let start: number = ROUTE.firstTunnel.start;
   let len: number = ROUTE.firstTunnel.len;
   while (start < ROUTE.horizon) {
-    ev.push({ kind: 'PALM_TUNNEL', start, end: start + len, variant: Math.floor(rnd() * 3), id: id++ });
+    ev.push({ kind: 'PALM_TUNNEL', start, end: start + len, variant: Math.floor(rnd() * 3), theme: ev.length % TUNNEL_THEMES.length, id: id++ });
     start += between(ROUTE.tunnel.gapMin, ROUTE.tunnel.gapMax);
     len = between(ROUTE.tunnel.lenMin, ROUTE.tunnel.lenMax);
     if (start < ev[ev.length - 1].end + ROUTE.clearance) start = ev[ev.length - 1].end + ROUTE.clearance;
@@ -67,7 +73,8 @@ export function planRoute(seed: number): RouteEvent[] {
       const t = tunnels.find((x) => !(at + clen + ROUTE.clearance <= x.start || at >= x.end + ROUTE.clearance));
       at = t ? t.end + ROUTE.clearance : at + ROUTE.clearance;
     }
-    ev.push({ kind: 'CASINO_INTERIOR', start: at, end: at + clen, variant: Math.floor(rnd() * 4), id: id++ });
+    const cv = Math.floor(rnd() * 4);
+    ev.push({ kind: 'CASINO_INTERIOR', start: at, end: at + clen, variant: cv, theme: cv % CASINO_THEMES.length, id: id++ });
     at += clen + between(ROUTE.casino.gapMin, ROUTE.casino.gapMax);
   }
   ev.sort((a, b) => a.start - b.start);
@@ -95,11 +102,11 @@ const smooth = (x: number): number => { const t = Math.max(0, Math.min(1, x)); r
  * Stärke 0…1, mit der die Umgebung des Ereignisses auf den Spieler an Streckenmeter s wirkt: steigt vor der Einfahrt und fällt nach der Ausfahrt weich
  * ab (Licht, Dunkelheit, Klang). Die Strecke wird nie unterbrochen.
  */
-export function routeStrength(plan: readonly RouteEvent[], s: number): { kind: RouteKind | null; k: number } {
-  let best: { kind: RouteKind | null; k: number } = { kind: null, k: 0 };
+export function routeStrength(plan: readonly RouteEvent[], s: number): { kind: RouteKind | null; k: number; theme: number } {
+  let best: { kind: RouteKind | null; k: number; theme: number } = { kind: null, k: 0, theme: 0 };
   for (const e of eventsIn(plan, s - ROUTE.blend * 2, s + ROUTE.blend * 2)) {
     const k = smooth((s - (e.start - ROUTE.blend * 0.4)) / ROUTE.blend) * (1 - smooth((s - (e.end - ROUTE.blend * 0.6)) / ROUTE.blend));
-    if (k > best.k) best = { kind: e.kind, k };
+    if (k > best.k) best = { kind: e.kind, k, theme: e.theme };
   }
   return best;
 }

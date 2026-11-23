@@ -1,5 +1,6 @@
 import { load, save } from '../storage/storage';
 import { BALANCE } from '../config/balance';
+import { Soundtrack } from './soundtrack';
 
 export type Sfx = 'start' | 'shield' | 'slow' | 'clear' | 'magnet' | 'glide' | 'land' | 'boost' | 'guide' | 'shieldHit' | 'crash' | 'record' | 'effectEnd' | 'nearMiss' | 'rushStart' | 'rushEnd' | 'rushTick' | 'laneWarn' | 'zap' | 'slash' | 'gate' | 'wave' | 'rushPass';
 
@@ -27,7 +28,15 @@ export class Sound {
   private noiseBuf: AudioBuffer | null = null;
   private flight: { g: GainNode; nf: BiquadFilterNode; o1: OscillatorNode; o2: OscillatorNode; wf: BiquadFilterNode; rg: GainNode } | null = null;
 
-  constructor() { this.muted = load().muted; }
+  private track = new Soundtrack();
+
+  constructor() {
+    this.muted = load().muted;
+    // Aufnahme erst nach dem Laden einwechseln (nur falls Musik schon läuft); Synth-Takt endet dann sauber
+    this.track.onReady = () => { if (this.musicOn && this.ctx && this.musicGain) { this.halt(); this.track.start(this.ctx, this.musicGain); } };
+  }
+
+  private halt(): void { if (this.musicTimer !== undefined) clearInterval(this.musicTimer); this.musicTimer = undefined; this.padBus?.gain.setTargetAtTime(0, this.ctx!.currentTime, 0.3); }
 
   setMuted(m: boolean): void {
     this.muted = m;
@@ -61,6 +70,7 @@ export class Sound {
         for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
       }
       if (this.ctx.state === 'suspended') void this.ctx.resume();
+      if (typeof fetch === 'function') void this.track.load(this.ctx as AudioContext);
     } catch { this.ctx = null; }
   }
 
@@ -233,6 +243,7 @@ export class Sound {
     }
     this.musicGain.gain.cancelScheduledValues(c.currentTime);
     this.musicGain.gain.setTargetAtTime(Sound.MUSIC_BUS, c.currentTime, 0.2);
+    if (this.track.available) { this.padBus?.gain.setTargetAtTime(0, c.currentTime, 0.05); this.track.start(c as AudioContext, this.musicGain); return; }
     this.nextT = c.currentTime + 0.08;
     if (this.musicTimer !== undefined) clearInterval(this.musicTimer);
     this.musicTimer = setInterval(() => this.schedule(), 40);
@@ -240,6 +251,7 @@ export class Sound {
 
   private stopMusic(): void {
     this.musicOn = false;
+    if (this.track.playing && this.ctx) this.track.stop(this.ctx as AudioContext);
     if (this.musicTimer !== undefined) clearInterval(this.musicTimer);
     this.musicTimer = undefined;
     const c = this.ready();
@@ -445,13 +457,13 @@ export class Sound {
   }
 
   // ---------- Streckenumgebung: Tunnel-Hall und Casino-Ambience (dezent, folgt den Soundeinstellungen) ----------
-  private envN: { send: GainNode; hum: GainNode; amb: GainNode; osc: OscillatorNode[]; src: AudioBufferSourceNode } | null = null;
+  private envN: { lp: BiquadFilterNode; send: GainNode; hum: GainNode; amb: GainNode; osc: OscillatorNode[]; src: AudioBufferSourceNode } | null = null;
   private envDingT = 0;
   /**
    * Umgebungsklang nach Streckenereignis (kind: 'PALM_TUNNEL' | 'CASINO_INTERIOR' | null) und Stärke k (0…1): kurzer, weicher Hall auf Motor und Effekten,
    * Tunnel mit leisem elektrischem Summen, Casino mit gedämpftem Stimmengewirr und seltenen, hellen Automatenklängen. Weiche Übergänge, kein Browser-Autoplay vor der ersten Eingabe.
    */
-  setEnv(kind: string | null, k: number): void {
+  setEnv(kind: string | null, k: number, theme = 0): void {
     const c = this.ready();
     if (!c || !this.engBus || !this.sfxBus || !this.master) return;
     if ((!kind || k < 0.01) && !this.envN) return;
@@ -472,11 +484,21 @@ export class Sound {
       const src = c.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
       const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 700; bp.Q.value = 0.7;
       src.connect(bp).connect(amb).connect(this.master); src.start();
-      this.envN = { send, hum, amb, osc: [o1, o2], src };
+      this.envN = { lp, send, hum, amb, osc: [o1, o2], src };
     }
     const E = this.envN, tun = kind === 'PALM_TUNNEL' ? k : 0, cas = kind === 'CASINO_INTERIOR' ? k : 0;
-    E.send.gain.setTargetAtTime(0.2 * tun + 0.1 * cas, t, 0.15);
-    E.hum.gain.setTargetAtTime(0.014 * tun, t, 0.2);
+    // Themenklang (nur Farbe der Ambience, die Musik bleibt unberührt): 0 Cosmic = weiter, heller Schimmer; 1 Atlantis = tiefes, gedämpftes Wasser;
+    // 2 Kingdom = längerer Hall mit leerer Quinte; 3 Jazz = warme Terz, sehr leise.
+    const TH = [
+      { f1: 82, f2: 165.4, hum: 0.013, rev: 0.22, lp: 3200 },
+      { f1: 41, f2: 82.2, hum: 0.02, rev: 0.26, lp: 900 },
+      { f1: 55, f2: 82.5, hum: 0.012, rev: 0.3, lp: 2000 },
+      { f1: 110, f2: 138.6, hum: 0.007, rev: 0.12, lp: 2600 },
+    ][((theme % 4) + 4) % 4];
+    if (tun > 0) { E.osc[0].frequency.setTargetAtTime(TH.f1, t, 0.3); E.osc[1].frequency.setTargetAtTime(TH.f2, t, 0.3); }
+    E.send.gain.setTargetAtTime(TH.rev * tun + 0.1 * cas, t, 0.15);
+    E.lp.frequency.setTargetAtTime(TH.lp, t, 0.3);
+    E.hum.gain.setTargetAtTime(TH.hum * tun, t, 0.2);
     E.amb.gain.setTargetAtTime(0.012 * cas, t, 0.25);
     // Casino: gelegentlich ein heller, leiser Automatenklang (Zufallsabstand 1–3 s, nie bei abgeschaltetem Ton)
     if (cas > 0.4 && !this.muted && t > this.envDingT) {
@@ -500,6 +522,7 @@ export class Sound {
   setRush(on: boolean): void {
     const c = this.ready();
     if (!c || !this.engBus) return;
+    if (this.track.playing) this.track.rush(c as AudioContext, on);
     const t = c.currentTime;
     if (on && !this.rushHum) {
       const g = c.createGain(); g.gain.value = 0;

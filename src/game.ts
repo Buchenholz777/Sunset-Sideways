@@ -692,7 +692,7 @@ export class Game {
         shieldFrac: sim.shieldT / B.effects.shield, rush: sim.style.rushActive, gates: sim.gates, obstacles: sim.obstacles, pickups: sim.pickups,
         crash: sim.crash ? { id: sim.crash.id } : null, running, sceneT: this.qaSceneT ?? sim.t - sim.t0, seed: sim.seed, finishZ: this.mode === 'sprint' ? SPRINT_FINISH_M : undefined,
       };
-      if (running) { this.sound.setLight(lightT(sim.s)); this.sound.update(sim.speedKmh, false, 0); this.sound.setEnv(this.renderer.routeNow.kind, this.renderer.routeNow.k); } else this.sound.setEnv(null, 0);
+      if (running) { this.sound.setLight(lightT(sim.s)); this.sound.update(sim.speedKmh, false, 0); this.sound.setEnv(this.renderer.routeNow.kind, this.renderer.routeNow.k, this.renderer.routeNow.theme); } else this.sound.setEnv(null, 0);
     }
     this.renderer.draw(v, this.state.phase === 'paused' && !this.qaHook ? 0 : frameDt);
     if (sim && this.state.phase !== 'preview') this.updateHud(sim);
