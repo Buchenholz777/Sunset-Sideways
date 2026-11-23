@@ -17,7 +17,7 @@ export const RAMP = {
   /** Länge und Breite der Auffahrtsfläche (m) und Höhe der Oberkante (m); Autotransporter-Rampe schmaler (Breite des Aufliegers). */
   len: 7, width: 3.0, truckWidth: 2.3, height: 1.25,
   /** Erste Rampe frühestens ab (m), Abstand der folgenden (m), Anteil der Lkw-Rampen. */
-  first: 1100, gapMin: 1100, gapMax: 2100, truckShare: 0.35,
+  first: 1100, gapMin: 1100, gapMax: 2100, truckShare: 1,
   /** Tempo des Rampen-Lkw (m/s), wie die übrigen Lkw (36 km/h). */
   truckV: 10,
   /** Rampen entstehen, sobald sie näher als so viele Meter am Wagen liegen (größer als die Zeichenweite). */

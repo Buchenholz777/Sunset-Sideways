@@ -261,17 +261,26 @@ export class Renderer {
     fill([P(x0, z0, y0), P(x1, z0, y0), P(x1, z0, y1), P(x0, z0, y1)], 0.3);
   }
 
-  /** Autotransporter: niedriger Auflieger mit Ladefläche auf Rampenhöhe, geladenem Wagen und Führerhaus; die Rampe (drawRamp) schließt am Heck an. */
+  /**
+   * Autotransporter nach dem Vorbild der Europa-Fahrzeugträger: blau-weißes Führerhaus, offener Auflieger mit zwei Ebenen (untere Ladefläche auf Rampenhöhe,
+   * obere Ebene darüber), Stützen, Geländer und Doppelachsen. Unbeladen. Die Rampe (drawRamp) ist die heruntergeklappte untere Ladefläche am Heck.
+   */
   private drawCarrier(zc: number, o: Obstacle): void {
-    const cx = o.x, z = o.z, H = RAMP.height, hw = 1.2;
-    this.drawBox(zc, cx, -hw, hw, z + 8.1, z + 10, 0.5, 3.1, '#c8c2d8');                    // Führerhaus
-    this.drawBox(zc, cx, -hw, hw, z + 0.1, z + 8.0, 0.55, H, '#3b3560');                    // Ladefläche
-    for (const zz of [z + 1.0, z + 6.6]) for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * hw - 0.15, sx * hw + 0.15, zz, zz + 1.1, 0, 0.8, '#111');   // Räder
-    this.drawBox(zc, cx, -0.9, 0.9, z + 3.4, z + 7.6, H, H + 0.75, '#e0457b');              // geladener Wagen (Unterbau)
-    this.drawBox(zc, cx, -0.8, 0.8, z + 4.4, z + 6.7, H + 0.75, H + 1.35, '#f2a2c0');       // Kabine
-    for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * hw - 0.06, sx * hw + 0.06, z + 0.2, z + 7.9, H, H + 0.2, '#ffd23f');   // Warnleisten
-    const k = this.proj(zc, cx, z + 0.1);
-    this.ctx.fillStyle = '#ff2a3d'; this.ctx.fillRect(k.sx - 0.9 * k.k, k.sy - 0.95 * k.k, 0.35 * k.k, 0.2 * k.k); this.ctx.fillRect(k.sx + 0.55 * k.k, k.sy - 0.95 * k.k, 0.35 * k.k, 0.2 * k.k);   // Rückleuchten
+    const cx = o.x, z = o.z, H = RAMP.height, hw = 1.2, L = 9.2, BLUE = '#2c6fdc', WHITE = '#eef2f8', STEEL = '#4b5470';
+    this.drawBox(zc, cx, -hw, hw, z + L + 0.3, z + L + 3.4, 0.55, 3.0, BLUE);                         // Führerhaus
+    this.drawBox(zc, cx, -hw, hw, z + L + 0.3, z + L + 3.4, 1.7, 2.2, WHITE);                         // weißer Streifen
+    this.drawBox(zc, cx, -hw, hw, z + 0.4, z + L, 0.5, H, STEEL);                                      // untere Ladefläche
+    this.drawBox(zc, cx, -hw, hw, z + 1.2, z + L, 2.95, 3.15, STEEL);                                  // obere Ladefläche
+    for (const zz of [z + 1.4, z + 2.6, z + 3.8]) for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * (hw + 0.1) - 0.17, sx * (hw + 0.1) + 0.17, zz, zz + 1.0, 0, 0.8, '#15171f');   // Achsen
+    for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * (hw + 0.1) - 0.17, sx * (hw + 0.1) + 0.17, z + L + 0.9, z + L + 1.9, 0, 0.9, '#15171f');
+    for (const zz of [z + 1.3, z + L - 0.3]) for (const sx of [-1, 1]) {                              // Stützen: blau-weiß gestreift
+      for (let i = 0; i < 4; i++) this.drawBox(zc, cx, sx * hw - 0.13, sx * hw + 0.13, zz, zz + 0.26, H + i * 0.4, H + (i + 1) * 0.4, i % 2 ? WHITE : BLUE);
+      this.drawBox(zc, cx, sx * hw - 0.13, sx * hw + 0.13, zz, zz + 0.26, 2.95, 3.9, BLUE);
+    }
+    for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * hw - 0.05, sx * hw + 0.05, z + 1.2, z + L, 3.15, 3.5, WHITE);   // Geländer oben
+    for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * hw - 0.05, sx * hw + 0.05, z + 0.4, z + L, H, H + 0.3, WHITE);    // Geländer unten
+    const k = this.proj(zc, cx, z + 0.4);
+    this.ctx.fillStyle = '#ff2a3d'; this.ctx.fillRect(k.sx - 1.05 * k.k, k.sy - 0.9 * k.k, 0.4 * k.k, 0.22 * k.k); this.ctx.fillRect(k.sx + 0.65 * k.k, k.sy - 0.9 * k.k, 0.4 * k.k, 0.22 * k.k);   // Rückleuchten
   }
 
   /** Rampe: keilförmige Auffahrt in Neonfarben mit Warnstreifen; die Oberkante schließt beim Lkw an die Ladefläche an. */
@@ -284,12 +293,12 @@ export class Renderer {
     const quad = (a: { sx: number; sy: number }[], fill: string): void => { ctx.beginPath(); a.forEach((p, i) => { if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy); }); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
     quad([nl, fl, gl], 'rgba(18,14,42,0.95)');                                  // linke Seitenfläche
     quad([nr, fr, gr], 'rgba(18,14,42,0.95)');                                  // rechte Seitenfläche
-    quad([nl, nr, fr, fl], '#2a2252');                                         // Oberseite
+    quad([nl, nr, fr, fl], '#5b6480');                                         // Oberseite
     // Warnstreifen quer zur Fahrtrichtung
     const n = 5;
     for (let i = 0; i < n; i += 2) {
       const t0 = i / n, t1 = (i + 1) / n, zA = z0 + (z1 - z0) * t0, zB = z0 + (z1 - z0) * t1;
-      quad([P(-hw, zA, H * t0), P(hw, zA, H * t0), P(hw, zB, H * t1), P(-hw, zB, H * t1)], '#ffd23f');
+      quad([P(-hw, zA, H * t0), P(hw, zA, H * t0), P(hw, zB, H * t1), P(-hw, zB, H * t1)], '#3a4258');
     }
     ctx.lineWidth = Math.max(1, 0.07 * nl.k); ctx.strokeStyle = `rgba(95,224,255,${glow.toFixed(2)})`;
     ctx.beginPath(); ctx.moveTo(nl.sx, nl.sy); ctx.lineTo(fl.sx, fl.sy); ctx.moveTo(nr.sx, nr.sy); ctx.lineTo(fr.sx, fr.sy); ctx.moveTo(nl.sx, nl.sy); ctx.lineTo(nr.sx, nr.sy); ctx.stroke();

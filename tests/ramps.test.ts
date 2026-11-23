@@ -17,7 +17,7 @@ describe('Rampen', () => {
       for (let i = 1; i < a.length; i++) expect(a[i].z - a[i - 1].z).toBeGreaterThanOrEqual(RAMP.gapMin);
       const ev = planRoute(seed);
       for (const r of a) for (const e of ev) expect(r.z > e.start - 300 && r.z < e.end + 200, `Seed ${seed} Rampe ${r.z}`).toBe(false);
-      expect(a.some((r) => r.truck)).toBe(true); expect(a.some((r) => !r.truck)).toBe(true);
+      expect(a.every((r) => r.truck)).toBe(true);        // nur Autotransporter, keine einzelnen Rampen
     }
   });
   it('ohne Option gibt es keine Rampen (Tests, Sprint)', () => {
@@ -29,8 +29,8 @@ describe('Rampen', () => {
     sim.obstacles = [];
     let took = false, maxH = 0, flew = 0;
     for (let i = 0; i < 40 / DT && !sim.crashed && !took; i++) {
-      sim.obstacles = sim.obstacles.filter((o) => o.kind === 'truck');
-      const r = sim.ramps.find((x) => !x.truck && x.z > sim.s);
+      sim.obstacles = sim.obstacles.filter((o) => o.carrier);
+      const r = sim.ramps.find((x) => x.z > sim.s);
       sim.step(DT, { dir: 0, target: r ? r.x : 0 });
       if (sim.glideT > 0) took = true;
     }
