@@ -80,7 +80,7 @@ export class Game {
   private overlayArmed = false;
   private seedParam: number | null;
   /** Nur für Tests: reproduzierbarer Szeneneinstieg per URL (?startS=&startT=&turbo=1&qa=1), unsichtbar. */
-  private qa: { startS?: number; startT?: number; ghost?: boolean } = {};
+  private qa: { startS?: number; startT?: number; ghost?: boolean; ramps?: boolean } = {};
   private qaHook = false;
   private qaSceneT: number | null = null;
   private qaPickupEvents = 0;
@@ -149,9 +149,10 @@ export class Game {
     if (this.previewToken) this.showBadge();
     window.addEventListener('pagehide', () => this.endRun('leave'));
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') void this.refreshConfig(); });
-    this.qa = this.qaHook ? { startS: num('startS'), startT: num('startT'), ghost: q.get('ghost') === '1' } : {};
+    this.qa = this.qaHook ? { startS: num('startS'), startT: num('startT'), ghost: q.get('ghost') === '1', ramps: q.get('ramps') !== '0' } : {};
     this.renderer.debug = this.qaHook && q.get('debug') === '1';
     this.renderer.ghost = this.qa.ghost === true;
+    if (this.qaHook && q.get('rain') !== null) this.renderer.forceRain = Math.max(0, Math.min(1, Number(q.get('rain')) || 0));
     if (this.qaHook && q.get('nolots') === '1') this.renderer.lotsOn = false;
     if (this.qaHook) {
       (window as unknown as { __qa: unknown }).__qa = {
@@ -341,7 +342,7 @@ export class Game {
     this.tele.send('start', this.runId, undefined, { cfg: mode === 'sprint' ? `${SPRINT_ID}` : this.remote.id, ev: mode === 'endless' && eventActive(this.remote) ? this.remote.event!.id : null, mode, ch: mode === 'sprint' && this.challenge?.ok ? 1 : 0 });
     const seed = mode === 'sprint' ? SPRINT_SEED : this.seedParam !== null ? (this.seedParam + this.runCount) >>> 0 : newSeed();
     this.runCount++;
-    this.sim = new Sim(seed, mode === 'sprint' ? { ...this.qa, script: SPRINT_ROUTE } : this.qa);
+    this.sim = new Sim(seed, mode === 'sprint' ? { ...this.qa, ramps: false, script: SPRINT_ROUTE } : { ramps: true, ...this.qa });
     this.el.sprintBar.hidden = mode !== 'sprint';
     this.el.bestWrap.hidden = mode === 'sprint';
     this.el.shareBox.hidden = true;
@@ -458,7 +459,7 @@ export class Game {
         else if (ev.type === 'comboLost') { if (ev.reason === 'time') this.showMiss('Combo vorbei', 'lost', 900); }
         else if (ev.type === 'laneWarn') this.sound.sfx('laneWarn');
         else if (ev.type === 'queued') this.toast(`Vorgemerkt: ${PICKUP_LABEL[ev.effect as PickupKey] ?? ev.effect}`, 1100);
-        else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast('Fliegen'); if (!this.runFlew) { this.runFlew = true; this.tele.send('fly', this.runId); } }
+        else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast(ev.ramp ? 'Rampe' : 'Fliegen'); if (!this.runFlew) { this.runFlew = true; this.tele.send('fly', this.runId); } }
         else if (ev.type === 'glideEnd') { this.renderer.burst('land'); this.sound.sfx('land'); this.sound.setFlight(false); }
         else if (ev.type === 'magnetPull') this.sound.sfx('magnet');
         else if (ev.type === 'effectEnd') {
@@ -688,11 +689,11 @@ export class Game {
     } else {
       const running = this.state.phase === 'running' || this.qaHook;
       v = {
-        s: sim.s, x: sim.q, X: sim.X, bodyYaw: sim.bodyYaw, phi: sim.phi, rel: sim.relAngle, slow: sim.slowT > 0, magnet: sim.magnetT > 0, blitz: sim.blitzT > 0, boost: sim.boostT > 0, guide: sim.guideQ, lift: sim.height, glideLeft: sim.glideT, slowAge: sim.slowT > 0 ? B.effects.slow - sim.slowT : -1, road: sim.road, speedKmh: sim.speedKmh, shield: sim.shieldT > 0,
+        s: sim.s, x: sim.q, X: sim.X, bodyYaw: sim.bodyYaw, phi: sim.phi, rel: sim.relAngle, slow: sim.slowT > 0, magnet: sim.magnetT > 0, blitz: sim.blitzT > 0, boost: sim.boostT > 0, guide: sim.guideQ, lift: sim.height, glideLeft: sim.glideT, glideTotal: sim.glideTotal, ramps: sim.ramps, slowAge: sim.slowT > 0 ? B.effects.slow - sim.slowT : -1, road: sim.road, speedKmh: sim.speedKmh, shield: sim.shieldT > 0,
         shieldFrac: sim.shieldT / B.effects.shield, rush: sim.style.rushActive, gates: sim.gates, obstacles: sim.obstacles, pickups: sim.pickups,
         crash: sim.crash ? { id: sim.crash.id } : null, running, sceneT: this.qaSceneT ?? sim.t - sim.t0, seed: sim.seed, finishZ: this.mode === 'sprint' ? SPRINT_FINISH_M : undefined,
       };
-      if (running) { this.sound.setLight(lightT(sim.s)); this.sound.update(sim.speedKmh, false, 0); this.sound.setEnv(this.renderer.routeNow.kind, this.renderer.routeNow.k, this.renderer.routeNow.theme); } else this.sound.setEnv(null, 0);
+      if (running) { this.sound.setLight(lightT(sim.s)); this.sound.update(sim.speedKmh, false, 0); this.sound.setEnv(this.renderer.routeNow.kind, this.renderer.routeNow.k, this.renderer.routeNow.theme); this.sound.setRain(this.renderer.rainNow); } else { this.sound.setEnv(null, 0); this.sound.setRain(0); }
     }
     this.renderer.draw(v, this.state.phase === 'paused' && !this.qaHook ? 0 : frameDt);
     if (sim && this.state.phase !== 'preview') this.updateHud(sim);

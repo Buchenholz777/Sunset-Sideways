@@ -134,3 +134,7 @@ Echtes Smartphone, Firefox/WebKit, Handspiel (Gefühl, Klang), Bildrate auf Ger�
 - Sternenbogen-Impuls (`starFlash`) nur Darstellung, bei „reduzierte Bewegung" aus.
 - Ambience je Thema: `Sound.setEnv(kind, k, theme)`.
 - Soundtrack: `src/audio/soundtrack.ts` lädt optional `/audio/soundtrack.json` (+ Audiodatei, Rush-Layer). Fehlt sie oder fehlt `license`, bleibt die Synth-Musik. **Die produzierte Aufnahme fehlt noch** – Paket in `docs/music/README.md` (Text, Harmonien, Generator-Prompt, Dateianforderungen, Rechte-Checkliste).
+
+## Rampen und Wetter
+- **Rampen** (`src/sim/ramps.ts`, `Sim.ramps`): Auffahrt auf der Straße oder Lkw mit Laderampe am Heck (35 %). Erste ab 1,1 km, danach alle 1,1–2,1 km; nur Endless (`SimOptions.ramps`, im Sprint und in Tests aus; QA-Seite `?ramps=0`). Überfahren hebt ab: gleicher Flugzustand wie „Fliegen“ (`glideT`, lenkbar, ohne Kontakte), Dauer `RAMP.fly` = 2,7 s (`Sim.glideTotal`). Landemarke mit Lichtsäule an der Aufsetzstelle (`Renderer.landMark`, folgt der Lenkung). In Rampennähe werden andere Hindernisse der Spur entfernt (`spawnRamps`). Keine Rampen in Tunneln/Casinos. Keine zusätzliche Distanz: der Gewinn ist das Überfliegen von Hindernissen.
+- **Regen** (`src/sim/weather.ts`, `Renderer.weatherLayer`, `Sound.setRain`): trocken bis ≈ 16 km, danach Schauer (1,5–3,2 km lang, 2,5–6 km Pause, Stärke 0,55–1), nur Darstellung/Klang. Dunklere Stimmung, kräftigere Neon-Randlinien, Regenfäden (reduzierte Bewegung: stehend, weniger). QA: `?rain=0…1` erzwingt Regen.

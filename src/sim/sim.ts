@@ -3,6 +3,7 @@ import { speedAtDist, steerAt } from '../core/speed';
 import { Generator, type GenWorld } from '../gen/generator';
 import { ScriptedGen, type RouteEntry } from '../sprint/rules';
 import { contactTime, obstacleFootprint, pickupFootprint, playerFootprint } from './contacts';
+import { RAMP, RampPlan, rampFootprint, type Ramp } from './ramps';
 import { planGuide } from './guide';
 import { Road } from './road';
 import { StyleState, type StyleEvent } from './style';
@@ -26,7 +27,7 @@ export type SimEvent =
   | { type: 'cleared'; x: number; z: number; kind: ObjKind }
   | { type: 'blitz'; x: number; z: number }
   | { type: 'magnetPull'; x: number; z: number }
-  | { type: 'glideStart' }
+  | { type: 'glideStart'; ramp?: boolean }
   | { type: 'glideEnd' }
   | { type: 'crash'; kind: ObjKind }
   | { type: 'effectEnd'; effect: PickupType }
@@ -47,6 +48,7 @@ export interface SimOptions {
   /** Feste Begegnungsfolge (Sunset Sprint) statt des laufenden Generators. */ script?: readonly RouteEntry[]; startT?: number; startS?: number; record?: boolean;
   /** nur Tests: keine Hindernistreffer */ ghost?: boolean;
   /** Nur Tests: keine selbstständigen Spurwechsel (Standard: an, außer im festen Sprint). */ noDynamic?: boolean;
+  /** Rampen und Rampen-Lkw einstreuen (Endless; aus in Tests und im festen Sprint). */ ramps?: boolean;
 }
 
 interface Hit { f: number; pickup: Pickup | null; obstacle: Obstacle | null }
@@ -86,6 +88,12 @@ export class Sim {
   blitzLeft = 0;
   /** Gleitflug: Restzeit; Höhe siehe `height`. */
   glideT = 0;
+  /** Gesamtdauer des laufenden Flugs (Power-up oder Rampe). */
+  glideTotal = 0;
+  /** Rampen auf der Strecke (nur wenn `opts.ramps`). */
+  ramps: Ramp[] = [];
+  private rampPlan: RampPlan | null = null;
+  private rampIdx = 0;
   /** Bereits verbrauchte Landeverlängerung (s). */
   private glideHold = 0;
   /** Vorgemerkter exklusiver Effekt (Fliegen oder Phantom-Turbo, höchstens einer; der neuere ersetzt den älteren). */
@@ -129,6 +137,7 @@ export class Sim {
     this.t0 = this.t;
     this.road = new Road(seed);
     this.speedKmh = speedAtDist(this.s);
+    if (opts.ramps) this.rampPlan = new RampPlan(seed, this.s + 200);
     this.gen = opts.script ? new ScriptedGen(opts.script) : new Generator(seed, { record: opts.record, startS: opts.startS });
     this.director = opts.script || opts.noDynamic ? null : new TrafficDirector();
     this.gen.update(this);
@@ -152,7 +161,7 @@ export class Sim {
   /** Flughöhe in Metern: 0,5 s Abheben, Reiseflug, 1 s Sinken. */
   get height(): number {
     if (this.glideT <= 0) return 0;
-    const G = B.glide, el = B.effects.glide - this.glideT;
+    const G = B.glide, el = this.glideTotal - this.glideT;
     return G.height * Math.min(smooth(el / G.up), smooth(this.glideT / G.down));
   }
   /** Längsfaktor des Verkehrs: Zeitlupe wirkt auf Spieler und Verkehr gleich. */
@@ -207,6 +216,7 @@ export class Sim {
     const pads = this.pullPickups(dt, qNew, vm);
 
     if (this.style.rushActive) this.rushContacts(body0, body1, ts, dt);
+    if (this.ramps.length) this.rampContacts(body0, body1, ts, dt);
     const flying = this.glideT > 0;
     const inv = this.invulnerable;
     const driven = inp.dir !== 0 || (inp.drag !== null && inp.drag !== undefined) || (inp.target !== null && inp.target !== undefined);
@@ -237,7 +247,7 @@ export class Sim {
         // Fliegen und Phantom-Turbo sind exklusive Bewegungs-/Kollisionszustände: läuft einer, wird der andere (höchstens einer) vorgemerkt und startet danach
         if ((p.type === 'glide' || p.type === 'boost') && (this.glideT > 0 || this.boostT > 0) && !(p.type === 'glide' ? this.glideT > 0 : this.boostT > 0)) { this.pendingFx = p.type; this.events.push({ type: 'queued', effect: p.type }); }
         else if (p.type === 'clear') this.startBlitz(qAt, sAt);
-        else if (p.type === 'glide') { this.glideT = B.effects.glide; this.glideHold = 0; this.events.push({ type: 'glideStart' }); }
+        else if (p.type === 'glide') { this.glideT = this.glideTotal = B.effects.glide; this.glideHold = 0; this.events.push({ type: 'glideStart' }); }
         else {
           // Erneutes Einsammeln setzt die Dauer zurück, verlängert sie nie über die Grundzeit (kein Stapeln); Restzeit nach diesem Schritt = Dauer − (1 − f)·dt
           const val = dur(p.type) + h.f * dt;
@@ -294,13 +304,16 @@ export class Sim {
     if (this.passed.size) this.updatePassed(body1);
     if (this.pendingFx && this.glideT <= 0 && this.boostT <= 0) {
       const next = this.pendingFx; this.pendingFx = null;                  // der vorgemerkte exklusive Effekt startet erst nach dem laufenden
-      if (next === 'glide') { this.glideT = B.effects.glide; this.glideHold = 0; this.events.push({ type: 'glideStart' }); } else this.boostT = B.effects.boost;
+      if (next === 'glide') { this.glideT = this.glideTotal = B.effects.glide; this.glideHold = 0; this.events.push({ type: 'glideStart' }); } else this.boostT = B.effects.boost;
     }
 
     for (const o of this.obstacles) {
       o.z += o.vz * ts * dt;
       if (o.hit) { o.knockT += dt; o.x += o.knockVx * dt; }
     }
+    for (const r of this.ramps) r.z += r.vz * ts * dt;
+    this.ramps = this.ramps.filter((r) => r.z > this.s - 60);
+    if (this.rampPlan) this.spawnRamps();
     this.obstacles = this.obstacles.filter((o) => !(o.hit && o.knockT > 0.9) && o.z + KINDS[o.kind].len > this.s - 60);
     this.pickups = this.pickups.filter((p) => !p.taken && p.z > this.s - 40);
     if (this.director) this.director.update({ seed: this.seed, t: this.t, t0: this.t0, s: this.s, q: this.q, speedKmh: this.speedKmh, timeScale: ts, obstacles: this.obstacles }, dt);
@@ -308,6 +321,34 @@ export class Sim {
     this.rushTick(dt, driven, vm, ts);
     this.flush();
     this.gen.update(this);
+  }
+
+  /** Fährt der Wagen auf eine Rampe, hebt er ab (nicht während Fliegen oder Phantom-Turbo; die Rampe bleibt dann unwirksam). */
+  private rampContacts(body0: ReturnType<typeof playerFootprint>, body1: ReturnType<typeof playerFootprint>, ts: number, dt: number): void {
+    if (this.glideT > 0 || this.boostT > 0 || this.pendingFx) return;
+    for (const r of this.ramps) {
+      if (r.taken || r.z > this.s + 40 || r.z < this.s - 20) continue;
+      const f0 = rampFootprint(this.road, r), f1 = r.vz === 0 ? f0 : rampFootprint(this.road, { ...r, z: r.z + r.vz * ts * dt });
+      if (contactTime(body0, body1, f0, f1) === null) continue;
+      r.taken = true;
+      this.glideT = this.glideTotal = RAMP.fly; this.glideHold = 0;
+      this.events.push({ type: 'glideStart', ramp: true });
+      return;
+    }
+  }
+
+  /** Rampen kommen aus dem festen Plan; im Bereich der Auffahrt und des Lkw werden andere Hindernisse entfernt (nichts steht auf der Rampe oder vor ihr). */
+  private spawnRamps(): void {
+    const plan = this.rampPlan!;
+    const slots = plan.upTo(this.s + RAMP.spawnAhead);
+    while (this.rampIdx < slots.length) {
+      const sl = slots[this.rampIdx++], x = plan.laneX(sl), id = this.nextId++;
+      const r: Ramp = { id, x, z: sl.z, vz: sl.truck ? RAMP.truckV : 0, truck: sl.truck, taken: false };
+      this.ramps.push(r);
+      const a = sl.z - RAMP.len / 2 - 14, b = sl.z + (sl.truck ? RAMP.len / 2 + 16 : RAMP.len / 2 + 12);
+      this.obstacles = this.obstacles.filter((o) => !(Math.abs(o.x - x) < 2.4 && o.z + KINDS[o.kind].len > a && o.z < b));
+      if (sl.truck) this.obstacles.push({ id: this.nextId++, kind: 'truck', x, z: sl.z + RAMP.len / 2, vz: RAMP.truckV, hit: false, knockT: 0, knockVx: 0 });
+    }
   }
 
   /** Phantom-Durchfahrt im Rush: jedes Fahrzeug erzeugt genau einmal einen Kontakt-Impuls (keine Punkte, kein Schaden, keine Rush-Energie). */

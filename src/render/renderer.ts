@@ -1,6 +1,8 @@
 import { BALANCE as B } from '../config/balance';
 import { footprintCorners, obstacleFootprint, pickupFootprint, playerFootprint, type Footprint } from '../sim/contacts';
 import type { Road } from '../sim/road';
+import { RAMP, type Ramp } from '../sim/ramps';
+import { rainAt } from '../sim/weather';
 import { KINDS, type Gate, type Obstacle, type Pickup, type PickupType } from '../sim/world';
 
 import { CAM_BACK, DRAW, RENDER, chaseSlope, gammaBoost, depthEff, isCrispScale, makeLayout, type Layout } from './projection';
@@ -16,7 +18,7 @@ import { drawCar } from './car3d';
 /** Alles, was zum Zeichnen eines Bildes nötig ist (Vorschau oder Lauf). */
 export interface View {
   s: number; x: number; /** Weltposition quer */ X: number; bodyYaw: number; phi: number; /** Winkel Nase–Straße */ rel: number; speedKmh: number;
-  shield: boolean; shieldFrac: number; slow: boolean; magnet: boolean; blitz: boolean; boost: boolean; /** Pfadfinder: Spurmitte oder null */ guide: number | null; /** Flughöhe (m) und Restzeit des Gleitflugs (s) */ lift: number; glideLeft: number; /** Sekunden seit dem Einsammeln der Zeitblase, sonst −1 */ slowAge: number;
+  shield: boolean; shieldFrac: number; slow: boolean; magnet: boolean; blitz: boolean; boost: boolean; /** Pfadfinder: Spurmitte oder null */ guide: number | null; /** Flughöhe (m) und Restzeit des Gleitflugs (s) */ lift: number; glideLeft: number; /** Gesamtdauer des laufenden Flugs (Power-up oder Rampe) */ glideTotal?: number; /** Rampen und Rampen-Lkw */ ramps?: readonly Ramp[]; /** Sekunden seit dem Einsammeln der Zeitblase, sonst −1 */ slowAge: number;
   obstacles: readonly Obstacle[]; pickups: readonly Pickup[];
   /** Neon Rush aktiv (nur Darstellung: Leuchten, betonte Tempolinien – keine Änderung der Physik). */
   rush?: boolean;
@@ -195,6 +197,100 @@ export class Renderer {
     return { d, k, sx: this.L.cx + (x - this.camXw - this.camHead * d) * k, sy: this.L.hy + this.L.Hv / de - dh * k };
   }
 
+  /** Regen: Stärke (0…1, weich geblendet); nur Darstellung. `forceRain` überschreibt den Plan (QA). */
+  private wet = 0;
+  forceRain: number | null = null;
+  get rainNow(): number { return this.wet; }
+
+  /**
+   * Regenstimmung: etwas dunklere, kühlere Umgebung, dafür kräftiger leuchtende Straßenränder (Neon) und feine Regenfäden.
+   * Fehlt in Tunneln und Casinos (dort geschlossen). Mit reduzierter Bewegung stehen die Fäden still und sind weniger.
+   */
+  private weatherLayer(v: View, zc: number, dt: number): void {
+    const L = this.L, ctx = this.ctx;
+    const target = (this.forceRain ?? rainAt(v.seed, v.s)) * (1 - this.rs.k);
+    this.wet += (target - this.wet) * (1 - Math.exp(-Math.min(0.1, dt) / 0.6));
+    const w = this.wet;
+    if (w < 0.01) return;
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = `rgb(${Math.round(255 - 70 * w)},${Math.round(255 - 62 * w)},${Math.round(255 - 30 * w)})`;
+    ctx.fillRect(0, 0, L.w, L.h);
+    // Neon kräftiger: die Randlinien der Straße glühen heller, die Farben wirken satter
+    ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'butt';
+    const edge = B.road.halfWidth + 0.15;
+    for (const [sx, col] of [[-edge, '95,224,255'], [edge, '255,79,216']] as const) {
+      let z0 = zc + 3;
+      while (z0 < zc + 320) {
+        const z1 = z0 * 1.0 + Math.max(3, (z0 - zc) * 0.22);
+        const a = this.proj(zc, sx, z0), b = this.proj(zc, sx, z1);
+        if (a.d > 1.5 && a.sy < L.h) {
+          ctx.strokeStyle = `rgba(${col},${(0.5 * w).toFixed(2)})`; ctx.lineWidth = Math.max(1, 0.34 * a.k);
+          ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
+        }
+        z0 = z1;
+      }
+    }
+    ctx.globalCompositeOperation = 'source-over';
+    // Regenfäden (stehend bei reduzierter Bewegung)
+    const n = Math.round((this.reducedMotion ? 22 : this.quality > 0 ? 38 : 78) * w);
+    const spd = Math.min(1, v.speedKmh / 500);
+    ctx.strokeStyle = `rgba(200,222,255,${(0.34 * w).toFixed(2)})`; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const h1 = hash(i * 12.9898 + 1), h2 = hash(i * 78.233 + 2);
+      const y = this.reducedMotion ? h2 * L.h : ((this.clock * (L.h * (1.1 + 0.8 * h1)) + h2 * L.h) % (L.h + 24)) - 12;
+      const x = h1 * (L.w + 20) - 10 + y * 0.12;
+      const len = (6 + 10 * h2) * (0.7 + 0.6 * spd);
+      ctx.moveTo(x, y); ctx.lineTo(x + len * 0.12, y + len);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /** Rampe: keilförmige Auffahrt in Neonfarben mit Warnstreifen; die Oberkante schließt beim Lkw an die Ladefläche an. */
+  private drawRamp(zc: number, r: Ramp, v: View): void {
+    const ctx = this.ctx, hw = RAMP.width / 2, z0 = r.z - RAMP.len / 2, z1 = r.z + RAMP.len / 2, H = RAMP.height;
+    const P = (x: number, z: number, h: number) => this.projectWorld(zc, this.road.center(z) + r.x + x, z, h);
+    const nl = P(-hw, z0, 0), nr = P(hw, z0, 0), fl = P(-hw, z1, H), fr = P(hw, z1, H), gl = P(-hw, z1, 0), gr = P(hw, z1, 0);
+    if (nl.d < 0.3) return;
+    const night = lightT(v.s), glow = 0.55 + 0.45 * night;
+    const quad = (a: { sx: number; sy: number }[], fill: string): void => { ctx.beginPath(); a.forEach((p, i) => { if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy); }); ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); };
+    quad([nl, fl, gl], 'rgba(18,14,42,0.95)');                                  // linke Seitenfläche
+    quad([nr, fr, gr], 'rgba(18,14,42,0.95)');                                  // rechte Seitenfläche
+    quad([nl, nr, fr, fl], '#2a2252');                                         // Oberseite
+    // Warnstreifen quer zur Fahrtrichtung
+    const n = 5;
+    for (let i = 0; i < n; i += 2) {
+      const t0 = i / n, t1 = (i + 1) / n, zA = z0 + (z1 - z0) * t0, zB = z0 + (z1 - z0) * t1;
+      quad([P(-hw, zA, H * t0), P(hw, zA, H * t0), P(hw, zB, H * t1), P(-hw, zB, H * t1)], '#ffd23f');
+    }
+    ctx.lineWidth = Math.max(1, 0.07 * nl.k); ctx.strokeStyle = `rgba(95,224,255,${glow.toFixed(2)})`;
+    ctx.beginPath(); ctx.moveTo(nl.sx, nl.sy); ctx.lineTo(fl.sx, fl.sy); ctx.moveTo(nr.sx, nr.sy); ctx.lineTo(fr.sx, fr.sy); ctx.moveTo(nl.sx, nl.sy); ctx.lineTo(nr.sx, nr.sy); ctx.stroke();
+    ctx.strokeStyle = `rgba(255,79,216,${glow.toFixed(2)})`; ctx.beginPath(); ctx.moveTo(fl.sx, fl.sy); ctx.lineTo(fr.sx, fr.sy); ctx.stroke();
+  }
+
+  /** Landemarke: zeigt im Flug die Stelle und Spur, an der der Wagen aufsetzt (folgt der Lenkung). */
+  private landMark(zc: number, sL: number, v: View): void {
+    const ctx = this.ctx, hw = 1.5, hl = 3.4;
+    const P = (x: number, z: number, h = 0) => this.projectWorld(zc, this.road.center(sL + z) + v.x + x, sL + z, h);
+    const a = P(-hw, -hl), b = P(hw, -hl), c = P(hw, hl), d = P(-hw, hl);
+    if (a.d < 1) return;
+    const pulse = this.reducedMotion ? 0.85 : 0.65 + 0.35 * Math.sin(this.clock * 10);
+    ctx.save();
+    // Lichtsäule über der Landestelle: auch aus großer Entfernung als Ziel erkennbar
+    const t0 = P(0, 0, 0), t1 = P(0, 0, 9), gx = Math.max(3, 1.1 * a.k);
+    const gr = ctx.createLinearGradient(0, t0.sy, 0, t1.sy); gr.addColorStop(0, `rgba(255,226,122,${(0.55 * pulse).toFixed(2)})`); gr.addColorStop(1, 'rgba(255,226,122,0)');
+    ctx.fillStyle = gr; ctx.fillRect(t0.sx - gx, t1.sy, gx * 2, t0.sy - t1.sy);
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.lineTo(c.sx, c.sy); ctx.lineTo(d.sx, d.sy); ctx.closePath();
+    ctx.globalAlpha = 0.32 * pulse; ctx.fillStyle = '#ffe27a'; ctx.fill();
+    ctx.globalAlpha = 0.95; ctx.strokeStyle = '#ffe27a'; ctx.lineWidth = Math.max(1.5, 0.09 * a.k); ctx.setLineDash([Math.max(3, 0.4 * a.k), Math.max(2, 0.22 * a.k)]); ctx.stroke();
+    // zwei Pfeile in Fahrtrichtung
+    ctx.setLineDash([]); ctx.lineWidth = Math.max(1.5, 0.12 * a.k);
+    for (const zz of [-1.4, 1.2]) { const l = P(-1.0, zz - 0.7), m = P(0, zz + 0.7), r = P(1.0, zz - 0.7); ctx.beginPath(); ctx.moveTo(l.sx, l.sy); ctx.lineTo(m.sx, m.sy); ctx.lineTo(r.sx, r.sy); ctx.stroke(); }
+    ctx.restore();
+  }
+
   private footprintPath(zc: number, body: Footprint): void {
     const ctx = this.ctx;
     ctx.beginPath();
@@ -311,6 +407,7 @@ export class Renderer {
     if (this.debug) this.debugLayer(v, zc);
     this.player(v, zc);
     this.fxLayer(v, dt);
+    this.weatherLayer(v, zc, dt);
     ctx.restore();
     if (!this.reducedMotion) {
       // Cosmic Highway, Sternenbogen in der Tunnelmitte: kurzer, weicher Cyan-/Magenta-Impuls an den Bildrändern (nur Darstellung, höchstens 0,26 Deckkraft, kein Blitz)
@@ -622,6 +719,16 @@ export class Renderer {
         ctx.globalAlpha = 1;
       } });
     }
+    // Rampen (Auffahrt auf der Straße, Laderampe am Lkw-Heck) und die Landemarke im Flug
+    for (const r of v.ramps ?? []) {
+      const d = r.z - zc;
+      if (d < -RAMP.len || d > DRAW || inEv(r.z)) continue;
+      items.push({ d: Math.max(0.5, d), draw: () => { ctx.globalAlpha = this.fade(Math.max(2, d)); this.drawRamp(zc, r, v); ctx.globalAlpha = 1; } });
+    }
+    if (v.glideLeft > 0 && v.running) {
+      const sL = Math.min(v.s + (v.speedKmh / 3.6) * v.glideLeft, zc + DRAW * 0.92);
+      items.push({ d: sL - zc, draw: () => this.landMark(zc, sL, v) });
+    }
     // Passanten: Kulisse auf den Gehwegen (Anzahl auf kleinen Geräten begrenzt)
     {
       const cap = this.quality > 0 || L.w < 340 ? 10 : 24;
@@ -822,7 +929,7 @@ export class Renderer {
     };
     this.carPt = carPt; this.carZs = L.portrait ? 0.78 : 0.6;
     // Überschlag beim Abheben: eine volle Drehung um die Längsachse in 0,9 s (sanft an- und auslaufend), nur mit normaler Bewegung
-    const elG = B.effects.glide - v.glideLeft;
+    const elG = (v.glideTotal || B.effects.glide) - v.glideLeft;
     const spinT = v.glideLeft > 0 && elG < 0.9 && !this.reducedMotion ? Math.max(0, elG) / 0.9 : 0;
     const spin = spinT > 0 ? Math.PI * 2 * (spinT < 0.5 ? 4 * spinT ** 3 : 1 - (-2 * spinT + 2) ** 3 / 2) : 0;
     const scan = this.reducedMotion ? 0 : Math.sin(this.clock * 5.2);
@@ -931,7 +1038,7 @@ export class Renderer {
     if (v.glideLeft > 0 && v.running && this.carPt) {
       // Gleitflug: zwei Düsenstrahlen, die vom Heck nach hinten (zur Kamera) ausströmen wie bei einem Jet. Sie nutzen dieselbe Projektion wie der Wagen
       // (Höhe, Neigung, Kurvenversatz) und laufen deshalb ohne Nachziehen mit.
-      const el = B.effects.glide - v.glideLeft;
+      const el = (v.glideTotal || B.effects.glide) - v.glideLeft;
       const inten = Math.min(1, el / 0.3) * Math.min(1, v.glideLeft / B.glide.down);
       const lift = v.lift / 0.8, ZR = -2.1, zs = this.carZs;
       const flick = this.reducedMotion ? 1 : 0.92 + 0.08 * Math.sin(this.clock * 48);

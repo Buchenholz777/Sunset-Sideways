@@ -516,6 +516,26 @@ export class Sound {
     }
   }
 
+  // ---------- Regen: leises, gefiltertes Rauschen (nur bei Regen, folgt den Soundeinstellungen) ----------
+  private rainN: { g: GainNode; src: AudioBufferSourceNode } | null = null;
+  /** Regenstärke k (0…1): sanftes Rauschen oberhalb der Musik, aus wenn trocken (Knoten werden dann abgebaut). */
+  setRain(k: number): void {
+    const c = this.ready();
+    if (!c || !this.sfxBus || !this.noiseBuf) return;
+    if (k < 0.01 && !this.rainN) return;
+    const t = c.currentTime;
+    if (!this.rainN) {
+      const g = c.createGain(); g.gain.value = 0;
+      const src = c.createBufferSource(); src.buffer = this.noiseBuf; src.loop = true;
+      const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1400;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7000;
+      src.connect(hp).connect(lp).connect(g).connect(this.sfxBus); src.start();
+      this.rainN = { g, src };
+    }
+    this.rainN.g.gain.setTargetAtTime(0.05 * k, t, 0.4);
+    if (k < 0.01) { const old = this.rainN; this.rainN = null; old.g.gain.setTargetAtTime(0, t, 0.2); try { old.src.stop(t + 1.2); } catch { /* bereits gestoppt */ } }
+  }
+
   // ---------- Neon Rush: leises elektrisches Summen während des Rushs ----------
   private rushHum: { g: GainNode; o: OscillatorNode[] } | null = null;
   /** Schaltet das Rush-Summen ein/aus (Sägezahn-Quint mit langsamem Tremolo über den Motor-Bus; folgt den Soundeinstellungen). */
