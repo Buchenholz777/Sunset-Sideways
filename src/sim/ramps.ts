@@ -11,7 +11,7 @@ import type { Road } from './road';
  */
 export const RAMP = {
   /** Flugdauer (s): steiles Abheben, dann langes Sinken. */
-  fly: 2.9,
+  fly: 2.0,
   /** Scheitelhöhe des Sprungs (m): ein hoher Bogen, kein Schweben und kein Antrieb. */
   jumpH: 4.5,
   /** Form des Bogens: Exponent < 1 steigt steil an (Scheitel bei u = 0,5^(1/rise)) und sinkt dann lang aus. */
