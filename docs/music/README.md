@@ -105,3 +105,6 @@ Loop-Anforderungen: Schleifenstart und -ende auf Taktgrenzen (1 Takt = 2,222 s b
 - Stummschaltung und Musikpegel (Admin) wirken wie bisher über Master- und Musikbus.
 - Neon Rush blendet die Rush-Spur weich ein (≈ 0,25 s) und danach aus (≈ 0,6 s); Tempo unverändert.
 - Tunnel-/Casino-Ambience liegt auf eigenen Bussen mit sehr niedrigem Pegel und läuft neben der Musik.
+
+## 9. Aktuell eingebundene Musik (Übergang)
+Bis der Ballade aus Abschnitt 1–5 produziert ist, spielt **„Oldskool“ von Of Far Different Nature** (CC0 1.0, https://opengameart.org/content/oldskool, Datei `public/audio/oldskool.mp3`, Download am 2026-11-23). Es ist ein Retro-Synth-Stück ohne Gesang und **nicht** der geplante Rock-Song. Die MP3 ist nicht die eigens nahtlos geschnittene Loop-Fassung (Loop Box #4), ein kaum hörbarer Übergang beim Wiederholen ist möglich. Ersetzen: `soundtrack.json` anpassen.
