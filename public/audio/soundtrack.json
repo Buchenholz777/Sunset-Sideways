@@ -1,4 +1,5 @@
 {
-  "main": "oldskool.mp3",
-  "license": "CC0 1.0 – Of Far Different Nature, \"Oldskool\", https://opengameart.org/content/oldskool (kommerzielle Nutzung erlaubt, Nennung freiwillig)"
+  "main": "pure_raceway_bpm160.mp3",
+  "playlist": ["pure_raceway_bpm160.mp3", "oldskool.mp3", "background_music_loop.mp3"],
+  "license": "CC0 1.0: MintoDog \"Pure Raceway\" (opengameart.org/content/pure-raceway); Of Far Different Nature \"Oldskool\" (opengameart.org/content/oldskool); Pro Sensory / Alex McCulloch \"Background Music (LOOP)\" (opengameart.org/content/background-music-loop). Kommerzielle Nutzung erlaubt."
 }

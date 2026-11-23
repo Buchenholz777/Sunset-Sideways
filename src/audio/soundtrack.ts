@@ -6,6 +6,8 @@
 export interface SoundtrackManifest {
   /** Haupt-Spur (Loop), relativ zu /audio/. */
   main: string;
+  /** Optionale Abspielliste (ersetzt die Einzelspur): die Stücke laufen nacheinander lückenlos, danach beginnt die Liste von vorn. Jeder Eintrag braucht die Lizenz der Gesamtangabe. */
+  playlist?: string[];
   /** Optionale Zusatzspur gleicher Länge (Gitarren-/Synth-Layer), wird bei Neon Rush eingeblendet. */
   rush?: string;
   /** Loop-Grenzen in Sekunden (musikalisch saubere Taktgrenzen); fehlt loopEnd, wird die ganze Datei geloopt. */
@@ -27,11 +29,15 @@ export function parseManifest(raw: unknown): SoundtrackManifest | null {
   const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined);
   const loopStart = num(m.loopStart), loopEnd = num(m.loopEnd);
   if (loopStart !== undefined && loopEnd !== undefined && loopEnd <= loopStart) return null;
-  return { main: m.main, rush: safe(m.rush) ? m.rush : undefined, loopStart, loopEnd, license: m.license };
+  const pl = Array.isArray(m.playlist) ? m.playlist.filter(safe) : undefined;
+  if (Array.isArray(m.playlist) && pl && pl.length !== m.playlist.length) return null;
+  return { main: m.main, playlist: pl && pl.length > 1 ? pl : undefined, rush: safe(m.rush) ? m.rush : undefined, loopStart, loopEnd, license: m.license };
 }
 
 export class Soundtrack {
   private main: AudioBuffer | null = null;
+  private list: AudioBuffer[] = [];
+  private timer: ReturnType<typeof setInterval> | undefined;
   private rushBuf: AudioBuffer | null = null;
   private man: SoundtrackManifest | null = null;
   private loading = false;
@@ -59,6 +65,7 @@ export class Soundtrack {
       };
       const main = await dec(man.main);
       if (!main) return;
+      if (man.playlist) { const rest = await Promise.all(man.playlist.filter((f) => f !== man.main).map((f) => dec(f).catch(() => null))); this.list = [main, ...rest.filter((b): b is AudioBuffer => !!b)]; }
       this.rushBuf = man.rush ? await dec(man.rush).catch(() => null) : null;
       this.man = man; this.main = main;
       this.onReady?.();
@@ -76,6 +83,7 @@ export class Soundtrack {
       s.connect(g); return s;
     };
     const t = ctx.currentTime + 0.05;
+    if (this.list.length > 1) { this.playList(ctx, out, t); this.out = out; return; }
     const a = mk(this.main, out); this.srcs = [a];
     if (this.rushBuf) {
       const rg = ctx.createGain(); rg.gain.value = 0; rg.connect(out); this.rushGain = rg;
@@ -85,6 +93,19 @@ export class Soundtrack {
     this.out = out;
   }
 
+  /** Abspielliste: das nächste Stück wird sample-genau an das Ende des vorigen gesetzt (kein Spalt, kein Überlappen). */
+  private playList(ctx: AudioContext, out: GainNode, t0: number): void {
+    let i = 0, at = t0;
+    const put = (): void => {
+      const buf = this.list[i % this.list.length];
+      const s = ctx.createBufferSource(); s.buffer = buf; s.connect(out); s.start(at);
+      this.srcs = [...this.srcs.filter((x) => x !== s).slice(-1), s];
+      at += buf.duration; i++;
+    };
+    put();
+    this.timer = setInterval(() => { if (at - ctx.currentTime < 4) put(); }, 500);
+  }
+
   /** Neon Rush: Zusatzspur weich ein- bzw. ausblenden; die Hauptspur und das Tempo bleiben unverändert. */
   rush(ctx: AudioContext, on: boolean): void {
     this.rushGain?.gain.setTargetAtTime(on ? 0.9 : 0, ctx.currentTime, on ? 0.25 : 0.6);
@@ -92,6 +113,7 @@ export class Soundtrack {
 
   stop(ctx: AudioContext): void {
     const t = ctx.currentTime;
+    if (this.timer !== undefined) { clearInterval(this.timer); this.timer = undefined; }
     this.out?.gain.setTargetAtTime(0, t, 0.15);
     for (const s of this.srcs) { try { s.stop(t + 1); } catch { /* bereits gestoppt */ } }
     this.srcs = []; this.rushGain = null; this.out = null;

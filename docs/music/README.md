@@ -107,4 +107,4 @@ Loop-Anforderungen: Schleifenstart und -ende auf Taktgrenzen (1 Takt = 2,222 s b
 - Tunnel-/Casino-Ambience liegt auf eigenen Bussen mit sehr niedrigem Pegel und läuft neben der Musik.
 
 ## 9. Aktuell eingebundene Musik (Übergang)
-Bis der Ballade aus Abschnitt 1–5 produziert ist, spielt **„Oldskool“ von Of Far Different Nature** (CC0 1.0, https://opengameart.org/content/oldskool, Datei `public/audio/oldskool.mp3`, Download am 2026-11-23). Es ist ein Retro-Synth-Stück ohne Gesang und **nicht** der geplante Rock-Song. Die MP3 ist nicht die eigens nahtlos geschnittene Loop-Fassung (Loop Box #4), ein kaum hörbarer Übergang beim Wiederholen ist möglich. Ersetzen: `soundtrack.json` anpassen.
+Bis die Ballade aus Abschnitt 1–5 produziert ist, läuft eine Abspielliste aus drei CC0-Stücken (lückenlos, ca. 3:44, danach von vorn): MintoDog „Pure Raceway“ (96 s), Of Far Different Nature „Oldskool“ (32 s), Pro Sensory / Alex McCulloch „Background Music (LOOP)“ (96 s). Alle ohne Gesang, alle von opengameart.org, Lizenz CC0 1.0 (Download 2026-11-23, Dateien in `public/audio/`). Das ist **nicht** der geplante Rock-Song. Ersetzen: `soundtrack.json` anpassen.

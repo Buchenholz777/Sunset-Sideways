@@ -16,3 +16,12 @@ describe('Soundtrack-Pipeline', () => {
     expect(parseManifest({ ...ok, rush: 'bad name' })?.rush).toBeUndefined();
   });
 });
+
+describe('Abspielliste', () => {
+  const base = { main: 'a.mp3', license: 'CC0' };
+  it('übernimmt gültige Listen mit mehr als einem Stück', () => { expect(parseManifest({ ...base, playlist: ['a.mp3', 'b.mp3'] })?.playlist).toEqual(['a.mp3', 'b.mp3']); });
+  it('lehnt Listen mit unsicheren Namen ab, ignoriert Einzellisten', () => {
+    expect(parseManifest({ ...base, playlist: ['a.mp3', '../b.mp3'] })).toBeNull();
+    expect(parseManifest({ ...base, playlist: ['a.mp3'] })?.playlist).toBeUndefined();
+  });
+});
