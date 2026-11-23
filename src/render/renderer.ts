@@ -18,7 +18,7 @@ import { drawCar } from './car3d';
 /** Alles, was zum Zeichnen eines Bildes nötig ist (Vorschau oder Lauf). */
 export interface View {
   s: number; x: number; /** Weltposition quer */ X: number; bodyYaw: number; phi: number; /** Winkel Nase–Straße */ rel: number; speedKmh: number;
-  shield: boolean; shieldFrac: number; slow: boolean; magnet: boolean; blitz: boolean; boost: boolean; /** Pfadfinder: Spurmitte oder null */ guide: number | null; /** Flughöhe (m) und Restzeit des Gleitflugs (s) */ lift: number; glideLeft: number; /** Gesamtdauer des laufenden Flugs (Power-up oder Rampe) */ glideTotal?: number; /** Rampen und Rampen-Lkw */ ramps?: readonly Ramp[]; /** Sekunden seit dem Einsammeln der Zeitblase, sonst −1 */ slowAge: number;
+  shield: boolean; shieldFrac: number; slow: boolean; magnet: boolean; blitz: boolean; boost: boolean; /** Pfadfinder: Spurmitte oder null */ guide: number | null; /** Flughöhe (m) und Restzeit des Gleitflugs (s) */ lift: number; glideLeft: number; /** Gesamtdauer des laufenden Flugs (Power-up oder Rampe) */ glideTotal?: number; /** Rampensprung (Bogen, ohne Düsen und Überschlag) */ jump?: boolean; /** Rampen und Rampen-Lkw */ ramps?: readonly Ramp[]; /** Sekunden seit dem Einsammeln der Zeitblase, sonst −1 */ slowAge: number;
   obstacles: readonly Obstacle[]; pickups: readonly Pickup[];
   /** Neon Rush aktiv (nur Darstellung: Leuchten, betonte Tempolinien – keine Änderung der Physik). */
   rush?: boolean;
@@ -248,9 +248,35 @@ export class Renderer {
     ctx.restore();
   }
 
+  /** Quader aus Weltmaßen (Spurmitte x0…x1 relativ, z0…z1, Höhe y0…y1) mit drei sichtbaren Flächen; Licht von oben und hinten. */
+  private drawBox(zc: number, cx: number, x0: number, x1: number, z0: number, z1: number, y0: number, y1: number, col: string): void {
+    const ctx = this.ctx;
+    const P = (x: number, z: number, y: number) => this.projectWorld(zc, this.road.center(z) + cx + x, z, y);
+    if (z0 - zc < 0.4) return;
+    const fill = (pts: { sx: number; sy: number }[], f: number): void => { ctx.beginPath(); pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.sx, p.sy); else ctx.lineTo(p.sx, p.sy); }); ctx.closePath(); ctx.fillStyle = mixHex(col, '#05030f', f); ctx.fill(); };
+    const xc = this.camXw - this.road.center(z0) - cx;
+    if (xc < x0) fill([P(x0, z0, y0), P(x0, z1, y0), P(x0, z1, y1), P(x0, z0, y1)], 0.55);
+    else if (xc > x1) fill([P(x1, z0, y0), P(x1, z1, y0), P(x1, z1, y1), P(x1, z0, y1)], 0.55);
+    if (y1 < 3.2) fill([P(x0, z0, y1), P(x1, z0, y1), P(x1, z1, y1), P(x0, z1, y1)], 0.05);
+    fill([P(x0, z0, y0), P(x1, z0, y0), P(x1, z0, y1), P(x0, z0, y1)], 0.3);
+  }
+
+  /** Autotransporter: niedriger Auflieger mit Ladefläche auf Rampenhöhe, geladenem Wagen und Führerhaus; die Rampe (drawRamp) schließt am Heck an. */
+  private drawCarrier(zc: number, o: Obstacle): void {
+    const cx = o.x, z = o.z, H = RAMP.height, hw = 1.2;
+    this.drawBox(zc, cx, -hw, hw, z + 8.1, z + 10, 0.5, 3.1, '#c8c2d8');                    // Führerhaus
+    this.drawBox(zc, cx, -hw, hw, z + 0.1, z + 8.0, 0.55, H, '#3b3560');                    // Ladefläche
+    for (const zz of [z + 1.0, z + 6.6]) for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * hw - 0.15, sx * hw + 0.15, zz, zz + 1.1, 0, 0.8, '#111');   // Räder
+    this.drawBox(zc, cx, -0.9, 0.9, z + 3.4, z + 7.6, H, H + 0.75, '#e0457b');              // geladener Wagen (Unterbau)
+    this.drawBox(zc, cx, -0.8, 0.8, z + 4.4, z + 6.7, H + 0.75, H + 1.35, '#f2a2c0');       // Kabine
+    for (const sx of [-1, 1]) this.drawBox(zc, cx, sx * hw - 0.06, sx * hw + 0.06, z + 0.2, z + 7.9, H, H + 0.2, '#ffd23f');   // Warnleisten
+    const k = this.proj(zc, cx, z + 0.1);
+    this.ctx.fillStyle = '#ff2a3d'; this.ctx.fillRect(k.sx - 0.9 * k.k, k.sy - 0.95 * k.k, 0.35 * k.k, 0.2 * k.k); this.ctx.fillRect(k.sx + 0.55 * k.k, k.sy - 0.95 * k.k, 0.35 * k.k, 0.2 * k.k);   // Rückleuchten
+  }
+
   /** Rampe: keilförmige Auffahrt in Neonfarben mit Warnstreifen; die Oberkante schließt beim Lkw an die Ladefläche an. */
   private drawRamp(zc: number, r: Ramp, v: View): void {
-    const ctx = this.ctx, hw = RAMP.width / 2, z0 = r.z - RAMP.len / 2, z1 = r.z + RAMP.len / 2, H = RAMP.height;
+    const ctx = this.ctx, hw = (r.truck ? RAMP.truckWidth : RAMP.width) / 2, z0 = r.z - RAMP.len / 2, z1 = r.z + RAMP.len / 2, H = RAMP.height;
     const P = (x: number, z: number, h: number) => this.projectWorld(zc, this.road.center(z) + r.x + x, z, h);
     const nl = P(-hw, z0, 0), nr = P(hw, z0, 0), fl = P(-hw, z1, H), fr = P(hw, z1, H), gl = P(-hw, z1, 0), gr = P(hw, z1, 0);
     if (nl.d < 0.3) return;
@@ -694,7 +720,7 @@ export class Renderer {
           const lift = o.hit ? Math.sin(Math.min(1, o.knockT * 3) * Math.PI) * 1.2 : 0;
           const lc = o.lc;
           const blink: Blinker | undefined = lc && !o.hit && (lc.stage === 'warn' || lc.stage === 'move') ? { side: lc.toX > lc.fromX ? 1 : -1 } : undefined;
-          drawObstacle(ctx, o.kind, p.sx, p.sy - lift * p.k, p.k, this.clock, o.id);
+          if (o.carrier) this.drawCarrier(zc, o); else drawObstacle(ctx, o.kind, p.sx, p.sy - lift * p.k, p.k, this.clock, o.id);
           // Blinker: wird nach dem Bild als scharfes Vektorelement auf der hochaufgelösten Ebene gezeichnet (die Spielfläche selbst ist grob gerastert)
           if (blink) this.lightQ.push({ light: blinkerLight(o.kind, p.sx, p.sy - lift * p.k, p.k, blink.side, B.blinker.scale, this.blinkerMinW()), a, occ: this.occlusionY(d), sy: p.sy });
           ctx.globalAlpha = 1;
@@ -930,7 +956,7 @@ export class Renderer {
     this.carPt = carPt; this.carZs = L.portrait ? 0.78 : 0.6;
     // Überschlag beim Abheben: eine volle Drehung um die Längsachse in 0,9 s (sanft an- und auslaufend), nur mit normaler Bewegung
     const elG = (v.glideTotal || B.effects.glide) - v.glideLeft;
-    const spinT = v.glideLeft > 0 && elG < 0.9 && !this.reducedMotion ? Math.max(0, elG) / 0.9 : 0;
+    const spinT = v.glideLeft > 0 && !v.jump && elG < 0.9 && !this.reducedMotion ? Math.max(0, elG) / 0.9 : 0;
     const spin = spinT > 0 ? Math.PI * 2 * (spinT < 0.5 ? 4 * spinT ** 3 : 1 - (-2 * spinT + 2) ** 3 / 2) : 0;
     const scan = this.reducedMotion ? 0 : Math.sin(this.clock * 5.2);
     if (this.rushK > 0.02) {
@@ -1035,7 +1061,7 @@ export class Renderer {
       }
       ctx.globalAlpha = 1;
     }
-    if (v.glideLeft > 0 && v.running && this.carPt) {
+    if (v.glideLeft > 0 && !v.jump && v.running && this.carPt) {
       // Gleitflug: zwei Düsenstrahlen, die vom Heck nach hinten (zur Kamera) ausströmen wie bei einem Jet. Sie nutzen dieselbe Projektion wie der Wagen
       // (Höhe, Neigung, Kurvenversatz) und laufen deshalb ohne Nachziehen mit.
       const el = (v.glideTotal || B.effects.glide) - v.glideLeft;

@@ -29,6 +29,8 @@ export interface LaneChange {
 export interface Obstacle {
   id: number; kind: ObjKind; x: number; z: number; vz: number;
   hit: boolean; knockT: number; knockVx: number;
+  /** Autotransporter mit Laderampe (nur Darstellung anders; Maße wie ein Lkw). */
+  carrier?: boolean;
   /** Verkehrsteilnehmer mit Spurwechsel (nur bewegte Fahrzeuge). */
   lc?: LaneChange;
   /** Durch den Spur-Räumer entfernt (Rückmeldung in der Darstellung). */

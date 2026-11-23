@@ -90,6 +90,8 @@ export class Sim {
   glideT = 0;
   /** Gesamtdauer des laufenden Flugs (Power-up oder Rampe). */
   glideTotal = 0;
+  /** Der laufende Flug ist ein Rampensprung (Bogen ohne Antrieb) statt des Fliegen-Power-ups. */
+  jump = false;
   /** Rampen auf der Strecke (nur wenn `opts.ramps`). */
   ramps: Ramp[] = [];
   private rampPlan: RampPlan | null = null;
@@ -161,6 +163,7 @@ export class Sim {
   /** Flughöhe in Metern: 0,5 s Abheben, Reiseflug, 1 s Sinken. */
   get height(): number {
     if (this.glideT <= 0) return 0;
+    if (this.jump) { const u = Math.max(0, Math.min(1, 1 - this.glideT / this.glideTotal)); return RAMP.jumpH * 4 * u * (1 - u); }
     const G = B.glide, el = this.glideTotal - this.glideT;
     return G.height * Math.min(smooth(el / G.up), smooth(this.glideT / G.down));
   }
@@ -247,7 +250,7 @@ export class Sim {
         // Fliegen und Phantom-Turbo sind exklusive Bewegungs-/Kollisionszustände: läuft einer, wird der andere (höchstens einer) vorgemerkt und startet danach
         if ((p.type === 'glide' || p.type === 'boost') && (this.glideT > 0 || this.boostT > 0) && !(p.type === 'glide' ? this.glideT > 0 : this.boostT > 0)) { this.pendingFx = p.type; this.events.push({ type: 'queued', effect: p.type }); }
         else if (p.type === 'clear') this.startBlitz(qAt, sAt);
-        else if (p.type === 'glide') { this.glideT = this.glideTotal = B.effects.glide; this.glideHold = 0; this.events.push({ type: 'glideStart' }); }
+        else if (p.type === 'glide') { this.glideT = this.glideTotal = B.effects.glide; this.jump = false; this.glideHold = 0; this.events.push({ type: 'glideStart' }); }
         else {
           // Erneutes Einsammeln setzt die Dauer zurück, verlängert sie nie über die Grundzeit (kein Stapeln); Restzeit nach diesem Schritt = Dauer − (1 − f)·dt
           const val = dur(p.type) + h.f * dt;
@@ -304,7 +307,7 @@ export class Sim {
     if (this.passed.size) this.updatePassed(body1);
     if (this.pendingFx && this.glideT <= 0 && this.boostT <= 0) {
       const next = this.pendingFx; this.pendingFx = null;                  // der vorgemerkte exklusive Effekt startet erst nach dem laufenden
-      if (next === 'glide') { this.glideT = this.glideTotal = B.effects.glide; this.glideHold = 0; this.events.push({ type: 'glideStart' }); } else this.boostT = B.effects.boost;
+      if (next === 'glide') { this.glideT = this.glideTotal = B.effects.glide; this.jump = false; this.glideHold = 0; this.events.push({ type: 'glideStart' }); } else this.boostT = B.effects.boost;
     }
 
     for (const o of this.obstacles) {
@@ -331,7 +334,7 @@ export class Sim {
       const f0 = rampFootprint(this.road, r), f1 = r.vz === 0 ? f0 : rampFootprint(this.road, { ...r, z: r.z + r.vz * ts * dt });
       if (contactTime(body0, body1, f0, f1) === null) continue;
       r.taken = true;
-      this.glideT = this.glideTotal = RAMP.fly; this.glideHold = 0;
+      this.glideT = this.glideTotal = RAMP.fly; this.jump = true; this.glideHold = 0;
       this.events.push({ type: 'glideStart', ramp: true });
       return;
     }
@@ -347,7 +350,7 @@ export class Sim {
       this.ramps.push(r);
       const a = sl.z - RAMP.len / 2 - 14, b = sl.z + (sl.truck ? RAMP.len / 2 + 16 : RAMP.len / 2 + 12);
       this.obstacles = this.obstacles.filter((o) => !(Math.abs(o.x - x) < 2.4 && o.z + KINDS[o.kind].len > a && o.z < b));
-      if (sl.truck) this.obstacles.push({ id: this.nextId++, kind: 'truck', x, z: sl.z + RAMP.len / 2, vz: RAMP.truckV, hit: false, knockT: 0, knockVx: 0 });
+      if (sl.truck) this.obstacles.push({ id: this.nextId++, kind: 'truck', x, z: sl.z + RAMP.len / 2, vz: RAMP.truckV, hit: false, knockT: 0, knockVx: 0, carrier: true });
     }
   }
 
@@ -478,6 +481,7 @@ export class Sim {
   /** Aufsetzen: bereits überlappte Objekte gelten bis zur unmittelbaren Trennung als passiert. */
   private land(body: ReturnType<typeof playerFootprint>): void {
     this.glideT = 0;
+    this.jump = false;
     this.glideHold = 0;
     this.events.push({ type: 'glideEnd' });
     this.markOverlaps(body);

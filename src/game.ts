@@ -406,7 +406,7 @@ export class Game {
     this.input.active = true;
     this.loop.reset();
     this.sound.startLoops();
-    if (this.sim && this.sim.glideT > 0) this.sound.setFlight(true);
+    if (this.sim && this.sim.glideT > 0 && !this.sim.jump) this.sound.setFlight(true);
   }
 
   private lastW = 0;
@@ -459,7 +459,7 @@ export class Game {
         else if (ev.type === 'comboLost') { if (ev.reason === 'time') this.showMiss('Combo vorbei', 'lost', 900); }
         else if (ev.type === 'laneWarn') this.sound.sfx('laneWarn');
         else if (ev.type === 'queued') this.toast(`Vorgemerkt: ${PICKUP_LABEL[ev.effect as PickupKey] ?? ev.effect}`, 1100);
-        else if (ev.type === 'glideStart') { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast(ev.ramp ? 'Rampe' : 'Fliegen'); if (!this.runFlew) { this.runFlew = true; this.tele.send('fly', this.runId); } }
+        else if (ev.type === 'glideStart') { if (ev.ramp) { this.renderer.burst('land'); this.sound.sfx('land'); this.toast('Sprung'); } else { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast('Fliegen'); } if (!this.runFlew) { this.runFlew = true; this.tele.send('fly', this.runId); } }
         else if (ev.type === 'glideEnd') { this.renderer.burst('land'); this.sound.sfx('land'); this.sound.setFlight(false); }
         else if (ev.type === 'magnetPull') this.sound.sfx('magnet');
         else if (ev.type === 'effectEnd') {
@@ -689,7 +689,7 @@ export class Game {
     } else {
       const running = this.state.phase === 'running' || this.qaHook;
       v = {
-        s: sim.s, x: sim.q, X: sim.X, bodyYaw: sim.bodyYaw, phi: sim.phi, rel: sim.relAngle, slow: sim.slowT > 0, magnet: sim.magnetT > 0, blitz: sim.blitzT > 0, boost: sim.boostT > 0, guide: sim.guideQ, lift: sim.height, glideLeft: sim.glideT, glideTotal: sim.glideTotal, ramps: sim.ramps, slowAge: sim.slowT > 0 ? B.effects.slow - sim.slowT : -1, road: sim.road, speedKmh: sim.speedKmh, shield: sim.shieldT > 0,
+        s: sim.s, x: sim.q, X: sim.X, bodyYaw: sim.bodyYaw, phi: sim.phi, rel: sim.relAngle, slow: sim.slowT > 0, magnet: sim.magnetT > 0, blitz: sim.blitzT > 0, boost: sim.boostT > 0, guide: sim.guideQ, lift: sim.height, glideLeft: sim.glideT, glideTotal: sim.glideTotal, jump: sim.jump, ramps: sim.ramps, slowAge: sim.slowT > 0 ? B.effects.slow - sim.slowT : -1, road: sim.road, speedKmh: sim.speedKmh, shield: sim.shieldT > 0,
         shieldFrac: sim.shieldT / B.effects.shield, rush: sim.style.rushActive, gates: sim.gates, obstacles: sim.obstacles, pickups: sim.pickups,
         crash: sim.crash ? { id: sim.crash.id } : null, running, sceneT: this.qaSceneT ?? sim.t - sim.t0, seed: sim.seed, finishZ: this.mode === 'sprint' ? SPRINT_FINISH_M : undefined,
       };
@@ -708,8 +708,8 @@ export class Game {
     this.fxChip(this.el.slow, sim.slowT, 'slow');
     this.fxChip(this.el.magnet, sim.magnetT, 'magnet');
     this.fxChip(this.el.blitz, sim.blitzT, 'blitz');
-    this.fxChip(this.el.glide, sim.glideT, 'glide');
-    const landing = sim.glideT > 0 && sim.glideT < 1.0;
+    this.fxChip(this.el.glide, sim.jump ? 0 : sim.glideT, 'glide');
+    const landing = sim.glideT > 0 && sim.glideT < 1.0 && !sim.jump;
     if (landing !== this.landing) {
       this.landing = landing;
       this.el.glide.classList.toggle('landing', landing);

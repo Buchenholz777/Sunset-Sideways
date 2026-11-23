@@ -11,9 +11,11 @@ import type { Road } from './road';
  */
 export const RAMP = {
   /** Flugdauer (s): 0,5 Abheben, ≈ 1,2 Reiseflug, 1 Sinken. */
-  fly: 2.7,
-  /** Länge und Breite der Auffahrtsfläche (m) und Höhe der Oberkante (m). */
-  len: 7, width: 3.0, height: 1.25,
+  fly: 2.4,
+  /** Scheitelhöhe des Sprungs (m): ein Bogen (Parabel), kein Schweben und kein Antrieb. */
+  jumpH: 3.2,
+  /** Länge und Breite der Auffahrtsfläche (m) und Höhe der Oberkante (m); Autotransporter-Rampe schmaler (Breite des Aufliegers). */
+  len: 7, width: 3.0, truckWidth: 2.3, height: 1.25,
   /** Erste Rampe frühestens ab (m), Abstand der folgenden (m), Anteil der Lkw-Rampen. */
   first: 1100, gapMin: 1100, gapMax: 2100, truckShare: 0.35,
   /** Tempo des Rampen-Lkw (m/s), wie die übrigen Lkw (36 km/h). */
@@ -26,7 +28,7 @@ export interface Ramp { id: number; x: number; z: number; vz: number; truck: boo
 export interface RampSlot { z: number; lane: number; truck: boolean }
 
 export function rampFootprint(road: Road, r: Ramp): Footprint {
-  return { x: road.center(r.z) + r.x, z: r.z, yaw: Math.atan(road.heading(r.z)), halfWidth: RAMP.width / 2, halfLength: RAMP.len / 2 };
+  return { x: road.center(r.z) + r.x, z: r.z, yaw: Math.atan(road.heading(r.z)), halfWidth: (r.truck ? RAMP.truckWidth : RAMP.width) / 2, halfLength: RAMP.len / 2 };
 }
 
 /** Folge der Rampenpositionen zu einem Seed (lazy, gleiche Folge für jeden Aufrufer). */

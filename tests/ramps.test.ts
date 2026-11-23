@@ -37,7 +37,7 @@ describe('Rampen', () => {
     expect(took).toBe(true);
     for (let i = 0; i < 4 / DT && !sim.crashed; i++) { sim.obstacles = []; sim.step(DT, { dir: 0, target: 0 }); if (sim.glideT > 0) { flew += DT; maxH = Math.max(maxH, sim.height); } }
     expect(flew).toBeGreaterThan(RAMP.fly - 0.6); expect(flew).toBeLessThan(RAMP.fly + 0.5);
-    expect(maxH).toBeCloseTo(B.glide.height, 0);
+    expect(maxH).toBeCloseTo(RAMP.jumpH, 0); expect(sim.jump).toBe(false);
     expect(sim.glideT).toBe(0); expect(sim.height).toBe(0);
   });
   it('im Flug lässt sich lenken, Verkehr darunter verursacht keinen Treffer', () => {
@@ -90,5 +90,24 @@ describe('Rampen im Dauerlauf', () => {
       return n;
     };
     expect(crashes(true)).toBeLessThanOrEqual(crashes(false) + 1);
+  });
+});
+
+describe('Rampensprung', () => {
+  it('ist ein symmetrischer Bogen (Parabel) mit Scheitel RAMP.jumpH und ohne Düsenflug', () => {
+    const sim = new Sim(12, { ramps: true, startS: 700, noDynamic: true });
+    sim.ramps = [{ id: 9301, x: 0, z: sim.s + 40, vz: 0, truck: false, taken: false }]; sim.obstacles = [];
+    const hs: number[] = [];
+    for (let i = 0; i < 4 / DT && !sim.crashed; i++) { sim.step(DT, { dir: 0, target: 0 }); if (sim.glideT > 0) { expect(sim.jump).toBe(true); hs.push(sim.height); } }
+    expect(hs.length * DT).toBeGreaterThan(RAMP.fly - 0.1);
+    const mx = Math.max(...hs), mid = hs.length >> 1;
+    expect(mx).toBeCloseTo(RAMP.jumpH, 1);
+    expect(Math.abs(hs[Math.floor(mid / 2)] - hs[Math.floor(mid * 1.5)])).toBeLessThan(0.15);
+    for (let i = 1; i < mid - 3; i++) expect(hs[i]).toBeGreaterThanOrEqual(hs[i - 1] - 1e-9);
+  });
+  it('Rampen-Lkw sind Autotransporter', () => {
+    const sim = new Sim(12, { ramps: true, startS: 900, noDynamic: true });
+    for (let i = 0; i < 6 / DT && !sim.crashed; i++) sim.step(DT, { dir: 0, target: null });
+    const t = sim.obstacles.find((o) => o.carrier); expect(t?.kind).toBe('truck');
   });
 });
