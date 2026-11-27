@@ -298,3 +298,8 @@ html.touch:not([data-phase="running"]) #hint, html.touch:not([data-phase="runnin
 
 /* „Weiche aus“ wandert mit dem ersten Hindernis (Position per Skript); ohne Position bleibt die feste Lage */
 #hint.at { transform: translate(-50%, -100%); }
+
+/* Touch-Texte: Smartphone zeigt die Mobile-Fassung, Desktop bleibt unverändert */
+.t-touch { display: none; }
+html.touch .t-touch { display: inline; }
+html.touch .t-desk { display: none; }

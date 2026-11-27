@@ -50,8 +50,8 @@ export function makeLayout(cssW: number, cssH: number): Layout {
   const w = Math.max(80, Math.round(cssW / scale));
   const h = Math.max(80, Math.round(cssH / scale));
   // Hochformat: Horizont etwas tiefer → weniger Tiefenstreckung nahe am Wagen (Wagen und Hindernisse wirken nicht in die Länge gezogen, Abstände stimmen mit der Kollisionsbox überein)
-  const hy = Math.round(h * ((portrait ? 0.49 : 0.34)));
-  const gy = Math.round(h * ((portrait ? 0.81 : 0.82)));
+  const hy = Math.round(h * ((portrait ? 0.42 : 0.34)));
+  const gy = Math.round(h * ((portrait ? 0.84 : 0.82)));
   const Hv = (gy - hy) * CAM_BACK;
   // Hochformat: Straße füllt die Bildbreite (Ränder leicht angeschnitten) – sonst wirkt alles schmal und in die Länge gezogen
   const fx = Math.min(0.87 * h, ((portrait ? 1.0 : 0.85) * w * CAM_BACK) / (2 * B.road.halfWidth));

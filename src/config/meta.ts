@@ -7,9 +7,9 @@ export const TEXT = {
   best: 'Bestweite',
   newRecord: 'Neuer Rekord!',
   controlsDesktop: 'Mit den Pfeiltasten lenken',
-  controlsTouch: 'Mit dem Daumen nach links oder rechts ziehen',
+  controlsTouch: 'WISCHEN ODER TIPPEN ZUM LENKEN',
   tipDesktop: '← → Lenken · Power-ups einsammeln, Hindernissen ausweichen.',
-  tipTouch: 'Mit dem Daumen ziehen · Power-ups einsammeln, Hindernissen ausweichen.',
+  tipTouch: 'Wischen oder tippen zum Lenken · Power-ups einsammeln, Hindernissen ausweichen.',
   briefDesktop: ['← → Lenken'],
-  briefTouch: ['Mit dem Daumen ziehen'],
+  briefTouch: ['Wischen oder tippen zum Lenken'],
 } as const;

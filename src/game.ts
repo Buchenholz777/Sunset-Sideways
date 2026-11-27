@@ -208,6 +208,8 @@ export class Game {
     window.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') this.setMode(true); }, { passive: true });
     window.addEventListener('keydown', (e) => { if (!e.metaKey && !e.ctrlKey && e.code !== 'Tab') this.setMode(false); }, { passive: true });
     this.input = new Input(this.canvas);
+    this.input.getQ = () => this.sim?.q ?? 0;
+    this.input.tapEnabled = this.touchCapable;
     this.loop = new FixedLoop((dt) => this.update(dt), (fd) => this.render(fd), () => this.pause('stall'));
 
     $('start-best').textContent = formatDistance(this.best);
@@ -374,6 +376,7 @@ export class Game {
     if (this.touchCapable === touch) return;
     if (this.state.phase === 'running') return;     // mitten in der Fahrt ändert ein beiläufiger Tastendruck oder emulierter Mausklick weder Hilfe noch Layout
     this.touchCapable = touch;
+    this.input.tapEnabled = touch;
     document.documentElement.classList.toggle('touch', touch);
     this.syncHowto();
     $('tip-line').textContent = touch ? TEXT.tipTouch : TEXT.tipDesktop;
