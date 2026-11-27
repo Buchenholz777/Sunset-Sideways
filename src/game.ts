@@ -331,7 +331,17 @@ export class Game {
     if (reason === 'leave') this.tele.flush(true);
   }
 
+  /** Touch: beim Start-Tipp (Nutzergeste) einmalig Vollbild anfordern, wo der Browser es erlaubt (Android; iPhone-Safari kennt es nicht). Fehler werden ignoriert. */
+  private tryFullscreen(): void {
+    try {
+      const el = document.documentElement;
+      if (!this.touchCapable || document.fullscreenElement || !el.requestFullscreen) return;
+      void el.requestFullscreen({ navigationUI: 'hide' }).catch(() => { /* abgelehnt: egal */ });
+    } catch { /* optional */ }
+  }
+
   private startRun(mode: Mode = this.mode): void {
+    this.tryFullscreen();
     if (!SPRINT_ENABLED) mode = 'endless';
     this.endRun('restart');
     this.mode = mode;
