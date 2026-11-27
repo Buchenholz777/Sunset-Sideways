@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { crashCauseText, nextGoalText } from '../src/game';
+import { setLang } from '../src/i18n';
+
+setLang('de');
 
 describe('Ergebnis: Ursache und nächstes Ziel', () => {
   it('Absturzursache aus dem Crash-Ereignis', () => {

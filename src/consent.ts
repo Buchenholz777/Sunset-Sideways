@@ -2,7 +2,8 @@
  * Einwilligung für den Google Tag Manager (GTM-WRM84FRX). Vor einer Zustimmung wird KEIN Google-Skript geladen und kein Cookie gesetzt.
  * Die Entscheidung liegt im localStorage dieses Browsers (technisch notwendig, um sie zu merken) und lässt sich jederzeit widerrufen.
  */
-export const GTM_ID = 'GTM-WRM84FRX';
+import { tr, onLang } from './i18n';
+export const GTM_ID ='GTM-WRM84FRX';
 export const CONSENT_KEY = 'ssw-consent';
 
 export type Decision = 'granted' | 'denied';
@@ -65,10 +66,14 @@ function show(): HTMLElement | null {
   const el = document.createElement('section');
   el.id = 'consent';
   el.setAttribute('role', 'region');
-  el.setAttribute('aria-label', 'Datenschutz-Einwilligung');
-  el.innerHTML = `<p><strong>Statistik mit Google?</strong> Wir möchten mit dem Google Tag Manager anonyme Nutzungsstatistik erfassen. <span class="c-long">Dabei werden Daten an Google übertragen und eventuell Cookies gesetzt. </span>Ohne deine Zustimmung wird nichts geladen – das Spiel läuft in jedem Fall. <a href="/datenschutz">Datenschutz</a></p>
-    <div class="consent-btns"><button type="button" data-d="denied">Ablehnen</button><button type="button" data-d="granted">Akzeptieren</button></div>`;
-  el.querySelectorAll<HTMLButtonElement>('button[data-d]').forEach((b) => b.addEventListener('click', () => decide(b.dataset.d as Decision)));
+  const paint = (): void => {
+    el.setAttribute('aria-label', tr('Datenschutz-Einwilligung'));
+    el.innerHTML = `<p><strong>${tr('Statistik mit Google?')}</strong>${tr(' Wir möchten mit dem Google Tag Manager anonyme Nutzungsstatistik erfassen. ')}<span class="c-long">${tr('Dabei werden Daten an Google übertragen und eventuell Cookies gesetzt. ')}</span>${tr('Ohne deine Zustimmung wird nichts geladen – das Spiel läuft in jedem Fall. ')}<a href="/datenschutz">${tr('Datenschutz')}</a></p>
+    <div class="consent-btns"><button type="button" data-d="denied">${tr('Ablehnen')}</button><button type="button" data-d="granted">${tr('Akzeptieren')}</button></div>`;
+    el.querySelectorAll<HTMLButtonElement>('button[data-d]').forEach((b) => b.addEventListener('click', () => decide(b.dataset.d as Decision)));
+  };
+  paint();
+  onLang(() => { if (banner === el) paint(); });
   document.body.appendChild(el);
   banner = el;
   if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(() => setBannerHeight(el.getBoundingClientRect().height)); ro.observe(el); }

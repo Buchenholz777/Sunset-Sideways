@@ -1,28 +1,28 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#070a24" />
-  <title>Sunset Sideways – Arcade-Rennspiel im Browser</title>
-  <meta name="description" content="Browser-Rennspiel: Weiche dem Verkehr aus, sammle Power-ups und rase vom Sonnenuntergang in die Neonnacht. Kostenlos, per Tastatur oder Touch." />
+  <title>Sunset Sideways – Arcade Racing Game in Your Browser</title>
+  <meta name="description" content="Browser racing game: dodge the traffic, collect power-ups and race from sunset into the neon night. Free, with keyboard or touch." />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="__ORIGIN__/" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Sunset Sideways" />
-  <meta property="og:locale" content="de_DE" />
-  <meta property="og:title" content="Sunset Sideways – Arcade-Rennspiel im Browser" />
-  <meta property="og:description" content="Weiche dem Verkehr aus, sammle Power-ups und rase vom Sonnenuntergang in die Neonnacht – kostenlos im Browser." />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:title" content="Sunset Sideways – Arcade Racing Game in Your Browser" />
+  <meta property="og:description" content="Dodge the traffic, collect power-ups and race from sunset into the neon night – free in your browser." />
   <meta property="og:url" content="__ORIGIN__/" />
   <meta property="og:image" content="__ORIGIN__/og.jpg" />
   <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Sunset Sideways: Sportwagen fährt bei Sonnenuntergang auf einer dreispurigen Straße zwischen Verkehr" />
+  <meta property="og:image:alt" content="Sunset Sideways: a sports car drives at sunset on a three-lane road between traffic" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Sunset Sideways – Arcade-Rennspiel im Browser" />
-  <meta name="twitter:description" content="Weiche dem Verkehr aus, sammle Power-ups und rase vom Sonnenuntergang in die Neonnacht – kostenlos im Browser." />
+  <meta name="twitter:title" content="Sunset Sideways – Arcade Racing Game in Your Browser" />
+  <meta name="twitter:description" content="Dodge the traffic, collect power-ups and race from sunset into the neon night – free in your browser." />
   <meta name="twitter:image" content="__ORIGIN__/og.jpg" />
   <script type="application/ld+json">
   {
@@ -30,13 +30,13 @@
     "@type": "VideoGame",
     "name": "Sunset Sideways",
     "url": "__ORIGIN__/",
-    "description": "Browser-Rennspiel: Weiche dem Verkehr aus, sammle Power-ups und rase vom Sonnenuntergang in die Neonnacht. Kostenlos, per Tastatur oder Touch.",
+    "description": "Browser racing game: dodge the traffic, collect power-ups and race from sunset into the neon night. Free, with keyboard or touch.",
     "image": "__ORIGIN__/og.jpg",
-    "inLanguage": "de",
-    "genre": ["Rennspiel", "Arcade"],
-    "gamePlatform": "Webbrowser",
+    "inLanguage": "en",
+    "genre": ["Racing", "Arcade"],
+    "gamePlatform": "Web browser",
     "applicationCategory": "Game",
-    "operatingSystem": "Jedes Betriebssystem mit modernem Webbrowser",
+    "operatingSystem": "Any operating system with a modern web browser",
     "playMode": "SinglePlayer",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "EUR", "availability": "https://schema.org/InStock" }
   }
@@ -45,41 +45,41 @@
 </head>
 <body>
   <div id="app">
-    <canvas id="stage" aria-label="Spielfläche"></canvas>
+    <canvas id="stage" aria-label="Game canvas"></canvas>
     <canvas id="stage-fx" aria-hidden="true"></canvas>
 
     <div id="hud" hidden>
       <div class="hud-left">
-        <div class="stat"><span class="lbl">Strecke</span><span id="hud-distance" class="val">0 m</span></div>
-        <div class="stat" id="hud-best-wrap"><span class="lbl">Bestweite</span><span id="hud-best" class="val">0 m</span></div>
-        <div id="hud-style" role="group" aria-label="Stilwertung">
-          <div class="st-score"><span class="lbl">Stil</span><span id="hud-style-score" class="val">0</span></div>
+        <div class="stat"><span class="lbl">Distance</span><span id="hud-distance" class="val">0 m</span></div>
+        <div class="stat" id="hud-best-wrap"><span class="lbl">Best</span><span id="hud-best" class="val">0 m</span></div>
+        <div id="hud-style" role="group" aria-label="Style score">
+          <div class="st-score"><span class="lbl">Style</span><span id="hud-style-score" class="val">0</span></div>
           <div id="hud-combo" hidden><span id="hud-combo-x" class="cx">x1</span><span class="cap">Combo</span><i class="bar"><b id="hud-combo-bar"></b></i></div>
           <div id="hud-rush"><span id="hud-rush-lbl" class="rl">Neon Rush</span><i class="bar"><b id="hud-rush-bar"></b></i><span id="hud-rush-txt" class="rt">0 %</span><span id="hud-rush-chain" class="rc" aria-live="off"></span></div>
         </div>
-        <ul id="hud-effects" aria-label="Aktive Effekte">
-                    <li id="fx-shield" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 5.5h5v3.2L8 11 5.5 8.7z" fill="currentColor"/></svg><span class="fx-name">Impulsschild</span><span class="fx-time"></span></li>
+        <ul id="hud-effects" aria-label="Active effects">
+                    <li id="fx-shield" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l6 3.5v7L8 15l-6-3.5v-7z" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 5.5h5v3.2L8 11 5.5 8.7z" fill="currentColor"/></svg><span class="fx-name">Pulse Shield</span><span class="fx-time"></span></li>
                     <li id="fx-magnet" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2v6a5 5 0 0 0 10 0V2h-3v6a2 2 0 0 1-4 0V2z" fill="currentColor"/></svg><span class="fx-name">Magnet</span><span class="fx-time"></span></li>
-          <li id="fx-blitz" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 1L3 9h4l-1 6 7-9H9z" fill="currentColor"/></svg><span class="fx-name">Spurblitz</span><span class="fx-time"></span></li>
-          <li id="fx-glide" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l2 5 5 2-5 1-2 4-2-4-5-1 5-2z" fill="currentColor"/></svg><span class="fx-name">Fliegen</span><span class="fx-time"></span></li>
+          <li id="fx-blitz" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9 1L3 9h4l-1 6 7-9H9z" fill="currentColor"/></svg><span class="fx-name">Lane Flash</span><span class="fx-time"></span></li>
+          <li id="fx-glide" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2l2 5 5 2-5 1-2 4-2-4-5-1 5-2z" fill="currentColor"/></svg><span class="fx-name">Fly</span><span class="fx-time"></span></li>
           <li id="fx-boost" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8l6-6 6 6M2 14l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg><span class="fx-name">Phantom</span><span class="fx-time"></span></li>
-          <li id="fx-guide" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l5 6H9v8H7V7H3z" fill="currentColor"/></svg><span class="fx-name">Pfadfinder</span><span class="fx-time"></span></li>
-          <li id="fx-slow" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h10M3 14h10M4 2c0 4 4 4 4 6s-4 2-4 6M12 2c0 4-4 4-4 6s4 2 4 6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span class="fx-name">Zeitblase</span><span class="fx-time"></span></li>
+          <li id="fx-guide" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1l5 6H9v8H7V7H3z" fill="currentColor"/></svg><span class="fx-name">Pathfinder</span><span class="fx-time"></span></li>
+          <li id="fx-slow" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h10M3 14h10M4 2c0 4 4 4 4 6s-4 2-4 6M12 2c0 4-4 4-4 6s4 2 4 6" fill="none" stroke="currentColor" stroke-width="1.8"/></svg><span class="fx-name">Time Bubble</span><span class="fx-time"></span></li>
         </ul>
       </div>
-      <div id="sprint-bar" hidden aria-hidden="true"><i></i><span>Ziel</span></div>
+      <div id="sprint-bar" hidden aria-hidden="true"><i></i><span>Goal</span></div>
       <div class="hud-speed"><div class="spd"><span id="hud-speed">165</span><span class="unit">km/h</span></div></div>
     </div>
 
     <div id="hud-btns">
       <button id="btn-pause" type="button" aria-label="Pause" hidden>Ⅱ</button>
-      <button id="btn-sound" type="button" aria-label="Ton ausschalten" aria-pressed="false">♪</button>
+      <button id="btn-sound" type="button" aria-label="Turn sound off" aria-pressed="false">♪</button>
     </div>
 
 
 
 
-    <div id="hint" role="status" aria-live="polite" hidden><span class="hint-arrow" aria-hidden="true">◀</span><span class="hint-text">Weiche aus</span><span class="hint-arrow" aria-hidden="true">▶</span></div>
+    <div id="hint" role="status" aria-live="polite" hidden><span class="hint-arrow" aria-hidden="true">◀</span><span class="hint-text">Dodge</span><span class="hint-arrow" aria-hidden="true">▶</span></div>
     <div id="fx-toast" role="status" aria-live="polite" hidden></div>
     <div id="fx-miss" aria-live="off" hidden></div>
 
@@ -87,14 +87,15 @@
 
 
     <section id="screen-start" class="overlay" data-default="start" aria-label="Start">
+      <div id="lang-switch" class="lang-switch" role="group" aria-label="Language / Sprache"><button type="button" data-lang="en" aria-pressed="true" class="on" lang="en">EN</button><button type="button" data-lang="de" aria-pressed="false" lang="de">DE</button></div>
       <div class="panel">
         <h1 class="logo" aria-label="Sunset Sideways"><span class="l1">Sunset</span><span class="l2">Sideways</span></h1>
-        <p class="tagline"><span class="t-desk">Weiche dem Verkehr aus. Wie weit kommst du?</span><span class="t-touch">WEICHE AUS. ÜBERLEBE. SCHLAGE DEN REKORD.</span></p>
-        <p class="best">Bestweite: <strong id="start-best">0 m</strong></p>
+        <p class="tagline"><span class="t-desk">Dodge the traffic. How far can you get?</span><span class="t-touch">DODGE. SURVIVE. BEAT THE RECORD.</span></p>
+        <p class="best"><span id="start-best-label">Best distance:</span> <strong id="start-best">0 m</strong></p>
         <div class="start-actions">
-          <button id="btn-start" class="primary" type="button" data-action="start"><span class="t-desk">Fahren</span><span class="t-touch">JETZT SPIELEN</span></button>
-          <button id="btn-sprint" class="secondary sprint-btn" type="button" hidden data-action="sprint"><strong>Sunset Sprint</strong><span>Erreiche die Neonnacht</span></button>
-          <button id="btn-lb" class="secondary lb-btn" type="button" data-action="lb">Weltrangliste</button>
+          <button id="btn-start" class="primary" type="button" data-action="start"><span class="t-desk">Drive</span><span class="t-touch">PLAY NOW</span></button>
+          <button id="btn-sprint" class="secondary sprint-btn" type="button" hidden data-action="sprint"><strong>Sunset Sprint</strong><span>Reach the neon night</span></button>
+          <button id="btn-lb" class="secondary lb-btn" type="button" data-action="lb">World leaderboard</button>
         </div>
         <div id="challenge" class="challenge" role="status" hidden></div>
         <div id="howto" data-mode="keys">
@@ -115,104 +116,106 @@
       </div>
       <div class="foot">
       <details id="about" class="about">
-        <summary>So funktioniert Sunset Sideways</summary>
+        <summary>How Sunset Sideways works</summary>
         <div class="about-body">
-          <h2>Das Rennspiel für den Browser</h2>
-          <p>Du fährst einen Sportwagen über einen dreispurigen Boulevard. Das Auto fährt von allein nach vorn und wird mit der Strecke immer schneller – du lenkst nur nach links und rechts. Weiche Taxis, Cabrios, Limousinen, Lkw, Baken und Absperrungen aus und komme so weit wie möglich. Die Bestweite wird in deinem Browser gespeichert.</p>
-          <p>Aus dem warmen Sonnenuntergang wird Dämmerung und schließlich eine Neonnacht mit aufgehendem Mond. Sunset Sideways ist kostenlos, braucht keinen Download und keine Anmeldung und läuft am Computer und auf dem Smartphone.</p>
-          <h3>Steuerung</h3>
+          <div id="about-text">
+          <h2>The racing game for your browser</h2>
+          <p>You drive a sports car along a three-lane boulevard. The car moves forward on its own and gets faster the further you go – you only steer left and right. Dodge taxis, convertibles, sedans, trucks, beacons and barriers and get as far as you can. Your best distance is saved in your browser.</p>
+          <p>The warm sunset turns into dusk and finally a neon night with a rising moon. Sunset Sideways is free, needs no download and no sign-up, and runs on computers and smartphones.</p>
+          <h3>Controls</h3>
           <ul>
-            <li><strong>Computer:</strong> mit den Pfeiltasten ← und → lenken, mit Enter oder der Leertaste starten, mit Esc pausieren.</li>
-            <li><strong>Smartphone und Tablet:</strong> den Daumen nach links oder rechts wischen oder links bzw. rechts auf den Bildschirm tippen (eine Spur pro Tipp).</li>
+            <li><strong>Computer:</strong> steer with the left and right arrow keys, start with Enter or Space, pause with Esc.</li>
+            <li><strong>Smartphone and tablet:</strong> swipe your thumb left or right, or tap the left or right side of the screen (one lane per tap).</li>
           </ul>
           <h3>Power-ups</h3>
           <ul>
-            <li><strong>Impulsschild:</strong> schützt vor einem Aufprall.</li>
-            <li><strong>Zeitblase:</strong> verlangsamt das Geschehen.</li>
-            <li><strong>Spurblitz:</strong> räumt Hindernisse aus deiner Spur.</li>
-            <li><strong>Magnetfeld:</strong> zieht Power-ups heran.</li>
-            <li><strong>Fliegen:</strong> hebt das Auto über den Verkehr.</li>
-            <li><strong>Phantom-Turbo:</strong> beschleunigt kurzzeitig.</li>
-            <li><strong>Pfadfinder:</strong> zeigt dir die freie Spur.</li>
+            <li><strong>Pulse Shield:</strong> protects you from one crash.</li>
+            <li><strong>Time Bubble:</strong> slows everything down.</li>
+            <li><strong>Lane Flash:</strong> clears obstacles from your lane.</li>
+            <li><strong>Magnet Field:</strong> pulls power-ups towards you.</li>
+            <li><strong>Fly:</strong> lifts the car over the traffic.</li>
+            <li><strong>Phantom Turbo:</strong> a short burst of speed.</li>
+            <li><strong>Pathfinder:</strong> shows you the free lane.</li>
           </ul>
-          <img src="./og.jpg" width="1200" height="630" loading="lazy" decoding="async" alt="Sunset Sideways: Sportwagen fährt bei Sonnenuntergang auf einer dreispurigen Straße zwischen Verkehr" />
+          </div>
+          <img src="./og.jpg" width="1200" height="630" loading="lazy" decoding="async" alt="Sunset Sideways: a sports car drives at sunset on a three-lane road between traffic" />
         </div>
       </details>
-      <nav class="legal" aria-label="Rechtliches"><a href="/datenschutz">Datenschutz</a><a href="/impressum">Impressum</a><button type="button" id="consent-settings">Cookie-Einstellungen</button></nav>
+      <nav class="legal" aria-label="Legal"><a href="/datenschutz">Privacy (German)</a><a href="/impressum">Legal notice (German)</a><button type="button" id="consent-settings">Cookie settings</button></nav>
       </div>
-      <noscript><p class="noscript">Sunset Sideways ist ein Rennspiel im Browser und benötigt JavaScript. Bitte aktiviere JavaScript, um zu fahren.</p></noscript>
+      <noscript><p class="noscript">Sunset Sideways is a racing game for your browser and needs JavaScript. Please enable JavaScript to play.</p></noscript>
     </section>
 
     <section id="screen-pause" class="overlay" data-default="resume" aria-label="Pause" hidden>
       <div class="panel">
-        <h2>Pause</h2>
+        <h2>Paused</h2>
         <p id="pause-reason" class="pause-reason" role="status" hidden></p>
         <p id="tip-line" class="controls"></p>
-        <button id="btn-resume" class="primary" type="button" data-action="resume">Fortsetzen</button>
-        <button id="btn-restart" class="secondary" type="button" data-action="restart">Neu starten</button>
+        <button id="btn-resume" class="primary" type="button" data-action="resume">Resume</button>
+        <button id="btn-restart" class="secondary" type="button" data-action="restart">Restart</button>
       </div>
     </section>
 
-    <section id="screen-result" class="overlay" data-default="again" aria-label="Ergebnis" hidden>
+    <section id="screen-result" class="overlay" data-default="again" aria-label="Result" hidden>
       <div class="panel">
         <p id="res-title" class="lbl-big">Deine Strecke</p>
         <p id="res-dist" class="big">0 m</p>
-        <p id="res-record" class="record" hidden>Neuer Rekord!</p>
+        <p id="res-record" class="record" hidden>New record!</p>
         <p id="res-cause" class="res-line"></p>
         <p id="res-goal" class="res-line goal"></p>
-        <ul id="res-stats" class="res-stats" aria-label="Stilwertung dieses Laufs">
-          <li><span id="res-style" class="n">0</span><span class="l">Stilpunkte</span></li>
-          <li><span id="res-near" class="n">0</span><span class="l">Near Misses</span></li>
-          <li><span id="res-combo" class="n">x0</span><span class="l">Beste Combo</span></li>
+        <ul id="res-stats" class="res-stats" aria-label="Style score of this run">
+          <li><span id="res-style" class="n">0</span><span class="l">Style points</span></li>
+          <li><span id="res-near" class="n">0</span><span class="l">Near misses</span></li>
+          <li><span id="res-combo" class="n">x0</span><span class="l">Best combo</span></li>
           <li><span id="res-rush" class="n">0</span><span class="l">Neon Rush</span></li>
         </ul>
-        <p id="res-style-record" class="record sm" hidden>Neuer Stil-Rekord!</p>
-        <p class="best"><span id="res-best-label">Bestweite:</span> <strong id="res-best">0 m</strong></p>
-        <p class="best sm"><span id="res-style-best-label">Stil-Rekord:</span> <strong id="res-style-best">0</strong></p>
-        <button id="btn-again" class="primary" type="button" data-action="again" disabled><span class="t-desk">Nochmal fahren</span><span class="t-touch">NOCHMAL FAHREN</span></button>
+        <p id="res-style-record" class="record sm" hidden>New style record!</p>
+        <p class="best"><span id="res-best-label">Best distance:</span> <strong id="res-best">0 m</strong></p>
+        <p class="best sm"><span id="res-style-best-label">Style record:</span> <strong id="res-style-best">0</strong></p>
+        <button id="btn-again" class="primary" type="button" data-action="again" disabled><span class="t-desk">Drive again</span><span class="t-touch">DRIVE AGAIN</span></button>
         <div id="res-lb" class="res-lb" hidden>
-          <p class="res-lb-t">Weltrangliste</p>
+          <p class="res-lb-t">World leaderboard</p>
           <form id="lb-form" class="lb-form" autocomplete="off" novalidate>
-            <label for="lb-name" class="sr-only">Dein Name für die Weltrangliste</label>
-            <input id="lb-name" type="text" maxlength="16" placeholder="Dein Name" autocomplete="nickname" autocapitalize="off" spellcheck="false" enterkeyhint="send" />
-            <button id="lb-publish" class="secondary" type="submit">Veröffentlichen</button>
+            <label for="lb-name" class="sr-only">Your name for the leaderboard</label>
+            <input id="lb-name" type="text" maxlength="16" placeholder="Your name" autocomplete="nickname" autocapitalize="off" spellcheck="false" enterkeyhint="send" />
+            <button id="lb-publish" class="secondary" type="submit">Publish</button>
           </form>
           <p id="lb-msg" class="lb-msg" role="status" aria-live="polite"></p>
           <p id="lb-rank" class="lb-rank" role="status"></p>
-          <button id="lb-view" class="linklike" type="button">Weltrangliste ansehen</button>
-          <p class="lb-priv">Name und Ergebnis werden öffentlich angezeigt. Ohne Veröffentlichung bleibt alles auf diesem Gerät.</p>
+          <button id="lb-view" class="linklike" type="button">View leaderboard</button>
+          <p class="lb-priv">Name and result are shown publicly. Without publishing, everything stays on this device.</p>
         </div>
         <div class="res-actions">
-          <button id="btn-res-lb" class="secondary touch-only" type="button" data-action="lb">RANGLISTE</button>
-          <button id="btn-share" class="secondary" type="button" data-action="share" hidden>Freund herausfordern</button>
-          <button id="btn-endless" class="secondary" type="button" data-action="endless" hidden>Endless fahren</button>
+          <button id="btn-res-lb" class="secondary touch-only" type="button" data-action="lb">LEADERBOARD</button>
+          <button id="btn-share" class="secondary" type="button" data-action="share" hidden>Challenge a friend</button>
+          <button id="btn-endless" class="secondary" type="button" data-action="endless" hidden>Drive Endless</button>
           <button id="btn-res-sprint" class="secondary" type="button" data-action="sprint" hidden>Sunset Sprint</button>
         </div>
         <div id="share-box" class="share-box" hidden>
-          <label for="share-url">Link zur Herausforderung</label>
+          <label for="share-url">Challenge link</label>
           <input id="share-url" type="text" readonly />
-          <button id="btn-copy" class="secondary" type="button" data-action="copy">Link kopieren</button>
+          <button id="btn-copy" class="secondary" type="button" data-action="copy">Copy link</button>
           <p id="share-msg" role="status"></p>
         </div>
       </div>
     </section>
     <section id="screen-lb" class="overlay lb" role="dialog" aria-modal="true" aria-labelledby="lb-title" hidden>
       <div class="panel lb-panel">
-        <h2 id="lb-title">Weltrangliste</h2>
-        <div class="lb-tabs" role="tablist" aria-label="Spielmodus">
+        <h2 id="lb-title">World leaderboard</h2>
+        <div class="lb-tabs" role="tablist" aria-label="Game mode">
           <button type="button" role="tab" data-lb-mode="endless" aria-selected="true" class="on">Endless</button>
           <button type="button" role="tab" data-lb-mode="sprint" aria-selected="false">Sunset Sprint</button>
         </div>
-        <div class="lb-tabs" role="tablist" aria-label="Zeitraum">
-          <button type="button" role="tab" data-lb-period="all" aria-selected="true" class="on">Gesamt</button>
-          <button type="button" role="tab" data-lb-period="7d" aria-selected="false">Letzte 7 Tage</button>
+        <div class="lb-tabs lb-tabs-period" role="tablist" aria-label="Period">
+          <button type="button" role="tab" data-lb-period="all" aria-selected="true" class="on">All time</button>
+          <button type="button" role="tab" data-lb-period="7d" aria-selected="false">Last 7 days</button>
         </div>
         <div id="lb-me" class="lb-me" role="status"></div>
         <div class="lb-scroll">
-          <table class="lb-table"><thead><tr><th scope="col">Platz</th><th scope="col">Spieler</th><th scope="col">Punkte</th><th scope="col">Distanz</th></tr></thead><tbody id="lb-body"></tbody></table>
+          <table class="lb-table"><thead><tr><th scope="col">Rank</th><th scope="col">Player</th><th scope="col">Points</th><th scope="col">Distance</th></tr></thead><tbody id="lb-body"></tbody></table>
         </div>
         <p id="lb-note" class="lb-note" role="status"></p>
-        <button id="lb-close" class="primary" type="button">Schließen</button>
+        <button id="lb-close" class="primary" type="button">Close</button>
       </div>
     </section>
   </div>

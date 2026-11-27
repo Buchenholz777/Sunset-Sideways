@@ -60,3 +60,9 @@ html.touch:not([data-phase="running"]) #fx-miss { display: none; }
   #fx-miss, #fx-miss.rush { animation: none; }
   #hud-combo.pop .cx, #hud-rush.start { animation: none; }
 }
+
+/* Sprachwahl (EN/DE) oben rechts im Startbildschirm */
+.lang-switch { position: absolute; top: calc(var(--sat) + 12px); right: calc(var(--sar) + 66px); z-index: 6; display: flex; gap: 0; border: 1px solid #ffffff55; border-radius: 999px; background: #070a24a0; overflow: hidden; backdrop-filter: blur(4px); }
+.lang-switch button { appearance: none; border: 0; background: transparent; color: #fff; font: 800 13px/1 system-ui, sans-serif; letter-spacing: .08em; min-width: 44px; min-height: 36px; padding: 0 12px; cursor: pointer; opacity: .7; }
+.lang-switch button.on { background: var(--amber, #ffb347); color: #1a0b2e; opacity: 1; }
+.lang-switch button:focus-visible { outline: 2px solid #fff; outline-offset: -3px; }

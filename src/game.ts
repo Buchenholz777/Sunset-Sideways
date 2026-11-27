@@ -12,17 +12,20 @@ import { Road } from './sim/road';
 import { lightT } from './render/scenery';
 import { Sound } from './audio/sound';
 import { load, save } from './storage/storage';
+import { tr, locale, getLang, onLang } from './i18n';
 import { PICKUP_LABEL, applyConfig, type PickupKey } from './config/runtime';
 import { LeaderboardUi } from './leaderboard/ui';
 import { SPRINT_CONFIG, SPRINT_ENABLED, SPRINT_FINISH_M, SPRINT_ID, SPRINT_ROUTE, SPRINT_SEED, sprintStageScale } from './sprint/rules';
 import { BUILTIN, Telemetry, eventActive, fetchConfig, randomId, type RemoteConfig } from './net/remote';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
+/** Zahl mit fester Nachkommastellenzahl, Dezimalzeichen je Sprache (Komma nur auf Deutsch). */
+const fix = (v: number, d: number): string => { const s = v.toFixed(d); return getLang() === 'de' ? s.replace('.', ',') : s; };
 
 /** Satz zur tatsächlichen Absturzursache (aus dem Crash-Ereignis). */
 export function crashCauseText(kind: string | undefined): string {
   const t: Record<string, string> = { taxi: 'Taxi getroffen', cabrio: 'Cabrio getroffen', sedan: 'Limousine getroffen', truck: 'Lkw getroffen', baken: 'Bake getroffen', barrier: 'Absperrung getroffen' };
-  return kind && t[kind] ? t[kind] : '';
+  return kind && t[kind] ? tr(t[kind]) : '';
 }
 
 /**
@@ -30,12 +33,12 @@ export function crashCauseText(kind: string | undefined): string {
  * erstes Power-up (wenn keins eingesammelt wurde), 1 km, Abstand zur Bestweite, sonst das nächste 5-km-Schild.
  */
 export function nextGoalText(dist: number, best: number, record: boolean, pickups: number): string {
-  const km = (m: number): string => (m % 1000 === 0 ? String(m / 1000) : (m / 1000).toFixed(2).replace('.', ','));
-  if (dist < 1000 && pickups === 0) return 'Ziel: Sammle ein Power-up ein.';
-  if (dist < 1000) return 'Ziel: Schaffe 1 km.';
-  if (!record && best > dist && best - dist <= 3000) return `Ziel: Noch ${Math.max(1, Math.round((best - dist) / 10) * 10)} m bis zu deiner Bestweite.`;
+  const km = (m: number): string => (m % 1000 === 0 ? String(m / 1000) : fix(m / 1000, 2));
+  if (dist < 1000 && pickups === 0) return tr('Ziel: Sammle ein Power-up ein.');
+  if (dist < 1000) return tr('Ziel: Schaffe 1 km.');
+  if (!record && best > dist && best - dist <= 3000) return tr('Ziel: Noch {n} m bis zu deiner Bestweite.', { n: Math.max(1, Math.round((best - dist) / 10) * 10) });
   const next = (Math.floor(dist / 5000) + 1) * 5000;
-  return `Ziel: Das ${km(next)}-km-Schild.`;
+  return tr('Ziel: Das {km}-km-Schild.', { km: km(next) });
 }
 
 type Mode = 'endless' | 'sprint';
@@ -121,6 +124,10 @@ export class Game {
   private styleBest = load().styleBest;
   private missTimer: ReturnType<typeof setTimeout> | undefined;
   private lastRushSec = -1;
+  /** Für den Sprachwechsel: letzte Pausenursache, Ergebnisart und Neuschreiben der Ergebnistexte. */
+  private pauseKey: PauseReason = 'manual';
+  private resultKind: 'crash' | 'goal' = 'crash';
+  private resRefresh: (() => void) | null = null;
   private lastPassSfx = 0;
   /** Weltrangliste (optional; Veröffentlichung nur auf ausdrücklichen Wunsch). */
   private lbui = new LeaderboardUi();
@@ -222,8 +229,9 @@ export class Game {
     this.syncHowto();
     this.el.sprintBtn.hidden = !SPRINT_ENABLED;
     this.showChallenge();
-    $('tip-line').textContent = this.touchCapable ? TEXT.tipTouch : TEXT.tipDesktop;
+    this.syncTip();
     this.syncSoundButton();
+    onLang(() => this.relocalize());
     this.bind();
     this.resize();
     this.loop.start();
@@ -318,7 +326,8 @@ export class Game {
   private showBadge(): void {
     const b = document.createElement('div');
     b.id = 'testdrive-badge';
-    b.textContent = 'Testfahrt · Entwurf – zählt nicht';
+    b.textContent = tr('Testfahrt · Entwurf – zählt nicht');
+    onLang(() => { b.textContent = tr('Testfahrt · Entwurf – zählt nicht'); });
     b.setAttribute('role', 'status');
     document.body.appendChild(b);
   }
@@ -394,19 +403,24 @@ export class Game {
     this.input.tapEnabled = touch;
     document.documentElement.classList.toggle('touch', touch);
     this.syncHowto();
-    $('tip-line').textContent = touch ? TEXT.tipTouch : TEXT.tipDesktop;
+    this.syncTip();
+  }
+
+  private syncTip(): void {
+    $('tip-line').textContent = tr(this.touchCapable ? TEXT.tipTouch : TEXT.tipDesktop);
   }
 
   /** Lenkhilfe des Startbildschirms: Text und Grafik passend zum zuletzt benutzten Eingabegerät (auch bei Hybridgeräten). */
   private syncHowto(): void {
-    $('controls-line').textContent = this.touchCapable ? TEXT.controlsTouch : TEXT.controlsDesktop;
+    $('controls-line').textContent = tr(this.touchCapable ? TEXT.controlsTouch : TEXT.controlsDesktop);
     $('howto').dataset.mode = this.touchCapable ? 'touch' : 'keys';
   }
 
   private pause(reason: PauseReason = 'manual'): void {
     if (this.state.phase !== 'running') return;
     this.pauseLog.push(reason);
-    this.el.pauseReason.textContent = PAUSE_TEXT[reason];
+    this.el.pauseReason.textContent = tr(PAUSE_TEXT[reason]);
+    this.pauseKey = reason;
     this.el.pauseReason.hidden = reason === 'manual';
     this.state.go('paused');
     this.input.reset();
@@ -459,7 +473,7 @@ export class Game {
       let shieldHit = false;
       for (const ev of sim.events) {
         if (ev.type === 'shieldHit') { this.renderer.burst('shieldHit'); this.renderer.shieldImpact(ev.x, ev.z); this.sound.sfx('shieldHit'); this.toast('Abgefangen!'); shieldHit = true; }
-        else if (ev.type === 'pickup') { this.runPickups++; this.tele.send('taken', this.runId, this.pickupKey(ev.pickup, ev.id, ev.z), { type: ev.pickup, s: Math.floor(sim.s) }); this.qaPickupEvents++; this.renderer.burst(ev.pickup); this.sound.sfx(ev.pickup); if (ev.pickup !== 'glide') this.toast(PICKUP_LABEL[ev.pickup as PickupKey] ?? ev.pickup, 1000); }
+        else if (ev.type === 'pickup') { this.runPickups++; this.tele.send('taken', this.runId, this.pickupKey(ev.pickup, ev.id, ev.z), { type: ev.pickup, s: Math.floor(sim.s) }); this.qaPickupEvents++; this.renderer.burst(ev.pickup); this.sound.sfx(ev.pickup); if (ev.pickup !== 'glide') this.toast(tr(PICKUP_LABEL[ev.pickup as PickupKey] ?? ev.pickup), 1000); }
         else if (ev.type === 'cleared') { this.renderer.burst('clear'); }
         else if (ev.type === 'blitz') { this.renderer.laneFlash(ev.x, ev.z); this.sound.sfx('zap'); }
         else if (ev.type === 'nearMiss') {
@@ -469,22 +483,22 @@ export class Game {
           if (ev.combo >= 2) { this.el.combo.classList.remove('pop'); void this.el.combo.offsetWidth; this.el.combo.classList.add('pop'); }
         }
         else if (ev.type === 'rushStart') { this.sound.sfx('rushStart'); this.renderer.rushStarted(); this.showMiss('Neon Rush!', 'rush', 1000); this.el.rush.classList.remove('start'); void this.el.rush.offsetWidth; this.el.rush.classList.add('start'); }
-        else if (ev.type === 'rushEnd') { this.sound.sfx('rushEnd'); this.renderer.rushEnded(); this.showMiss(ev.reason === 'hit' ? 'Rush verloren' : 'Rush vorbei', 'lost', 900); }
+        else if (ev.type === 'rushEnd') { this.sound.sfx('rushEnd'); this.renderer.rushEnded(); this.showMiss(tr(ev.reason === 'hit' ? 'Rush verloren' : 'Rush vorbei'), 'lost', 900); }
         else if (ev.type === 'slash') { this.renderer.slash(ev.dir); this.sound.sfx('slash'); }
         else if (ev.type === 'gate') { this.renderer.gateCollected(ev.x, ev.z); this.sound.sfx('gate', ev.n); this.showMiss(ev.n === 1 ? `Neon Gate +${ev.pts}` : `Rush Chain x${ev.n} +${ev.pts}`, 'rush', 1100); }
         else if (ev.type === 'shockwave') { this.renderer.shockwave(); this.sound.sfx('wave'); }
         else if (ev.type === 'rushPass') { this.renderer.rushPass(ev.x, ev.z); const nowMs = performance.now(); if (nowMs - this.lastPassSfx > 160) { this.lastPassSfx = nowMs; this.sound.sfx('rushPass'); } }
-        else if (ev.type === 'comboLost') { if (ev.reason === 'time') this.showMiss('Combo vorbei', 'lost', 900); }
+        else if (ev.type === 'comboLost') { if (ev.reason === 'time') this.showMiss(tr('Combo vorbei'), 'lost', 900); }
         else if (ev.type === 'laneWarn') this.sound.sfx('laneWarn');
-        else if (ev.type === 'queued') this.toast(`Vorgemerkt: ${PICKUP_LABEL[ev.effect as PickupKey] ?? ev.effect}`, 1100);
-        else if (ev.type === 'glideStart') { if (ev.ramp) { this.renderer.burst('land'); this.sound.sfx('land'); this.toast('Sprung'); } else { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast('Fliegen'); } if (!this.runFlew) { this.runFlew = true; this.tele.send('fly', this.runId); } }
+        else if (ev.type === 'queued') this.toast(tr('Vorgemerkt: {x}', { x: tr(PICKUP_LABEL[ev.effect as PickupKey] ?? ev.effect) }), 1100);
+        else if (ev.type === 'glideStart') { if (ev.ramp) { this.renderer.burst('land'); this.sound.sfx('land'); this.toast(tr('Sprung')); } else { this.renderer.burst('glide'); this.sound.setFlight(true); this.toast(tr('Fliegen')); } if (!this.runFlew) { this.runFlew = true; this.tele.send('fly', this.runId); } }
         else if (ev.type === 'glideEnd') { this.renderer.burst('land'); this.sound.sfx('land'); this.sound.setFlight(false); }
         else if (ev.type === 'magnetPull') this.sound.sfx('magnet');
         else if (ev.type === 'effectEnd') {
           this.sound.sfx('effectEnd');
           // Ende eines Effekts sichtbar machen (der Schild-Treffer meldet sich schon selbst)
-          if (ev.effect === 'boost') this.toast('Normales Tempo', 900);
-          else if (ev.effect === 'shield' && !shieldHit) this.toast('Schild abgelaufen', 900);
+          if (ev.effect === 'boost') this.toast(tr('Normales Tempo'), 900);
+          else if (ev.effect === 'shield' && !shieldHit) this.toast(tr('Schild abgelaufen'), 900);
         }
       }
       sim.events.length = 0;
@@ -507,9 +521,10 @@ export class Game {
   /** Ergebnis-Oberfläche je Modus (Endless / Sprint, Absturz / Ziel). */
   private resultFor(kind: 'crash' | 'goal'): void {
     const sprint = this.mode === 'sprint';
-    this.el.resTitle.textContent = kind === 'goal' ? 'Ziel erreicht!' : sprint ? 'Dein Sprint' : 'Deine Strecke';
-    this.el.resBestLabel.textContent = sprint ? 'Sprint-Bestleistung:' : 'Bestweite:';
-    $('res-best').textContent = sprint ? (this.sprintDone > 0 ? `Ziel erreicht (${this.sprintDone}×)` : formatDistance(this.sprintBest)) : formatDistance(this.best);
+    this.resultKind = kind;
+    this.el.resTitle.textContent = tr(kind === 'goal' ? 'Ziel erreicht!' : sprint ? 'Dein Sprint' : 'Deine Strecke');
+    this.el.resBestLabel.textContent = tr(sprint ? 'Sprint-Bestleistung:' : 'Bestweite:');
+    $('res-best').textContent = sprint ? (this.sprintDone > 0 ? tr('Ziel erreicht ({n}×)', { n: this.sprintDone }) : formatDistance(this.sprintBest)) : formatDistance(this.best);
     this.el.shareBtn.hidden = !sprint;
     this.el.endlessBtn.hidden = !sprint;
     this.el.resSprintBtn.hidden = sprint || !SPRINT_ENABLED;
@@ -534,10 +549,12 @@ export class Game {
     this.recordShown = false;
     $('res-dist').textContent = formatDistance(SPRINT_FINISH_M);
     $('res-record').hidden = true;
-    $('res-cause').textContent = 'Du hast die Neonnacht erreicht.';
-    $('res-goal').textContent = 'Teile den Sprint und fordere einen Freund heraus.';
+    $('res-cause').textContent = tr('Du hast die Neonnacht erreicht.');
+    $('res-goal').textContent = tr('Teile den Sprint und fordere einen Freund heraus.');
     this.resultFor('goal');
     this.fillStyleResult(sim, true);
+    const goalStyle = sim.style.styleScore;
+    this.resRefresh = () => { $('res-dist').textContent = formatDistance(SPRINT_FINISH_M); $('res-cause').textContent = tr('Du hast die Neonnacht erreicht.'); $('res-goal').textContent = tr('Teile den Sprint und fordere einen Freund heraus.'); $('res-style').textContent = goalStyle.toLocaleString(locale()); };
     this.el.again.disabled = true;
     this.el.pause.hidden = true;
     const token = ++this.crashToken;
@@ -549,14 +566,14 @@ export class Game {
   private showChallenge(): void {
     const c = this.challenge;
     if (!c) return;
-    const km = (m: number): string => (m / 1000).toFixed(1).replace('.', ',');
+    const km = (m: number): string => fix(m / 1000, 1);
     this.el.challengeBox.hidden = false;
     if (!c.ok) {
-      this.el.challengeBox.textContent = 'Diese Herausforderung gibt es nicht mehr. Starte den aktuellen Sunset Sprint oder fahre Endless.';
+      this.el.challengeBox.textContent = tr('Diese Herausforderung gibt es nicht mehr. Starte den aktuellen Sunset Sprint oder fahre Endless.');
       return;
     }
-    const from = c.reach === null ? '' : c.reach >= SPRINT_FINISH_M ? ' Absender: Ziel erreicht (Angabe des Absenders).' : ` Absender: ${km(c.reach)} km weit (Angabe des Absenders).`;
-    this.el.challengeBox.textContent = `Herausforderung: Sunset Sprint – erreiche die Neonnacht nach ${km(SPRINT_FINISH_M)} km.${from} Starte, wenn du bereit bist.`;
+    const from = c.reach === null ? '' : c.reach >= SPRINT_FINISH_M ? tr(' Absender: Ziel erreicht (Angabe des Absenders).') : tr(' Absender: {km} km weit (Angabe des Absenders).', { km: km(c.reach) });
+    this.el.challengeBox.textContent = tr('Herausforderung: Sunset Sprint – erreiche die Neonnacht nach {km} km.{from} Starte, wenn du bereit bist.', { km: km(SPRINT_FINISH_M), from });
     this.el.sprintBtn.classList.add('invited');
   }
 
@@ -564,12 +581,12 @@ export class Game {
 
   private async share(): Promise<void> {
     const url = this.shareUrl();
-    const km = (this.lastReach / 1000).toFixed(1).replace('.', ',');
-    const text = this.lastGoal ? 'Ich habe den Sunset Sprint bis in die Neonnacht geschafft. Schaffst du das auch?' : `Ich bin im Sunset Sprint ${km} km weit gekommen. Schaffst du mehr?`;
+    const km = fix(this.lastReach / 1000, 1);
+    const text = this.lastGoal ? tr('Ich habe den Sunset Sprint bis in die Neonnacht geschafft. Schaffst du das auch?') : tr('Ich bin im Sunset Sprint {km} km weit gekommen. Schaffst du mehr?', { km });
     this.el.shareUrl.value = url;
     this.el.shareBox.hidden = false;
     try {
-      if (typeof navigator.share === 'function') { await navigator.share({ title: 'Sunset Sideways – Sunset Sprint', text, url }); this.el.shareMsg.textContent = 'Geteilt.'; return; }
+      if (typeof navigator.share === 'function') { await navigator.share({ title: 'Sunset Sideways – Sunset Sprint', text, url }); this.el.shareMsg.textContent = tr('Geteilt.'); return; }
     } catch (e) { if ((e as Error).name === 'AbortError') { this.el.shareMsg.textContent = ''; return; } }
     await this.copyLink();
   }
@@ -577,8 +594,8 @@ export class Game {
   private async copyLink(): Promise<void> {
     const url = this.shareUrl();
     this.el.shareUrl.value = url; this.el.shareBox.hidden = false;
-    try { await navigator.clipboard.writeText(url); this.el.shareMsg.textContent = 'Link kopiert. Du kannst ihn jetzt einfügen und verschicken.'; }
-    catch { this.el.shareUrl.focus(); this.el.shareUrl.select(); this.el.shareMsg.textContent = 'Markiert: Link bitte selbst kopieren.'; }
+    try { await navigator.clipboard.writeText(url); this.el.shareMsg.textContent = tr('Link kopiert. Du kannst ihn jetzt einfügen und verschicken.'); }
+    catch { this.el.shareUrl.focus(); this.el.shareUrl.select(); this.el.shareMsg.textContent = tr('Markiert: Link bitte selbst kopieren.'); }
   }
 
   /** Kurzer Stil-Hinweis (Near Miss, Combo, Neon Rush): klein, über der Fahrbahn, ≈ 0,8 s; ersetzt den vorigen Hinweis. */
@@ -676,9 +693,11 @@ export class Game {
     $('res-dist').textContent = formatDistance(dist);
     $('res-record').hidden = !this.recordShown;
     $('res-cause').textContent = crashCauseText(sim.crash?.kind);
-    $('res-goal').textContent = sprint ? `Ziel: Noch ${Math.max(10, Math.round((SPRINT_FINISH_M - dist) / 10) * 10)} m bis zur Neonnacht.` : nextGoalText(dist, this.best, this.recordShown, this.runPickups);
+    $('res-goal').textContent = sprint ? tr('Ziel: Noch {n} m bis zur Neonnacht.', { n: Math.max(10, Math.round((SPRINT_FINISH_M - dist) / 10) * 10) }) : nextGoalText(dist, this.best, this.recordShown, this.runPickups);
     this.resultFor('crash');
     this.fillStyleResult(sim, sprint);
+    const styleScore = sim.style.styleScore, crashKind = sim.crash?.kind, nextGoal = (): string => (sprint ? tr('Ziel: Noch {n} m bis zur Neonnacht.', { n: Math.max(10, Math.round((SPRINT_FINISH_M - dist) / 10) * 10) }) : nextGoalText(dist, this.best, this.recordShown, this.runPickups));
+    this.resRefresh = () => { $('res-dist').textContent = formatDistance(dist); $('res-cause').textContent = crashCauseText(crashKind); $('res-goal').textContent = nextGoal(); $('res-style').textContent = styleScore.toLocaleString(locale()); };
     $('start-best').textContent = formatDistance(this.best);
     this.el.again.disabled = true;
     this.el.pause.hidden = true;
@@ -731,7 +750,7 @@ export class Game {
     if (landing !== this.landing) {
       this.landing = landing;
       this.el.glide.classList.toggle('landing', landing);
-      const nm = this.el.glide.querySelector('.fx-name'); if (nm) nm.textContent = landing ? 'Landung' : 'Fliegen';
+      const nm = this.el.glide.querySelector('.fx-name'); if (nm) nm.textContent = tr(landing ? 'Landung' : 'Fliegen');
       if (landing) this.sound.sfx('effectEnd');
     }
     this.fxChip(this.el.boost, sim.boostT, 'boost');
@@ -742,12 +761,12 @@ export class Game {
   /** Stil-HUD: DOM nur bei geänderten Werten schreiben (Punkte, Combo-Stufe und -Restzeit, Rush-Ladung bzw. -Restzeit). */
   private styleHud(sim: Sim): void {
     const st = sim.style, L = this.last, E = this.el;
-    const score = st.styleScore.toLocaleString('de-DE');
+    const score = st.styleScore.toLocaleString(locale());
     if (score !== L.score) { L.score = score; E.score.textContent = score; }
     // Combo: Multiplikator und Restzeit des Fensters (aktive Spielzeit)
     const win = st.comboWindow(sim.magnetT > 0), rem = st.comboRemaining(sim.t, sim.magnetT > 0);
     const cx = st.comboCount > 0 ? `x${st.multiplier}` : '';
-    if (cx !== L.combo) { L.combo = cx; E.combo.hidden = cx === ''; E.comboX.textContent = cx || 'x1'; E.combo.title = st.comboCount > 5 ? `Kette: ${st.comboCount} Near Misses` : ''; }
+    if (cx !== L.combo) { L.combo = cx; E.combo.hidden = cx === ''; E.comboX.textContent = cx || 'x1'; E.combo.title = st.comboCount > 5 ? tr('Kette: {n} Near Misses', { n: st.comboCount }) : ''; }
     const cb = (Math.round((rem / win) * 20) * 5).toString();
     if (cb !== L.comboBar) { L.comboBar = cb; E.comboBar.style.width = cb + '%'; }
     // Neon Rush: Ladeanzeige, aktive Restdauer, Abklingzeit
@@ -764,7 +783,7 @@ export class Game {
     const rb = (Math.round(frac * 50) * 2).toString();
     if (rb !== L.rushBar) { L.rushBar = rb; E.rushBar.style.width = rb + '%'; }
     const sec = act ? Math.max(0, st.rushRemaining) : 0;
-    const txt = act ? `${sec.toFixed(1).replace('.', ',')} s` : st.rushCharge >= 100 && st.rushCooldown > 0 ? `in ${Math.ceil(st.rushCooldown)} s` : `${Math.round(st.rushCharge)} %`;
+    const txt = act ? `${fix(sec, 1)} s` : st.rushCharge >= 100 && st.rushCooldown > 0 ? tr('in {n} s', { n: Math.ceil(st.rushCooldown) }) : `${Math.round(st.rushCharge)} %`;
     if (txt !== L.rushTxt) { L.rushTxt = txt; E.rushTxt.textContent = txt; }
     // Rush Chain: eigene Zeile (nur während des Rushs), eingesammelte Tore als Punkte; getrennt vom normalen Combo-HUD
     const chainTxt = act ? `Rush Chain ${st.rushChain > 0 ? 'x' + st.rushChain : '–'} ${'●'.repeat(st.rushChain)}${'○'.repeat(Math.max(0, B.style.rush.gateCount - st.rushChain))}` : '';
@@ -777,21 +796,21 @@ export class Game {
   /** Kennzahlen des Laufs in die Ergebnisanzeige schreiben; Stil-Rekord nur im Endless und nur außerhalb von QA/Testfahrt. */
   private fillStyleResult(sim: Sim, sprint: boolean): void {
     const st = sim.style;
-    $('res-style').textContent = st.styleScore.toLocaleString('de-DE');
+    $('res-style').textContent = st.styleScore.toLocaleString(locale());
     $('res-near').textContent = String(st.nearMissCount);
     $('res-combo').textContent = st.maxCombo > 0 ? `x${Math.min(B.style.combo.maxMult, st.maxCombo)}${st.maxCombo > B.style.combo.maxMult ? ` (${st.maxCombo})` : ''}` : 'x0';
     $('res-rush').textContent = String(st.rushCount);
     const rec = !sprint && !this.excluded && st.styleScore > 0 && st.styleScore > this.styleBest;
     if (rec) { this.styleBest = st.styleScore; save({ styleBest: st.styleScore }); }
     $('res-style-record').hidden = !rec;
-    $('res-style-best').textContent = this.styleBest.toLocaleString('de-DE');
+    $('res-style-best').textContent = this.styleBest.toLocaleString(locale());
     $('res-style-best-label').parentElement!.hidden = sprint;
     // Weltrangliste: Veröffentlichung anbieten (nie in Testfahrt/QA, nie ohne Punkte)
     this.lbui.offer(this.excluded || st.styleScore <= 0 ? null : { mode: sprint ? 'sprint' : 'endless', score: st.styleScore, dist: sprint ? Math.min(SPRINT_FINISH_M, Math.floor(sim.s)) : Math.floor(sim.s), dur: sim.t - sim.t0, nm: st.nearMissCount, gp: st.gatePoints });
   }
 
   private fxChip(li: HTMLElement, remaining: number, key: 'shield' | 'slow' | 'magnet' | 'blitz' | 'glide' | 'boost' | 'guide'): void {
-    const txt = remaining > 0 ? `${remaining.toFixed(1).replace('.', ',')} s` : '';
+    const txt = remaining > 0 ? `${fix(remaining, 1)} s` : '';
     if (this.last[key] === txt) return;
     this.last[key] = txt;
     li.hidden = remaining <= 0;
@@ -799,8 +818,29 @@ export class Game {
     if (t) t.textContent = txt;
   }
 
+  /** Sprachwechsel: alle zur Laufzeit geschriebenen Texte in der neuen Sprache neu setzen (statische Texte erledigt i18n selbst). */
+  private relocalize(): void {
+    $('start-best').textContent = formatDistance(this.best);
+    this.el.best.textContent = formatDistance(this.best);
+    this.syncTip();
+    this.syncHowto();
+    this.syncSoundButton();
+    this.showChallenge();
+    if (!this.el.pauseReason.hidden) this.el.pauseReason.textContent = tr(PAUSE_TEXT[this.pauseKey]);
+    this.last.dist = ''; this.last.score = ''; this.last.rushTxt = ''; this.last.chain = '';
+    for (const k of ['shield', 'slow', 'magnet', 'blitz', 'glide', 'boost', 'guide'] as const) this.last[k] = '';
+    if (this.state.phase === 'crashed' && this.resRefresh) {
+      const sprint = this.mode === 'sprint';
+      this.el.resTitle.textContent = tr(this.resultKind === 'goal' ? 'Ziel erreicht!' : sprint ? 'Dein Sprint' : 'Deine Strecke');
+      this.el.resBestLabel.textContent = tr(sprint ? 'Sprint-Bestleistung:' : 'Bestweite:');
+      $('res-best').textContent = sprint ? (this.sprintDone > 0 ? tr('Ziel erreicht ({n}×)', { n: this.sprintDone }) : formatDistance(this.sprintBest)) : formatDistance(this.best);
+      $('res-style-best').textContent = this.styleBest.toLocaleString(locale());
+      this.resRefresh();
+    }
+  }
+
   private syncSoundButton(): void {
     this.el.snd.setAttribute('aria-pressed', String(this.sound.muted));
-    this.el.snd.setAttribute('aria-label', this.sound.muted ? 'Ton einschalten' : 'Ton ausschalten');
+    this.el.snd.setAttribute('aria-label', tr(this.sound.muted ? 'Ton einschalten' : 'Ton ausschalten'));
   }
 }

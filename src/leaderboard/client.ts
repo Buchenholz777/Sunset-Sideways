@@ -1,3 +1,4 @@
+import { tr, trLoose } from '../i18n';
 import { BALANCE as B } from '../config/balance';
 import { GAME_VERSION } from '../net/remote';
 
@@ -64,12 +65,12 @@ export class LeaderboardClient {
   /** Lauf veröffentlichen (ausdrückliche Aktion). Legt bei Bedarf die pseudonyme Gast-Berechtigung an. */
   async publish(name: string, c: RunClaim): Promise<{ ok: true; res: SubmitOk } | { ok: false; status: number; error: string }> {
     const tk = this.ticket;
-    if (!tk || tk.mode !== c.mode) return { ok: false, status: 0, error: 'Für diesen Lauf ist keine Veröffentlichung möglich (keine Verbindung beim Start).' };
+    if (!tk || tk.mode !== c.mode) return { ok: false, status: 0, error: tr('Für diesen Lauf ist keine Veröffentlichung möglich (keine Verbindung beim Start).') };
     let token = loadLocal().token;
     if (!token) {
       const g = await call<{ token?: string }>('/guest', {});
-      if (g.status === 429) return { ok: false, status: 429, error: 'Zu viele Anfragen. Bitte später erneut versuchen.' };
-      if (g.status !== 200 || typeof g.data?.token !== 'string') return { ok: false, status: g.status, error: 'Die Weltrangliste ist gerade nicht erreichbar. Dein Ergebnis bleibt auf diesem Gerät.' };
+      if (g.status === 429) return { ok: false, status: 429, error: tr('Zu viele Anfragen. Bitte später erneut versuchen.') };
+      if (g.status !== 200 || typeof g.data?.token !== 'string') return { ok: false, status: g.status, error: tr('Die Weltrangliste ist gerade nicht erreichbar. Dein Ergebnis bleibt auf diesem Gerät.') };
       token = g.data.token;
     }
     const r = await call<SubmitOk & { error?: string }>('/submit', { token, ticket: tk.ticket, name, score: c.score, dist: c.dist, dur: c.dur, nm: c.nm, gp: c.gp, ver: GAME_VERSION, rules: B.leaderboard.scoreRulesVersion });
@@ -78,7 +79,7 @@ export class LeaderboardClient {
       if (this.ticket === tk) this.ticket = null;               // ein Ticket gilt für genau einen Lauf
       return { ok: true, res: r.data };
     }
-    if (r.status === 0) return { ok: false, status: 0, error: 'Die Weltrangliste ist gerade nicht erreichbar. Bitte später erneut versuchen.' };
-    return { ok: false, status: r.status, error: typeof r.data?.error === 'string' ? r.data.error : 'Veröffentlichung nicht möglich.' };
+    if (r.status === 0) return { ok: false, status: 0, error: tr('Die Weltrangliste ist gerade nicht erreichbar. Bitte später erneut versuchen.') };
+    return { ok: false, status: r.status, error: typeof r.data?.error === 'string' ? trLoose(r.data.error) : tr('Veröffentlichung nicht möglich.') };
   }
 }

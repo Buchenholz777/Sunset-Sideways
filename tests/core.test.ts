@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRng } from '../src/core/rng';
 import { formatDistance } from '../src/core/format';
+import { setLang } from '../src/i18n';
 import { parseSaved } from '../src/storage/storage';
 import { GameState } from '../src/core/state';
 
@@ -15,6 +16,7 @@ describe('RNG', () => {
 
 describe('Format', () => {
   it('Meter und Kilometer deutsch', () => {
+    setLang('de');
     expect(formatDistance(999.9)).toBe('999 m');
     expect(formatDistance(1234)).toBe('1,23 km');
   });
