@@ -223,6 +223,7 @@ button.secondary { padding: 10px 28px; min-height: 44px; font: inherit; font-siz
 #sprint-bar span { position: absolute; right: 6px; top: -2px; font: 800 9px/10px system-ui, sans-serif; color: #fff; letter-spacing: .1em; text-transform: uppercase; }
 .res-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 .res-actions button[hidden] { display: none; }
+html:not(.touch) .touch-only { display: none; }
 .share-box { display: grid; gap: 6px; width: min(92vw, 420px); text-align: left; font-size: 13px; }
 .share-box[hidden] { display: none; }
 .share-box input { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #ffffff66; background: #070a24; color: #fff; font: 13px system-ui, sans-serif; }
