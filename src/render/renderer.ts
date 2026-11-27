@@ -90,6 +90,8 @@ export class Renderer {
   private road!: Road;
   /** Grafikprofil: 0 voll, 1 reduziert (Fassadendetails, Rauch, Glow), 2 minimal. Spielregeln bleiben unberührt. */
   quality = 0;
+  /** Name des aktuellen Grafikprofils (HIGH / MEDIUM / LOW) für Messung und Anzeige. */
+  get profile(): 'HIGH' | 'MEDIUM' | 'LOW' { return this.quality === 0 ? 'HIGH' : this.quality === 1 ? 'MEDIUM' : 'LOW'; }
   private costAvg = 0; private costN = 0; private fastN = 0;
   reducedMotion = false;
   /** Entwicklungsansicht (nur per Test-URL ?qa=1&debug=1): Mittellinie, Ränder, Trefferflächen. */

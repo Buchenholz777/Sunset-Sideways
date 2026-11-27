@@ -202,6 +202,8 @@ export class Game {
     }
     // Modus folgt der tatsächlichen Eingabe: primärer grober Zeiger = Touch; Tastendruck wechselt zu Desktop, Berührung zu Touch
     this.touchCapable = matchMedia('(pointer: coarse)').matches;
+    // Schwache Smartphones starten im Profil MEDIUM (wenige Kerne / wenig Speicher); die laufende Messung (adapt) regelt danach in beide Richtungen.
+    { const n = navigator as Navigator & { deviceMemory?: number }; if (this.touchCapable && ((n.hardwareConcurrency || 8) <= 4 || (n.deviceMemory ?? 8) <= 3)) this.renderer.quality = 1; }
     this.state.onChange = (p) => { document.documentElement.dataset.phase = p; };
     document.documentElement.dataset.phase = this.state.phase;
     document.documentElement.classList.toggle('touch', this.touchCapable);
@@ -238,6 +240,9 @@ export class Game {
   private bind(): void {
     window.addEventListener('resize', () => this.resize());
     window.addEventListener('orientationchange', () => this.resize());
+    // Browserleisten, Split-Screen: visualViewport und Größe der Zeichenfläche beobachten (nur wenn verfügbar)
+    try { window.visualViewport?.addEventListener('resize', () => this.resize()); } catch { /* optional */ }
+    try { if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.resize()).observe(this.canvas); } catch { /* optional */ }
     // Automatische Pause nur, wenn das Fenster den Fokus tatsächlich verliert. Hatte es ihn beim Start/Fortsetzen nie (eingebettete Ansicht), gäbe es sonst eine Dauer-Pause.
     window.addEventListener('blur', () => { if (this.focusKnown) this.pause('blur'); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.pause('hidden'); });
@@ -322,7 +327,7 @@ export class Game {
   private endRun(reason: 'crash' | 'restart' | 'leave' | 'goal', cause?: string): void {
     if (!this.runOpen || !this.sim) return;
     this.runOpen = false;
-    this.tele.send('end', this.runId, undefined, { dist: Math.floor(this.sim.s), reason, cause });
+    this.tele.send('end', this.runId, undefined, { dist: Math.floor(this.sim.s), reason, cause, q: this.renderer.profile });
     if (reason === 'leave') this.tele.flush(true);
   }
 
@@ -341,7 +346,7 @@ export class Game {
     this.runSeen.clear();
     this.runMiles = 0;
     this.runOpen = true;
-    this.tele.send('start', this.runId, undefined, { cfg: mode === 'sprint' ? `${SPRINT_ID}` : this.remote.id, ev: mode === 'endless' && eventActive(this.remote) ? this.remote.event!.id : null, mode, ch: mode === 'sprint' && this.challenge?.ok ? 1 : 0 });
+    this.tele.send('start', this.runId, undefined, { cfg: mode === 'sprint' ? `${SPRINT_ID}` : this.remote.id, ev: mode === 'endless' && eventActive(this.remote) ? this.remote.event!.id : null, mode, ch: mode === 'sprint' && this.challenge?.ok ? 1 : 0, ori: innerHeight > innerWidth ? 'p' : 'l', q: this.renderer.profile });
     const seed = mode === 'sprint' ? SPRINT_SEED : this.seedParam !== null ? (this.seedParam + this.runCount) >>> 0 : newSeed();
     this.runCount++;
     this.sim = new Sim(seed, mode === 'sprint' ? { ...this.qa, ramps: false, script: SPRINT_ROUTE } : { ramps: true, ...this.qa });
