@@ -303,3 +303,12 @@ html.touch:not([data-phase="running"]) #hint, html.touch:not([data-phase="runnin
 .t-touch { display: none; }
 html.touch .t-touch { display: inline; }
 html.touch .t-desk { display: none; }
+
+/* Handy hochkant: Effekte als kompakte Symbol-Zeile statt hoher Liste, damit die Fahrbahn frei bleibt */
+@media (max-width: 600px) and (orientation: portrait) {
+  #hud-effects { flex-direction: row; flex-wrap: wrap; gap: 4px; margin-top: 4px; width: calc(100vw - var(--sal) - var(--sar) - 20px); }
+  #hud-effects li { padding: 3px 6px; font-size: 13px; gap: 4px; }
+  #hud-effects .fx-name { display: none; }
+  #hud-effects .fx-time { margin-left: 0; padding-left: 0; }
+  #hud-effects svg { width: 16px; height: 16px; }
+}
