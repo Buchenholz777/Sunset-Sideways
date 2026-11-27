@@ -9,7 +9,7 @@ Hochformat nutzte die Querformat-Kamera: Straße schmal, Wagen und Hindernisse i
 Gemeinsames Layout für beide Ausrichtungen (Horizont/Brennweite auf Höhe ausgelegt), Desktop-Texte und -HUD auch auf Touch, kein Tippen-Modell, Fenstergröße reagierte nur auf `resize`/`orientationchange`.
 
 ## C. Umsetzung
-- Eigene Hochformat-Kamera (`makeLayout`: Horizont 0,42·h, Wagenzeile 0,84·h, Straße füllt die Breite, stärkere Fernsicht-Stauchung).
+- Eigene Hochformat-Kamera (`makeLayout`: Horizont 0,49·h, Wagenzeile 0,84·h, Straße füllt die Breite, stärkere Fernsicht-Stauchung).
 - Tipp-Steuerung (links/rechts = eine Spur) zusätzlich zum Wischen; Touch-Texte.
 - Kompaktes HUD, aktive Effekte als Symbolzeile; Safe-Areas.
 - Game-Over: großer NOCHMAL FAHREN-Button, sekundärer RANGLISTE-Button nur auf Touch; passt ab 320×568 ohne Scrollen.
